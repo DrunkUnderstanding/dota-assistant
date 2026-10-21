@@ -1,0 +1,31 @@
+# 复制为 config.toml 后修改。config.toml 含个人 token，不要进 git、不要外传。
+
+# ---- 推荐 ----
+position = 1          # 默认位置：1 一号位 / 2 中单 / 3 三号位 / 4 四号位 / 5 五号位（run 时控制面板可以改）
+rank_min = 7          # 统计数据的段位范围：1 先锋 2 卫士 3 中军 4 统帅 5 传奇 6 万古流芳 7 超凡入圣 8 冠绝一世，0=不限
+rank_max = 8
+days = 14             # 统计最近几天的天梯全英雄选择对局；高分段对局少，建议 14（改了要重新 update）
+account_id = 0        # Steam 好友代码：拉你的段位和近期英雄（游戏里要开「公开比赛数据」）
+history_matches = 300 # 用最近多少局天梯判断「你的英雄」
+stratz_token = ""     # STRATZ API token（stratz.com/api，Steam 登录后免费领）：分位置数据 + 你每局打的位置
+
+pool = []             # 手写英雄池，例：["幻刺", "斧王", "Tidehunter"]；少量加分、不受位置筛选限制
+only_pool = false     # true = 只在英雄池里推荐
+position_filter = true
+top = 3               # 「你的英雄」里推荐几个
+top_other = 2         # 另外给几个池外的选择
+
+# ---- 实时助手（python -m dota_assistant run）----
+monitor = 1           # 截哪块屏幕：1 = 主屏，多屏时 2、3…
+scan_interval = 1.0   # 识别间隔（秒）
+match_threshold = 0.70  # 头像相似度低于此当空位；先用 recognize 看实际分数再调
+gsi_port = 3000       # 改了要重新 gsi-install
+voice = true
+voice_rate = 1        # 语速 -10 ~ 10
+overlay_x = 0.80      # 叠加层左上角位置，占屏幕宽 / 高的比例
+overlay_y = 0.22
+overlay_width = 420
+overlay_opacity = 0.85
+hotkey_toggle = "F8"  # 显示 / 隐藏叠加层
+hotkey_rescan = "F9"  # 立即重新识别并播报
+hotkey_shot = "F10"   # 保存全屏截图到 shots/

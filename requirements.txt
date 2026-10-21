@@ -1,0 +1,5 @@
+requests>=2.31
+numpy>=1.26
+opencv-python>=4.8
+mss>=9.0
+PySide6-Essentials>=6.6
