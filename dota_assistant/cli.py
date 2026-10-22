@@ -2,13 +2,18 @@
 
   update [--player]            拉取 / 刷新数据（--player 只刷新个人数据，几秒）
   suggest --enemy PA,斧王 --ally 冰女 --ban 敌法师 [--pos 1]    命令行里手动推荐
-  run                          实时助手：叠加层 + 语音 + 控制面板
+  start                        一键启动（「启动助手.bat」就是调这个）：自动补齐配置 / 界面组件 / GSI / 数据再开助手
+  run [--browser]              实时助手：叠加层 + 语音 + 控制面板（界面用 Electron；--browser 浏览器预览）
+  demo [--browser]             不开 Dota 演示叠加层和语音（按真实对局逐个选人，再弹局内提醒）
   calibrate <截图>             在选人截图上框出英雄格子
   recognize <截图>             用当前校准识别一张截图（调试用），输出标注图
   label <截图> [更多截图…]      逐格确认 / 纠正识别结果，存成学习模板
   gsi-install <Dota 安装目录>  写入 Game State Integration 配置
+  gsi-dump                     只收 GSI 推送并存档（确认选人时 GSI 给了什么）
   say <文字>                   测试语音
   backtest [--matches N]       用统计之后的新对局检验推荐和胜负的关系
+  backtest-ai [--moments N]    大模型选人盲测（用 Claude Code 订阅，和统计引擎同题对比）
+  coach-sim <比赛编号...>       拿已解析的录像重放，看「局内缺口提醒」当时会说什么
   kb hero <英雄> / kb item <物品> / kb find <关键词或正则> / kb update [--force]
                                查当前版本官方技能 / 物品说明
 """
@@ -160,7 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--pos", type=int, choices=range(1, 6), help="我的位置，默认取 config.toml")
     sp.add_argument("--top", type=int)
     sp.add_argument("--all-roles", action="store_true", help="不按位置筛选")
-    sub.add_parser("run", help="实时助手")
+    sub.add_parser("start", help="一键启动：自动准备好一切再开助手（启动助手.bat 用的就是它）")
+    up = sub.add_parser("run", help="实时助手")
+    up.add_argument("--browser", action="store_true", help="不开 Electron，用浏览器打开界面（叠加层只是预览）")
+    dp = sub.add_parser("demo", help="演示叠加层和语音")
+    dp.add_argument("--step", type=float, default=4.0, help="每一步间隔秒数")
+    dp.add_argument("--browser", action="store_true", help="不开 Electron，用浏览器打开界面")
+    dp.add_argument("--speed", type=float, default=60, help="局内部分每真实秒走多少游戏秒（60 = 1 秒 1 分钟）")
     cp = sub.add_parser("calibrate", help="在选人截图上框出英雄格子")
     cp.add_argument("image", type=Path)
     rp = sub.add_parser("recognize", help="识别一张截图（调试）")
@@ -172,10 +183,17 @@ def main(argv: list[str] | None = None) -> int:
     bp = sub.add_parser("backtest", help="样本外回测")
     bp.add_argument("--matches", type=int, default=3000)
     bp.add_argument("--tune", action="store_true", help="网格搜对线权重 / 反制风险权重（一半调参一半验证）")
+    ap2 = sub.add_parser("backtest-ai", help="大模型选人盲测")
+    ap2.add_argument("--moments", type=int, default=300)
+    ap2.add_argument("--model", default="claude-opus-5-5")
+    ap2.add_argument("--workers", type=int, default=3)
+    cs = sub.add_parser("coach-sim", help="局内缺口提醒：录像重放")
+    cs.add_argument("match_ids", type=int, nargs="+")
     kp = sub.add_parser("kb", help="当前版本知识库")
     kp.add_argument("action", choices=["hero", "item", "find", "update"])
     kp.add_argument("query", nargs="*")
     kp.add_argument("--force", action="store_true", help="update 时即使版本没变也重拉")
+    sub.add_parser("gsi-dump", help="记录 GSI 推送内容")
     yp = sub.add_parser("say", help="测试语音")
     yp.add_argument("text", nargs="+")
     args = ap.parse_args(argv)
@@ -186,9 +204,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "suggest":
         return cmd_suggest(cfg, args)
+    if args.cmd == "start":
+        from .start import main as start
+        return start()
     if args.cmd == "run":
-        from .ui import run
-        return run(cfg)
+        from .webui import run
+        return run(cfg, browser=args.browser)
+    if args.cmd == "demo":
+        from .demo import run as demo
+        return demo(cfg, args.step, browser=args.browser, game_speed=args.speed)
     if args.cmd == "calibrate":
         from .calibrate import calibrate
         return 0 if calibrate(args.image) else 1
@@ -208,8 +232,21 @@ def main(argv: list[str] | None = None) -> int:
         from .backtest import run as backtest
         print(backtest(cfg, args.matches, do_tune=args.tune))
         return 0
+    if args.cmd == "backtest-ai":
+        from .aibacktest import run as ai_run
+        print(ai_run(cfg, args.moments, args.model, args.workers))
+        return 0
+    if args.cmd == "coach-sim":
+        from .coach import simulate
+        for mid in args.match_ids:
+            print(simulate(cfg, mid), end=chr(10) * 2)
+        return 0
     if args.cmd == "kb":
         return cmd_kb(cfg, args)
+    if args.cmd == "gsi-dump":
+        from .gsi import dump
+        dump(cfg.gsi_port, config.ROOT / "shots" / "gsi")
+        return 0
     if args.cmd == "say":
         import time
         from .speech import Speaker

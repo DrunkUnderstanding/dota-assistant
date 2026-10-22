@@ -40,13 +40,14 @@ TAGS = {
     "怕破坏": (r"^破坏(会|只会)使", None),
     "无视技能免疫": (r"无视(技能|减益)免疫|穿透(技能|减益)免疫", r"不无视|无法无视"),
     "提供技能免疫": (r"获得.{0,4}(技能|减益)免疫", None),
-    "隐身": (r"隐身|隐匿", r"显形|打破隐身|处于隐身状态下"),
+    "隐身": (r"(进入|获得|变为|变成|处于|带有|是|为)[^。，；]{0,6}隐(身|匿)|隐藏起来",
+             r"隐身单位|脱离|打破|阻止|不会产生|显形"),
     "反隐 / 显形": (r"显形|真视", None),
-    "沉默": (r"沉默", None),
+    "沉默": (r"沉默(?!术士)|阻止.{0,12}施法", r"无法成为目标"),
     "眩晕": (r"眩晕|击晕", None),
-    "缴械": (r"缴械", None),
+    "缴械": (r"缴械", r"(他|自身|期间|这段时间内)被缴械|面朝方向被锁定|无法成为目标"),
     "妖术": (r"妖术|变为.{0,4}(动物|小动物)", None),
-    "缠绕 / 定身": (r"缠绕|束缚|定身|无法移动", None),
+    "缠绕 / 定身": (r"缠绕|束缚|定身|无法移动|困在原地|冻在原地", r"迷雾缠绕|逃离.{0,2}束缚|缠绕之爪|时无法施放|地之束缚会|将队友封入|友方单位"),
     "减速": (r"减速|降低.{0,6}移动速度", r"减速抗性"),
     "减甲": (r"(降低|减少|减去|削减).{0,10}护甲|护甲.{0,4}(降低|减少)", None),
     "吸血": (r"吸血|生命窃取", None),
@@ -60,6 +61,12 @@ TAGS = {
     "持续施法": (r"持续施法", None),
     "全图": (r"全地图|全图|全局", None),
 }
+
+# 注释（notes）多是「能不能打到隐身单位」「被沉默时会不会打断」这类交互说明，不代表技能本身的能力。
+# 只有这几个标签允许从注释里取（它们的官方措辞经常只出现在注释里，例如射手天赋的克敌机先）。
+NOTES_OK = {"克敌机先", "无视技能免疫", "不可驱散", "怕破坏", "无视闪避"}
+# 「控制」类标签：判断对面有多少控制、要不要黑皇杖
+CONTROL_TAGS = ("眩晕", "沉默", "缠绕 / 定身", "妖术", "缴械")
 
 # 物品说明里的 $属性 占位符
 STAT_LABELS = {
@@ -226,15 +233,24 @@ class Entry:
     def full_text(self) -> str:
         return "\n".join([*self.stats, self.text, *self.notes, self.scepter, self.shard])
 
+    def main_text(self) -> str:
+        """说明正文（含属性、神杖 / 魔晶），不含注释"""
+        return "\n".join([*self.stats, self.text, self.scepter, self.shard])
+
     def tags(self) -> dict[str, str]:
-        """标签 → 命中的原句"""
-        return tag_sentences(self.full_text())
+        """标签 → 命中的原句。能力类标签只看正文；NOTES_OK 里的标签也看注释"""
+        out = tag_sentences(self.main_text())
+        for tag, sent in tag_sentences("\n".join(self.notes), only=NOTES_OK).items():
+            out.setdefault(tag, sent)
+        return out
 
 
-def tag_sentences(text: str) -> dict[str, str]:
+def tag_sentences(text: str, only: set[str] | None = None) -> dict[str, str]:
     out = {}
     sentences = [x.strip() for x in re.split(r"(?<=[。！；\n])", text) if x.strip()]
     for tag, (pat, exclude) in TAGS.items():
+        if only is not None and tag not in only:
+            continue
         for s in sentences:
             if re.search(pat, s) and not (exclude and re.search(exclude, s)):
                 out[tag] = s
@@ -288,6 +304,10 @@ class HeroKB:
                 out.setdefault(tag, (ab.name, sent))
         return out
 
+    def with_tag(self, *tags: str) -> list[tuple[Entry, str, str]]:
+        """所有带这些标签的技能：[(技能, 标签, 原句)]"""
+        return [(ab, t, sent) for ab in self.abilities for t, sent in ab.tags().items() if t in tags]
+
 
 class KnowledgeBase:
     def __init__(self, raw: dict):
@@ -307,6 +327,7 @@ class KnowledgeBase:
                                           "远程" if h.get("attack_capability") == 2 else "近战",
                                           h.get("attack_range") or 0, abilities, pairs, facets)
         self.items = {it["name"].removeprefix("item_"): _entry(it, True) for it in raw["items"]}
+        self.item_ids = {it["name"]: it["id"] for it in raw["items"]}
         self._item_lookup = {}
         for k, e in self.items.items():
             for n in (k, e.name, k.replace("_", "")):

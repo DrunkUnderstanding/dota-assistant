@@ -1,0 +1,9 @@
+{
+  "name": "dota-assistant-ui",
+  "private": true,
+  "description": "Dota 2 选人助手的界面外壳：只开窗口加载本机 Python 服务的页面，不含任何逻辑",
+  "main": "main.js",
+  "devDependencies": {
+    "electron": "44.2.0"
+  }
+}

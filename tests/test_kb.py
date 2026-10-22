@@ -28,6 +28,21 @@ class TagTest(unittest.TestCase):
         self.assertNotIn("提供闪避", kb.tag_sentences("每次攻击均有80%几率无视闪避。"))
         self.assertIn("无视闪避", kb.tag_sentences("每次攻击均有80%几率无视闪避。"))
 
+    def test_invisibility_means_self_invis(self):
+        self.assertIn("隐身", kb.tag_sentences("司夜刺客进入隐身状态并获得移动速度加成。"))
+        for sent in ("不能伤害隐身单位。", "不能作用于减益免疫或隐身单位。", "阻止英雄进入隐身状态。"):
+            self.assertNotIn("隐身", kb.tag_sentences(sent), sent)
+
+    def test_notes_only_count_for_whitelisted_tags(self):
+        e = kb.Entry("测试", "x", text="造成伤害。", notes=["肉钩能击中隐身单位。", "被沉默时不会打断。", "拥有克敌机先效果。"])
+        tags = e.tags()
+        self.assertIn("克敌机先", tags)
+        self.assertNotIn("沉默", tags)
+
+    def test_silence_not_from_hero_name(self):
+        self.assertNotIn("沉默", kb.tag_sentences("沉默术士用他的智慧强化刀刃。"))
+        self.assertIn("沉默", kb.tag_sentences("沉默术士停止一切声音，阻止地图上所有敌方英雄和单位施法。"))
+
     def test_dispel_type_line_is_not_a_dispel(self):
         self.assertNotIn("驱散", kb.tag_sentences("驱散类型：弱驱散"))
         self.assertIn("不可驱散", kb.tag_sentences("破坏的负面效果不能被驱散。"))
@@ -60,6 +75,12 @@ class RealDataTest(unittest.TestCase):
 
     def test_drow_marksmanship_true_strike(self):
         self.assertIn("克敌机先", self.hero("卓尔游侠").tags())
+
+    def test_no_fake_invisibility(self):
+        # 2026-10-22 修过的误判：这几个技能只是说明里提到「隐身单位」
+        for name in ("露娜", "灰烬之灵", "沉默术士", "帕吉"):
+            self.assertNotIn("隐身", self.hero(name).tags(), name)
+        self.assertIn("隐身", self.hero("司夜刺客").tags())
 
     def test_item_lookup_and_tags(self):
         self.assertEqual(self.base.item("BKB").name, "黑皇杖")

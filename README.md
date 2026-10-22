@@ -10,13 +10,38 @@
 
 ---
 
+## 最简用法：双击「启动助手.bat」
+
+先装两样东西（各装一次）：
+- **Python 3.11+**：[python.org](https://www.python.org/downloads/)，安装时勾选 Add to PATH
+- **Node.js LTS**：[nodejs.org](https://nodejs.org)（界面用）
+
+然后每次打游戏前**双击 `启动助手.bat`**。它会自动：
+1. 第一次运行时问你 Steam 好友代码和 STRATZ token，生成 `config.toml`
+2. 第一次运行时安装依赖和界面组件
+3. 找到 Dota 安装目录，写好 GSI 配置
+4. 数据旧了自动更新（全量 3 天一次，个人数据半天一次）
+5. 打开控制面板和叠加层
+
+只有一件事要你手动做一次：Steam 库里右键 Dota 2 → 属性 → 启动选项，加上 `-gamestateintegration`；
+Dota 设置里显示模式改「无边框窗口」，社交里打开「公开比赛数据」。
+
+选人阶段的 GSI 推送会自动存到 `shots/gsi/`，用来确认 GSI 能不能直接给出双方阵容。
+
+下面是各步骤的手动做法和细节，出问题时再看。
+
+---
+
 ## 一、安装（游戏电脑上做一次）
 
-需要 **Python 3.11 或更高**（[python.org](https://www.python.org/downloads/) 安装时勾选 Add to PATH）。
+需要 **Python 3.11 或更高**（[python.org](https://www.python.org/downloads/) 安装时勾选 Add to PATH）
+和 **Node.js 18 或更高**（[nodejs.org](https://nodejs.org/)，界面用 Electron 画）。
 
 ```
 cd dota-assistant
 pip install -r requirements.txt
+cd electron
+npm install          # 下载 Electron（约 100MB）；国内慢的话先 set ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/
 ```
 
 `config.toml` 是个人配置（好友代码、STRATZ token 等），不进 git。拷整个文件夹过来的话它已经在了；
@@ -77,10 +102,19 @@ python -m dota_assistant update --player   # 只刷新你自己的段位和近�
 python -m dota_assistant run
 ```
 
-会弹出**控制面板**，游戏画面上出现**叠加层**（鼠标点不到它，不影响操作）。
+会弹出**控制面板**，游戏画面上出现**叠加层**（鼠标点不到它，不影响操作）。关掉控制面板就退出。
+
+- 叠加层是一张卡片：顶上是位置和阵营，下面双方已选的头像，然后是推荐英雄（头像、胜率、胜率条，
+  理由按颜色分：绿 = 克谁、蓝 = 配谁、红 = 怕谁、橙 = 易被反制、紫 = 你自己的战绩），最下面是威胁提醒。
+- 控制面板右边是叠加层的实时预览。
+- **调位置**：点叠加层右上角的🔒（或按 F7）解锁，锁变成打开的金色🔓、卡片出现金色虚线框，按住卡片拖到想要的地方，
+  再点一下锁（或按 F7）固定，恢复鼠标穿透。固定时只有右上角的锁和 × 能点，其余地方照样点穿。
+- **关闭**：点叠加层右上角的 ×（或按 F8）。弹着局内提醒时只关这条提醒；否则整个叠加层收起，按 F8 或控制面板「显示叠加层」重新打开。位置记在 `data/overlay.json`，下次启动沿用。
+- 没装 Electron 时：`run --browser` 用浏览器打开（叠加层只是预览，盖不到游戏上）。
 
 | 热键 | 作用 |
 |---|---|
+| F7 | 解锁叠加层（可以拖动）/ 固定位置 |
 | F8 | 显示 / 隐藏叠加层 |
 | F9 | 立即重新识别，并把当前推荐再念一遍 |
 | F10 | 保存一张全屏截图到 `shots/`（攒校准 / 学习素材） |
@@ -89,9 +123,10 @@ python -m dota_assistant run
 
 - **位置**：这局你打几号位（默认取 `config.toml` 的 `position`，天梯排队选的位置记得改）
 - **阵营**：默认跟 GSI；没装 GSI 时手动选
-- **自动识别 / 手动输入**：识别不靠谱时切到手动，自己在 10 个格子里打英雄名（支持简称：PA、冰女、小牛……），回车即推荐
+- **自动识别 / 手动输入**：识别不靠谱时切到手动，自己在 10 个格子里打英雄名（支持简称：PA、冰女、小牛……，
+  打字时下拉框会列出带头像的候选，↑↓ 选、回车确认并跳到下一格）
 - 10 个格子就是「当前局面」：识别结果会填进来，你也可以随时改；正在编辑的格子不会被识别覆盖
-- 格子里灰色的「? 某某 0.62」= 最像某某但相似度不够，当空位处理
+- 格子里灰色的「? 某某」= 最像某某但相似度不够，当空位处理；头像右上角的数字是相似度。名字打错的格子会标红
 
 叠加层的位置、宽度、透明度、热键、语速、识别阈值都在 `config.toml` 里调（字段说明见 `config.example.toml`）。
 
@@ -99,11 +134,13 @@ python -m dota_assistant run
 
 ```
 python -m dota_assistant suggest --enemy PA,斧王,冰女 --ally 莱恩,小牛 --ban 敌法师 --pos 1
+python -m dota_assistant demo               # 不开 Dota 看叠加层和语音效果（按真实对局逐个选人，再把录像当 GSI 推过来弹局内提醒；--speed 调快慢）
 python -m dota_assistant say 测试一下语音
 python -m dota_assistant backtest          # 拿统计之后的新对局检验推荐准不准，结果在 data/backtest_report.txt
 python -m dota_assistant kb hero 小黑       # 当前版本官方技能 / 天赋 / 机制标签 + 你确认过的规则
 python -m dota_assistant kb item BKB       # 物品说明（支持 BKB、MKB、跳刀等简称）
 python -m dota_assistant kb find 克敌机先   # 在所有技能和物品说明里搜关键词
+python -m dota_assistant coach-sim 9054096051   # 拿一局录像重放，看「这局缺什么」的提醒当时会怎么说
 ```
 
 知识库来自 Valve 官方数据，`update` 时版本号变了会自动重拉。你确认过的经验判断写在 `knowledge/rules.toml`（会跟着项目走）。

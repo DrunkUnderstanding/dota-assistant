@@ -76,27 +76,31 @@ class Suggestion:
     def winrate(self) -> float:
         return sigmoid(self.score) * 100
 
-    def reason(self) -> str:
+    def reason_parts(self) -> list[tuple[str, str]]:
+        """推荐理由的各段：[(种类, 文字)]，种类 = good 克 / syn 配 / bad 怕 / risk 易被反制 / meta 版本强势 / me 个人 / pool 英雄池"""
         parts = []
         good = [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1]) if pct(v) >= 0.8][:2]
         bad = [(h, v) for h, v in sorted(self.vs, key=lambda t: t[1]) if pct(v) <= -1.5][:1]
         team = [(h, v) for h, v in sorted(self.syn, key=lambda t: -t[1]) if pct(v) >= 1.0][:1]
         if good:
-            parts.append("克 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in good))
+            parts.append(("good", "克 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in good)))
         if team:
-            parts.append("配 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in team))
+            parts.append(("syn", "配 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in team)))
         if bad:
-            parts.append("但怕 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in bad))
+            parts.append(("bad", "但怕 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in bad)))
         hard = [(h, v) for h, v in self.counters if pct(v) >= RISK_HINT]
         if self.enemies_left >= 3 and hard:
-            parts.append("易被反制：" + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in hard[:2]))
+            parts.append(("risk", "易被反制：" + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in hard[:2])))
         if not parts:
-            parts.append(f"版本强势（自身 {sigmoid(self.base) * 100:.1f}%）")
+            parts.append(("meta", f"版本强势（自身 {sigmoid(self.base) * 100:.1f}%）"))
         if self.my_games:
-            parts.append(f"你近期 {self.my_games} 局 {self.my_wins / self.my_games:.0%}")
+            parts.append(("me", f"你近期 {self.my_games} 局 {self.my_wins / self.my_games:.0%}"))
         elif self.in_pool:
-            parts.append("你的英雄池")
-        return "；".join(parts)
+            parts.append(("pool", "你的英雄池"))
+        return parts
+
+    def reason(self) -> str:
+        return "；".join(t for _, t in self.reason_parts())
 
 
 class Engine:

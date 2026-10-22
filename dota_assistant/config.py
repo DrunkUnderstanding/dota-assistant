@@ -31,11 +31,13 @@ class Config:
     gsi_port: int = 3000              # Game State Integration 本地端口
     voice: bool = True
     voice_rate: int = 1               # 语速 -10 ~ 10
-    overlay_x: float = 0.80           # 叠加层左上角位置（占屏幕宽 / 高的比例）
+    coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
+    overlay_x: float = 0.80           # 叠加层左上角位置（占屏幕宽 / 高的比例）；拖动过以后以 data/overlay.json 为准
     overlay_y: float = 0.22
     overlay_width: int = 420          # 叠加层宽度（逻辑像素）
     overlay_opacity: float = 0.85
     hotkey_toggle: str = "F8"         # 显示 / 隐藏叠加层
+    hotkey_lock: str = "F7"           # 解锁（可以拖动叠加层）/ 固定位置
     hotkey_rescan: str = "F9"         # 立即重新识别并播报
     hotkey_shot: str = "F10"          # 保存一张全屏截图到 shots/（收集校准 / 学习素材）
 

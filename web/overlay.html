@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选人助手 · 叠加层</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* 窗口本身全透明，只有卡片有底色；鼠标穿透由 Electron 设置 */
+  html, body { background: transparent; overflow: hidden; }
+  body { padding: 2px; }
+  /* ?preview=1：在浏览器里预览时垫一张像游戏画面的背景，方便看透明效果 */
+  body.preview {
+    min-height: 100vh; padding: 40px;
+    background: radial-gradient(circle at 30% 20%, #3b4a3a, #1b2418 45%, #0d110c);
+  }
+  body.preview .ov-wrap { width: 420px; }
+
+  /* 右上角两个按钮：锁（关着 = 位置固定、鼠标穿透；打开 = 按住卡片任意处拖动）、×（关闭叠加层） */
+  .ov-wrap { position: relative; }
+  .ov-head { padding-right: 60px; }               /* 给右上角按钮让出位置 */
+  .ov .ov-close { display: none; }                /* 局内提醒自带的 × 由右上角的 × 代替 */
+  .ov-tools { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; }
+  .ov-tools button {
+    width: 24px; height: 24px; padding: 0;
+    display: grid; place-items: center; cursor: pointer;
+    border: 1px solid var(--line-strong); border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05); color: var(--text-faint);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .ov-tools button:hover { color: var(--text); border-color: var(--gold); }
+  .ov-tools .ov-quit:hover { color: #fff; border-color: var(--bad); background: rgba(229, 103, 92, 0.35); }
+  .ov-tools svg { width: 14px; height: 14px; pointer-events: none; }
+  .ov-lock .icon-open, body.unlocked .ov-lock .icon-closed { display: none; }
+  body.unlocked .ov-lock .icon-open { display: block; }
+  body.unlocked .ov-lock { color: #1a1408; border-color: var(--gold); background: linear-gradient(180deg, #ecc06a, #c39037); }
+  .ov.is-hidden ~ .ov-tools { display: none; }
+  body.unlocked .ov-wrap { cursor: grab; user-select: none; }
+  body.unlocked.dragging .ov-wrap { cursor: grabbing; }
+  body.unlocked .ov { outline: 2px dashed var(--gold); outline-offset: -2px; }
+</style>
+</head>
+<body>
+<div class="ov-wrap" id="wrap">
+  <div class="ov" id="ov"><div class="ov-empty">等待助手…</div></div>
+  <div class="ov-tools">
+    <button class="ov-lock" id="btn-lock" type="button">
+      <svg class="icon-closed" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <rect x="3" y="7" width="10" height="7.5" rx="1.5" fill="currentColor" fill-opacity="0.2"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.6 0v2"/>
+      </svg>
+      <svg class="icon-open" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <rect x="3" y="7" width="10" height="7.5" rx="1.5" fill="currentColor" fill-opacity="0.2"/><path d="M5.2 7V5a2.8 2.8 0 0 1 5.5-.8"/>
+      </svg>
+    </button>
+    <button class="ov-quit" id="btn-close" type="button">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+    </button>
+  </div>
+</div>
+<script type="module">
+import { act, connect, getJSON } from './api.js';
+import { renderOverlay } from './view.js';
+
+const root = document.getElementById('ov');
+const wrap = document.getElementById('wrap');
+const lockBtn = document.getElementById('btn-lock');
+const closeBtn = document.getElementById('btn-close');
+const shell = window.overlayShell;   // Electron 预加载脚本给的；浏览器预览时没有，只显示样子
+let locked = true;
+let dragging = false;
+if (new URLSearchParams(location.search).has('preview')) document.body.classList.add('preview');
+getJSON('/api/config').then((c) => document.documentElement.style.setProperty('--ov-alpha', Math.max(0.2, Math.min(1, c.opacity))));
+
+connect((s) => {
+  renderOverlay(root, s.overlay.view);
+  root.classList.toggle('is-hidden', !s.overlay.visible);
+  locked = s.overlay.locked;
+  document.body.classList.toggle('unlocked', !locked);
+  const key = s.overlay.lock_key ? `（${s.overlay.lock_key}）` : '';
+  lockBtn.title = locked ? `位置已固定 · 点一下解锁${key}，解锁后按住卡片拖动` : `可以拖动 · 放好后点一下固定位置${key}`;
+  const tkey = s.overlay.toggle_key ? `（${s.overlay.toggle_key}）` : '';
+  closeBtn.title = s.overlay.view?.closable ? `关闭这条提醒${tkey}` : `关闭叠加层 · 按 ${s.overlay.toggle_key || '热键'} 或控制面板重新打开`;
+  shell?.setLocked(locked);
+  reportHitRects();
+}, (ok) => {
+  if (!ok) renderOverlay(root, { kind: 'notice', title: '选人助手', lines: [{ kind: 'dim', text: '和助手断开了，正在重连…' }] });
+});
+
+// ---------- 可点区域：固定时只有右上角的锁和 ×，解锁时整张卡片；Electron 据此切换鼠标穿透 ----------
+let lastRects = '';
+function reportHitRects() {
+  const els = locked ? [...document.querySelectorAll('.ov-tools button')] : [wrap];
+  const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
+    .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }));
+  const key = JSON.stringify(rects);
+  if (key === lastRects) return;
+  lastRects = key;
+  shell?.setHitRects(rects);
+}
+new ResizeObserver(reportHitRects).observe(wrap);
+root.addEventListener('transitionend', reportHitRects);   // 显示 / 隐藏的过渡结束后按钮位置才稳定
+
+// ---------- 解锁后拖动 ----------
+wrap.addEventListener('pointerdown', (e) => {
+  if (locked || e.button !== 0 || e.target.closest('button')) return;
+  wrap.setPointerCapture(e.pointerId);
+  dragging = true;
+  document.body.classList.add('dragging');
+  shell?.dragStart();
+});
+const endDrag = () => {
+  if (!dragging) return;
+  dragging = false;
+  document.body.classList.remove('dragging');
+  shell?.dragEnd();
+};
+wrap.addEventListener('pointerup', endDrag);
+wrap.addEventListener('pointercancel', endDrag);
+wrap.addEventListener('lostpointercapture', endDrag);
+lockBtn.addEventListener('click', () => act('set', { key: 'overlay_locked', value: !locked }));
+closeBtn.addEventListener('click', () => act('close_overlay'));
+
+</script>
+</body>
+</html>

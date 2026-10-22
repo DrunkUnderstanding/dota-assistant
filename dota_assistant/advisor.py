@@ -101,3 +101,34 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
         e, v = advice.threat
         out.append(("warn", f"注意：{e.name_cn} 对我方威胁最大（{pct(v):+.1f}%）"))
     return out
+
+
+def hero_ref(h: Hero) -> dict:
+    return {"id": h.id, "name": h.name_cn}
+
+
+def render_view(advice: Advice, side: str | None) -> dict:
+    """和 render_lines 同样的内容，但保留结构（英雄 id、胜率、理由分段），给网页叠加层画头像 / 卡片用。可直接转 JSON。"""
+    d = advice.draft
+    groups = []
+    for title, group in (("你的英雄", advice.mine), ("其他选择", advice.other)):
+        if group:
+            groups.append({"title": title, "items": [
+                {**hero_ref(s.hero), "winrate": round(s.winrate, 1),
+                 "tags": [{"kind": k, "text": t} for k, t in s.reason_parts()]} for s in group]})
+    threat = None
+    if advice.threat:
+        e, v = advice.threat
+        threat = {**hero_ref(e), "delta": round(pct(v), 1)}
+    return {
+        "kind": "draft",
+        "position": advice.position,
+        "position_name": POSITION_NAMES[advice.position],
+        "side": side,
+        "side_name": {"radiant": "天辉", "dire": "夜魇"}.get(side or "", "阵营未知"),
+        "enemies": [hero_ref(h) for h in d.enemies],
+        "allies": [hero_ref(h) for h in d.allies],
+        "my_hero": hero_ref(d.my_hero) if d.my_hero else None,
+        "groups": groups,
+        "threat": threat,
+    }

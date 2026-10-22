@@ -3,3 +3,5 @@ data/
 config.toml
 shots/
 *_识别.png
+node_modules/
+.playwright-mcp/

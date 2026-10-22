@@ -1,0 +1,176 @@
+"""网页界面的本地服务 + Electron 启动。
+
+  Python（live.Live：识别 / 推荐 / 语音 / GSI / 热键）
+    └ 本机 HTTP 服务（只监听 127.0.0.1）
+        ├ /overlay.html /panel.html …   web/ 下的静态页面
+        ├ /portraits/<id>.png           英雄头像（data/portraits）
+        ├ /api/events                   SSE：状态一变就推一份完整快照
+        └ /api/action                   POST：控制面板的操作
+    └ Electron（electron/main.js）：开两个窗口加载上面的页面
+        ├ 叠加层：透明、置顶、鼠标穿透、不抢焦点（普通窗口，不注入游戏）；解锁后可以拖动，固定后恢复穿透
+        └ 控制面板：普通窗口，关掉它整个助手退出
+
+没装 Electron 时可以 --browser 用浏览器打开（叠加层只能当预览看，盖不到游戏上）。
+"""
+from __future__ import annotations
+
+import json
+import mimetypes
+import os
+import queue
+import subprocess
+import threading
+import webbrowser
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import urlparse
+
+from .config import DATA_DIR, ROOT, Config
+
+WEB_DIR = ROOT / "web"
+ELECTRON_DIR = ROOT / "electron"
+PORTRAIT_DIR = DATA_DIR / "portraits"
+JSON_TYPE = "application/json; charset=utf-8"
+
+
+def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
+    """pos：用户拖过的位置（比例），优先于 config.toml 里的 overlay_x / overlay_y"""
+    pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
+    return {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": cfg.overlay_width,
+            "opacity": cfg.overlay_opacity}
+
+
+class WebServer:
+    """live 需要有 current_snapshot / subscribe / unsubscribe / submit / action / heroes / cfg（测试里可以换成假的）"""
+
+    def __init__(self, live, port: int = 0):
+        self.live = live
+        server = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                path = urlparse(self.path).path
+                if path == "/":
+                    self.send_response(302)
+                    self.send_header("Location", "/panel.html")
+                    self.end_headers()
+                elif path == "/api/events":
+                    server._events(self)
+                elif path == "/api/state":
+                    self._send(200, server.live.current_snapshot or "{}", JSON_TYPE)
+                elif path == "/api/heroes":
+                    self._json(200, server.live.heroes())
+                elif path == "/api/config":
+                    self._json(200, overlay_config(server.live.cfg, server.live.overlay_pos))
+                elif path.startswith("/portraits/"):
+                    self._file(PORTRAIT_DIR, path.removeprefix("/portraits/"))
+                else:
+                    self._file(WEB_DIR, path.lstrip("/"))
+
+            def do_POST(self):
+                if urlparse(self.path).path != "/api/action":
+                    return self._json(404, {"ok": False, "message": "没有这个接口"})
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                    msg = server.live.submit(server.live.action, body).result(timeout=20)
+                    self._json(200, {"ok": True, "message": msg or ""})
+                except Exception as e:
+                    self._json(400, {"ok": False, "message": str(e)})
+
+            def _file(self, base: Path, rel: str):
+                target = (base / rel).resolve()
+                if base.resolve() not in target.parents or not target.is_file():
+                    return self._json(404, {"ok": False, "message": "没有这个文件"})
+                ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
+                if ctype.startswith("text/") or ctype.endswith("javascript"):
+                    ctype += "; charset=utf-8"
+                self._send(200, target.read_bytes(), ctype)
+
+            def _json(self, code: int, obj):
+                self._send(code, json.dumps(obj, ensure_ascii=False), JSON_TYPE)
+
+            def _send(self, code: int, body, ctype: str):
+                data = body.encode() if isinstance(body, str) else body
+                self.send_response(code)
+                self.send_header("Content-Type", ctype)
+                self.send_header("Content-Length", str(len(data)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(data)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        self.server.daemon_threads = True
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="webui")
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def start(self) -> WebServer:
+        self.thread.start()
+        return self
+
+    def stop(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+
+    def _events(self, h: BaseHTTPRequestHandler) -> None:
+        h.send_response(200)
+        h.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        h.send_header("Cache-Control", "no-store")
+        h.end_headers()
+        q = self.live.subscribe()
+        try:
+            while True:
+                try:
+                    h.wfile.write(f"data: {q.get(timeout=15)}\n\n".encode())
+                except queue.Empty:
+                    h.wfile.write(b": ping\n\n")                   # 保活，顺便发现断开的连接
+                h.wfile.flush()
+        except OSError:                                             # 页面关了 / 刷新了
+            pass
+        finally:
+            self.live.unsubscribe(q)
+
+
+def find_electron() -> Path | None:
+    exe = ELECTRON_DIR / "node_modules" / "electron" / "dist" / "electron.exe"
+    return exe if exe.exists() else None
+
+
+def serve(live, browser: bool = False) -> int:
+    """起服务 + 打开界面，直到控制面板关掉（Electron）或 Ctrl+C（浏览器模式）"""
+    srv = WebServer(live).start()
+    live.start()
+    try:
+        if browser:
+            webbrowser.open(srv.url + "/panel.html")
+            webbrowser.open(srv.url + "/overlay.html?preview=1")
+            print(f"界面：{srv.url}/panel.html（叠加层预览：{srv.url}/overlay.html?preview=1），Ctrl+C 退出")
+            threading.Event().wait()
+            return 0
+        exe = find_electron()
+        if exe is None:
+            print("没找到 Electron。先装一次：cd electron && npm install（需要 Node.js）\n"
+                  "或者先用 run --browser 在浏览器里看界面（叠加层盖不到游戏上）。")
+            return 1
+        env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
+        proc = subprocess.Popen([str(exe), str(ELECTRON_DIR), f"--server={srv.url}"], env=env)
+        try:
+            return proc.wait()
+        except KeyboardInterrupt:
+            proc.terminate()
+            return 0
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        live.close()
+        srv.stop()
+
+
+def run(cfg: Config, browser: bool = False) -> int:
+    from .live import Live
+    return serve(Live(cfg), browser)

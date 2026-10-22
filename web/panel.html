@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dota 选人助手 · 控制面板</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark"></span>Dota 选人助手</div>
+  <div class="status" id="status"></div>
+</header>
+
+<section class="toolbar">
+  <div class="field">
+    <span class="field-label">位置</span>
+    <div class="seg" id="seg-position">
+      <button data-v="1">1 一号位</button><button data-v="2">2 中单</button><button data-v="3">3 三号位</button><button data-v="4">4 四号位</button><button data-v="5">5 五号位</button>
+    </div>
+  </div>
+  <div class="field">
+    <span class="field-label">阵营</span>
+    <div class="seg" id="seg-side">
+      <button data-v="auto">自动（GSI）</button><button data-v="radiant">天辉</button><button data-v="dire">夜魇</button>
+    </div>
+  </div>
+  <div class="field">
+    <span class="field-label">输入</span>
+    <div class="seg" id="seg-mode">
+      <button data-v="auto">自动识别</button><button data-v="manual">手动输入</button>
+    </div>
+  </div>
+  <div class="field field-toggles">
+    <label class="switch"><input type="checkbox" id="opt-voice"><i></i>语音</label>
+    <label class="switch" title="没连上 GSI 时也按间隔截屏识别"><input type="checkbox" id="opt-scan"><i></i>无 GSI 也识别</label>
+  </div>
+</section>
+
+<main class="main">
+  <section class="card board">
+    <div class="card-head">
+      <h2>当前局面</h2>
+      <span class="card-hint">识别和手动输入都写进这里；输错的名字会标红。输入框里打中文名、英文名或简称都行</span>
+    </div>
+    <div class="team" data-side="radiant">
+      <div class="team-label"><span class="team-name">天辉</span><span class="team-tag"></span></div>
+      <div class="slots"></div>
+    </div>
+    <div class="team" data-side="dire">
+      <div class="team-label"><span class="team-name">夜魇</span><span class="team-tag"></span></div>
+      <div class="slots"></div>
+    </div>
+    <label class="bans">
+      <span class="bans-label">禁用</span>
+      <input id="bans" type="text" placeholder="逗号分隔，可以留空；识别到的禁用会自动加上" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="actions">
+      <button class="btn btn-primary" data-act="refresh">按格子重新推荐</button>
+      <button class="btn" data-act="rescan">立即识别</button>
+      <button class="btn" data-act="learn" title="按格子里的名字，把这次识别到的头像存成模板，以后认得更准">记住这次识别</button>
+      <button class="btn" data-act="shot">保存截图</button>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-act="clear">清空</button>
+    </div>
+  </section>
+
+  <aside class="card preview">
+    <div class="card-head">
+      <h2>叠加层</h2>
+      <button class="btn btn-small" data-act="toggle_overlay" id="btn-toggle"></button>
+    </div>
+    <div class="preview-stage">
+      <div class="ov" id="preview"><div class="ov-empty">等待助手…</div></div>
+    </div>
+  </aside>
+</main>
+
+<footer class="footer" id="footer"></footer>
+
+<div class="ac" id="ac" hidden></div>
+<script type="module" src="panel.js"></script>
+</body>
+</html>
