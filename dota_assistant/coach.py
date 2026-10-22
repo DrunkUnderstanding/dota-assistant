@@ -31,6 +31,7 @@ RHYTHM_RATIO = 0.80          # 正补 / 经济低于同分段平均的 80% 才�
 CHECKPOINTS = range(10, 61, 5)
 REPEAT_AFTER = 6             # 同一条缺口还没补上，隔几分钟再提醒一次（最多 2 次）
 MAX_PER_MOMENT = 2
+SUPPORT_POSITIONS = (4, 5)   # 辅助：对抗装（黑皇杖 / 金箍棒）不催你出，改成「提醒核心」
 
 
 # ---------- 同分段基准 ----------
@@ -108,12 +109,14 @@ class Need:
     due: float = 0                # 几分钟之后才开始提醒
     priority: int = 1             # 越小越重要
     evidence: list[str] = field(default_factory=list)   # 依据（原句 / 数字），复盘时显示
+    brief: str = ""               # 开局（本局要点卡片）的说法：那时还没到点，不能说「你还没有」
 
 
 def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules: list[kb.Rule],
-         bench: dict | None) -> tuple[list[Need], list[str]]:
+         bench: dict | None, pos: int = 1) -> tuple[list[Need], list[str]]:
     """一局开始时就能确定的缺口 + 开局提示"""
     needs, notes = [], []
+    support = pos in SUPPORT_POSITIONS
     my_tags = me.tags()
 
     # 1. 黑皇杖：对面控制多
@@ -128,10 +131,13 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         who = "、".join(f"{e.name}（{hits[0][0].name}）" for e, hits in ctrl)
         pierce = [f"{e.name}的{ab.name}" for e, hits in ctrl for ab, _, _ in hits if ab.pierces_immunity]
         text = f"对面 {len(ctrl)} 个英雄有控制，你还没有黑皇杖，优先做"
-        if pierce:
-            text += f"；注意 {'、'.join(dict.fromkeys(pierce))} 无视技能免疫，黑皇杖挡不住"
-        needs.append(Need("bkb", text, ("black_king_bar",), due, 0,
-                          [f"{e.name}·{ab.name}：{s}" for e, hits in ctrl for ab, _, s in hits[:1]]))
+        early = f"对面 {len(ctrl)} 个英雄有控制（{who}），黑皇杖优先，{due:.0f} 分钟前要有"
+        tail = f"；注意 {'、'.join(dict.fromkeys(pierce))} 无视技能免疫，黑皇杖挡不住" if pierce else ""
+        if support:
+            notes.append(f"对面 {len(ctrl)} 个英雄有控制（{who}），提醒核心早出黑皇杖{tail}")
+        else:
+            needs.append(Need("bkb", text + tail, ("black_king_bar",), due, 0,
+                              [f"{e.name}·{ab.name}：{s}" for e, hits in ctrl for ab, _, s in hits[:1]], early + tail))
 
     # 2. 闪避：自己能处理就不推
     eva = [(e, e.with_tag("提供闪避")) for e in enemies]
@@ -144,9 +150,12 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
             notes.append(f"对面{names}有闪避，但你的{ab}自带克敌机先，不用专门出金箍棒")
         elif player_rule:
             notes.append(f"对面{names}有闪避；你的规则：{player_rule[0].text}")
+        elif support:
+            notes.append(f"对面{names}有闪避，提醒核心考虑金箍棒或血棘")
         else:
             needs.append(Need("mkb", f"对面{names}有闪避，考虑金箍棒或血棘", ("monkey_king_bar", "bloodthorn"),
-                              30, 2, [f"{e.name}·{hits[0][0].name}：{hits[0][2]}" for e, hits in eva]))
+                              30, 2, [f"{e.name}·{hits[0][0].name}：{hits[0][2]}" for e, hits in eva],
+                              f"对面{names}有闪避，后期考虑金箍棒或血棘"))
 
     # 3. 隐身：提醒队伍反隐，自己有反隐也说一声
     inv = [(e, e.with_tag("隐身")) for e in enemies]
@@ -238,7 +247,7 @@ def prepare(cfg: Config, my_id: int, enemy_ids: list[int], pos: int) -> tuple[Co
             notes.append(f"同分段数据没拉到（{e}），这局只提醒对抗装")
     if not enemies:
         notes.append("没有对面阵容（选人时没识别 / 没填），这局只看出装节奏")
-    needs, hero_notes = plan(me, enemies, base, kb.load_rules(), bench)
+    needs, hero_notes = plan(me, enemies, base, kb.load_rules(), bench, pos)
     return Coach(needs, bench, item_tree(), base), hero_notes + notes
 
 
@@ -275,7 +284,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None) -> str:
     pos = _stratz_position(cfg, match_id, account_id) or cfg.position
     bench = fetch_bench(cfg, my.id, pos) if cfg.stratz_token else None
     tree = item_tree()
-    needs, notes = plan(my, enemies, base, rules, bench)
+    needs, notes = plan(my, enemies, base, rules, bench, pos)
     coach = Coach(needs, bench, tree, base)
 
     deaths = sorted(d["time"] for d in me.get("deaths_log") or [])

@@ -1,6 +1,7 @@
 """网页界面：结构化视图、Live 主控（含局内缺口提醒）、本地服务。不联网、不出声、不开窗口。"""
 import json
 import tempfile
+import threading
 import time
 import unittest
 import urllib.error
@@ -8,7 +9,7 @@ import urllib.request
 from types import SimpleNamespace
 
 from dota_assistant import advisor as adv
-from dota_assistant import coach
+from dota_assistant import brief, coach, gameplan
 from dota_assistant.config import Config
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
@@ -46,12 +47,16 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
 
 
-def make_live(overlay_file: Path | None = None, coach_prepare=None) -> Live:
+def no_brief(*args):
+    raise RuntimeError("测试里不联网")
+
+
+def make_live(overlay_file: Path | None = None, coach_prepare=None, brief_build=no_brief, plan_build=no_brief) -> Live:
     cfg = Config(position_filter=False, top=2, top_other=2)
     return Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
                 advisor=fake_advisor(cfg), bank=FakeBank(), calibration=None,
                 overlay_file=overlay_file or TMP / f"overlay-{time.monotonic_ns()}.json",
-                coach_prepare=coach_prepare)
+                coach_prepare=coach_prepare, brief_build=brief_build, plan_build=plan_build)
 
 
 def wait(fut):
@@ -228,6 +233,77 @@ class CoachLiveTest(unittest.TestCase):
         self.live.coach_card = {"kind": "notice", "title": "x", "lines": [], "closable": True}
         self.push(40, state="DOTA_GAMERULES_STATE_POST_GAME")
         self.assertIsNone(self.live.coach_card)                 # 比赛结束收起
+
+
+class BriefLiveTest(unittest.TestCase):
+    """策略时间弹本局要点 → 号角响收起 → 热键再看；有了要点就不再单独弹「开局提示」"""
+
+    def setUp(self):
+        self.built = []
+
+        def build(cfg, my_id, ally_ids, enemy_ids, pos):
+            self.built.append((my_id, sorted(ally_ids), sorted(enemy_ids), pos))
+            b = brief.Brief("本局要点 · 幻影长矛手 一号位")
+            b.add("对线", [("warn", "对上斧王比平时难打")])
+            return b
+
+        def prepare(cfg, my_id, enemy_ids, pos):
+            return coach.Coach([], None, {}, None), ["对面能隐身"]
+
+        self.plan_go = threading.Event()                        # 控制 AI 打法什么时候「写完」
+
+        def plan(cfg, my_id, ally_ids, enemy_ids, lane_ids, text):
+            self.plan_go.wait(5)
+            return gameplan.Plan([("对线劣势时", [gameplan.Tip("退到塔下补刀", "束缚击原文", "将目标束缚")])])
+
+        self.live = make_live(coach_prepare=prepare, brief_build=build, plan_build=plan)
+        self.live.gsi = SimpleNamespace(state=GameState(), stop=lambda: None)
+        self.live.slots["radiant"][:1] = ["水晶室女"]
+        self.live.slots["dire"][:2] = ["斧王", "潮汐猎人"]
+        self.live.start()
+
+    def tearDown(self):
+        self.live.close()
+
+    def push(self, state, minute=-1.5):
+        st = self.live.gsi.state
+        st.raw = {"map": {"matchid": "9", "game_state": f"DOTA_GAMERULES_STATE_{state}", "clock_time": int(minute * 60)},
+                  "player": {"team_name": "radiant", "deaths": 0}, "hero": {"name": "npc_dota_hero_phantom_lancer"}}
+        st.updated = time.time()
+        wait(self.live.submit(self.live.coach_tick))
+        time.sleep(0.1)                                         # 后台线程做完再排进来
+        wait(self.live.submit(lambda: None))
+        return json.loads(self.live.current_snapshot)["overlay"]
+
+    def test_strategy_brief_then_horn(self):
+        self.assertIsNone(self.push("HERO_SELECTION")["view"].get("sections"))   # 选人中不做
+        ov = self.push("STRATEGY_TIME")
+        self.assertEqual(self.built, [(PL.id, [CM.id], [AXE.id, TIDE.id], 1)])
+        self.assertEqual(ov["view"]["kind"], "brief")
+        self.assertEqual(ov["view"]["sections"][0]["lines"], [{"kind": "warn", "text": "对上斧王比平时难打"}])
+        self.assertTrue(ov["visible"])
+
+        wait(self.live.submit(self.live.show_brief))           # F6 翻到打法页：还在生成
+        ov = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertEqual(ov["view"]["page"], "plan")
+        self.assertIn("正在写", ov["view"]["sections"][0]["lines"][0]["text"])
+        wait(self.live.submit(self.live.show_brief))           # 再按：回数据页
+        self.plan_go.set()                                      # 写完：自动翻到打法页
+        ov = self.push("STRATEGY_TIME")
+        self.assertEqual(ov["view"]["page"], "plan")
+        self.assertEqual(ov["view"]["sections"][-1]["lines"],
+                         [{"kind": "warn", "text": "退到塔下补刀", "note": "束缚击原文"}])
+
+        ov = self.push("PRE_GAME", -1)                          # 出门：要点还在，「开局提示」不单独弹
+        self.assertEqual(ov["view"]["kind"], "brief")
+        self.assertEqual(len(self.built), 1)
+        self.assertFalse(self.push("GAME_IN_PROGRESS", 0.2)["visible"])          # 号角响：收起
+
+        wait(self.live.submit(self.live.action, {"type": "show_brief"}))         # 热键 / 面板按钮再看：先看打法
+        ov = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief" and ov["view"]["page"] == "plan")
+        wait(self.live.submit(self.live.toggle_overlay))                         # F8 关掉
+        self.assertIsNone(self.live.coach_card)
 
 
 class WebServerTest(unittest.TestCase):

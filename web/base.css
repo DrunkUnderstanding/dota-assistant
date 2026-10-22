@@ -160,6 +160,21 @@ img { display: block; }
   background: rgba(255, 255, 255, 0.05); color: var(--text-dim); font: 16px/1 var(--font); cursor: pointer;
 }
 .ov-close:hover { color: var(--text); border-color: var(--gold); }
+.brief-sec { margin: 0 0 8px; }
+.brief-sec h3 {
+  margin: 0 0 3px; font-size: 11px; font-weight: 600; letter-spacing: 1px; color: var(--text-faint);
+}
+.brief-sec p {
+  margin: 0 0 3px; padding: 4px 8px; border-radius: 6px; font-size: 13px; line-height: 1.5;
+  background: rgba(255, 255, 255, 0.04); border-left: 3px solid var(--syn);
+}
+.brief-sec .brief-warn { border-left-color: var(--risk); color: #f6d3ad; }
+.brief-sec p small { margin-left: 6px; font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+.brief-tabs { display: flex; align-items: center; gap: 6px; margin: -4px 0 8px; font-size: 12px; }
+.brief-tab { padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--text-dim); }
+.brief-tab.is-on { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
+.brief-tabs em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--text-faint); }
+.brief-sec .brief-dim { border-left-color: transparent; background: none; color: var(--text-dim); font-size: 11px; padding: 0 8px; }
 .ov-empty { padding: 14px 4px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 @keyframes pick-in {

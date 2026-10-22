@@ -41,6 +41,13 @@ class RealKBTest(unittest.TestCase):
         needs, _ = self.plan("斯温", ["风行者", "幻影刺客"])
         self.assertIn("mkb", [n.key for n in needs])
 
+    def test_support_not_nagged_for_bkb(self):
+        me, enemies = self.hero("司夜刺客"), [self.hero(e) for e in ["风行者", "沉默术士", "冥魂大帝", "幻影刺客"]]
+        needs, notes = coach.plan(me, enemies, self.base, [], None, pos=4)
+        self.assertEqual([n.key for n in needs], [])
+        self.assertTrue(any("提醒核心早出黑皇杖" in n for n in notes), notes)
+        self.assertTrue(any("提醒核心考虑金箍棒" in n for n in notes), notes)
+
     def test_slark_invis_note(self):
         _, notes = self.plan("幻影长矛手", ["斯拉克"])
         self.assertTrue(any("粉对它没用" in n for n in notes), notes)

@@ -32,6 +32,8 @@ class Config:
     voice: bool = True
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
+    ai_plan: bool = True              # 本局要点里加「AI 打法」（走 Claude Code 订阅，每局一次，几十秒）
+    ai_model: str = "claude-opus-5-5"
     overlay_x: float = 0.80           # 叠加层左上角位置（占屏幕宽 / 高的比例）；拖动过以后以 data/overlay.json 为准
     overlay_y: float = 0.22
     overlay_width: int = 420          # 叠加层宽度（逻辑像素）
@@ -40,6 +42,7 @@ class Config:
     hotkey_lock: str = "F7"           # 解锁（可以拖动叠加层）/ 固定位置
     hotkey_rescan: str = "F9"         # 立即重新识别并播报
     hotkey_shot: str = "F10"          # 保存一张全屏截图到 shots/（收集校准 / 学习素材）
+    hotkey_brief: str = "F6"          # 再看一次本局要点（号角响后会自动收起）
 
 
 def load(path: Path | None = None) -> Config:

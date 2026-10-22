@@ -1,5 +1,6 @@
 """实时助手的主控（不依赖任何界面库）：定时识别、局面、推荐、语音、热键，状态整理成 JSON 推给网页界面。
-对局开始后（GSI）接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片。
+选完人（GSI 策略时间）弹「本局要点」卡片（brief.py），后台再让大模型写「打法」第二页（gameplan.py），号角响后收起；
+对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片。
 
 「控制面板的格子」就是这里的 self.slots，识别和网页输入都只往里写。
 所有改状态的操作都放进同一个工作线程按顺序执行（网页请求、热键、定时识别都只是往队列里丢任务）：
@@ -19,10 +20,10 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import coach
+from . import brief, coach, gameplan
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
-from .gsi import GSIServer
+from .gsi import STRATEGY_STATE, GSIServer
 from .heroes import Hero
 from .hotkeys import Hotkeys
 from .speech import Speaker
@@ -39,7 +40,8 @@ class Live:
     def __init__(self, cfg: Config, screen_factory=None, use_gsi: bool = True, use_hotkeys: bool = True,
                  speaker: Speaker | None = None, advisor: adv.Advisor | None = None,
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
-                 overlay_file: Path | None = None, coach_prepare: Callable | None = None):
+                 overlay_file: Path | None = None, coach_prepare: Callable | None = None,
+                 brief_build: Callable | None = None, plan_build: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.advisor = advisor or adv.Advisor(cfg)
@@ -82,7 +84,12 @@ class Live:
         self._coach_prepare = coach_prepare or coach.prepare
         self.coach: coach.Coach | None = None
         self.coach_match: str | None = None      # 为哪一局（GSI matchid）建的；换局就重建
-        self.coach_card: dict | None = None      # 正弹着的提醒卡片；关掉 / 比赛结束就是 None
+        self.coach_card: dict | None = None      # 正弹着的卡片（本局要点 / 局内提醒）；关掉 / 比赛结束就是 None
+        self._brief_build = brief_build or brief.build
+        self.brief_match: str | None = None      # 本局要点为哪一局做的
+        self.brief: brief.Brief | None = None    # 做好的本局要点（关掉以后按热键还能再看）
+        self.brief_page = "data"                 # 卡片显示哪一页：data 数据 / plan AI 打法
+        self._plan_build = plan_build or gameplan.generate
         self.coach_voice = cfg.coach_voice       # 先不念（玩家 2026-10-22 决定），config 里能打开
         self._coach_deaths = 0
         self._coach_checkpoint = 0
@@ -105,7 +112,8 @@ class Live:
             self.hotkeys = Hotkeys({cfg.hotkey_toggle: lambda: self.submit(self.toggle_overlay),
                                     cfg.hotkey_lock: lambda: self.submit(self.toggle_lock),
                                     cfg.hotkey_rescan: lambda: self.submit(self.scan, True),
-                                    cfg.hotkey_shot: lambda: self.submit(self.save_shot)}).start()
+                                    cfg.hotkey_shot: lambda: self.submit(self.save_shot),
+                                    cfg.hotkey_brief: lambda: self.submit(self.show_brief)}).start()
 
     # ---------- 线程 / 订阅 ----------
 
@@ -216,6 +224,8 @@ class Live:
             self.save_shot()
         elif t == "dismiss_coach":
             self.coach_card = None
+        elif t == "show_brief":
+            self.show_brief()
         elif t == "toggle_overlay":
             self.toggle_overlay()
         elif t == "toggle_lock":
@@ -344,10 +354,17 @@ class Live:
 
     def coach_tick(self) -> None:
         st = self.gsi.state if self.gsi else None
-        if not (st and st.alive and st.in_match):
-            self.coach_card = None               # 比赛结束 / 回到选人：收起提醒
+        strategy = bool(st and st.alive and st.game_state == STRATEGY_STATE)
+        if not (st and st.alive and (st.in_match or strategy)):
+            self.coach_card = None               # 比赛结束 / 回到选人：收起卡片
             return
         key = st.match_id or "?"
+        if key != self.brief_match:              # 策略时间就做；错过了（中途开助手）进游戏也补一张
+            self._start_brief(key)
+        if strategy:
+            return
+        if self.coach_card and self.coach_card.get("kind") == "brief" and st.clock_minutes >= 0:
+            self.coach_card = None               # 号角响了：本局要点收起，按热键还能再看
         if key != self.coach_match:
             self._start_coach(key)
             return
@@ -371,7 +388,7 @@ class Live:
         draft = self.current_draft()
         if not draft.my_hero:
             return                               # GSI 还没给英雄，下一轮再试
-        self.coach_match, self.coach, self.coach_card = key, None, None
+        self.coach_match, self.coach = key, None
         my_id, enemy_ids, pos = draft.my_hero.id, [h.id for h in draft.enemies], self.position
 
         def work():
@@ -393,8 +410,83 @@ class Live:
         self._coach_deaths = st.deaths
         self._coach_checkpoint = max((c for c in coach.CHECKPOINTS if c < st.clock_minutes), default=0)
         self.message = "局内提醒已就绪"
-        if notes:
+        if notes and not self.brief:             # 本局要点里已经有这些了
             self._show_coach("开局提示", [("row", n) for n in notes])
+
+    def _start_brief(self, key: str) -> None:
+        draft = self.current_draft()
+        if not draft.my_hero:
+            return                               # GSI 还没给英雄，下一轮再试
+        self.brief_match, self.brief = key, None
+        ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
+
+        def work():
+            try:
+                res, err = self._brief_build(self.cfg, *ids, self.position), None
+            except Exception as e:
+                res, err = None, e
+            self.submit(self._brief_ready, key, res, err, ids)
+        threading.Thread(target=work, daemon=True, name="brief").start()
+
+    def _brief_ready(self, key: str, res, err, ids: tuple = ()) -> None:
+        if key != self.brief_match:
+            return
+        if err:
+            self.message = f"本局要点没做出来：{err}"
+            return
+        self.brief, self.brief_page = res, "data"
+        if self.cfg.ai_plan:
+            self._start_plan(key, res, ids)
+        else:
+            res.plan_note = "AI 打法没开（config.toml 里 ai_plan = true 打开）"
+        st = self.gsi.state if self.gsi else None
+        if st and st.alive and st.in_match and st.clock_minutes >= 0:
+            self.message = f"本局要点已就绪（已经开打，按 {self.cfg.hotkey_brief} 查看）"
+            return
+        self.show_brief()
+
+    def _start_plan(self, key: str, b: brief.Brief, ids: tuple) -> None:
+        b.plan_note = "AI 正在写本局打法…（一般 30~60 秒，做好会自动切到这页）"
+
+        def work():
+            try:
+                res, err = self._plan_build(self.cfg, *ids, b.lane_ids, b.text()), None
+            except Exception as e:
+                res, err = None, e
+            self.submit(self._plan_ready, key, res, err)
+        threading.Thread(target=work, daemon=True, name="plan").start()
+
+    def _plan_ready(self, key: str, plan, err) -> None:
+        if key != self.brief_match or not self.brief:
+            return
+        if err:
+            self.brief.plan_note = f"AI 打法没做出来：{err}"
+        else:
+            self.brief.plan = plan
+            self.brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
+        if self._showing_brief():                # 正在看要点：自动翻到打法页
+            self.brief_page = "plan"
+            self.coach_card = self._brief_view()
+        else:
+            self.message = f"本局打法已就绪，按 {self.cfg.hotkey_brief} 查看"
+
+    def _showing_brief(self) -> bool:
+        return bool(self.coach_card and self.coach_card.get("kind") == "brief")
+
+    def _brief_view(self) -> dict:
+        return self.brief.view(self.brief_page, f"{self.cfg.hotkey_brief} 切换数据 / 打法")
+
+    def show_brief(self) -> None:
+        """热键：没在看就打开（打法做好了先看打法），正在看就翻页"""
+        if not self.brief:
+            self.message = "这局还没有本局要点（要等选完人、GSI 告诉我你的英雄）"
+            return
+        if self._showing_brief():
+            self.brief_page = "plan" if self.brief_page == "data" else "data"
+        else:
+            self.brief_page = "plan" if self.brief.plan else "data"
+        self.coach_card = self._brief_view()
+        self.user_hidden = False
 
     def _show_coach(self, title: str, lines: list[tuple[str, str]]) -> None:
         self.coach_card = {"kind": "notice", "title": title, "closable": True,
@@ -483,7 +575,8 @@ class Live:
             "hotkeys": [{"key": self.cfg.hotkey_toggle, "text": "显隐 / 关提醒"},
                         {"key": self.cfg.hotkey_lock, "text": "解锁 / 固定位置"},
                         {"key": self.cfg.hotkey_rescan, "text": "重识别"},
-                        {"key": self.cfg.hotkey_shot, "text": "截图"}],
+                        {"key": self.cfg.hotkey_shot, "text": "截图"},
+                        {"key": self.cfg.hotkey_brief, "text": "本局要点 / 翻页"}],
             "hotkeys_failed": list(self.hotkeys.failed) if self.hotkeys else [],
             "message": self.message,
         }

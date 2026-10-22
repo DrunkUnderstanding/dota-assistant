@@ -80,7 +80,8 @@ kbd {
 .card-head h2 { margin: 0; font-size: 14px; font-weight: 700; white-space: nowrap; flex: none; }
 .card-hint { color: var(--text-faint); font-size: 12px; min-width: 0; }
 .preview .card-head { align-items: center; }
-.preview .card-head .btn { margin-left: auto; }
+.preview .card-head .btn { flex: none; }
+.preview .card-head .btn:first-of-type { margin-left: auto; }
 
 /* 局面 */
 .board { display: flex; flex-direction: column; gap: 14px; overflow: auto; align-self: start; max-height: 100%; }

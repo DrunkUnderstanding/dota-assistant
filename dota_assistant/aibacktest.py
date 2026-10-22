@@ -16,15 +16,10 @@ from __future__ import annotations
 
 import json
 import random
-import shutil
-import subprocess
-import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
-
 import numpy as np
 
-from . import backtest as bt, data
+from . import backtest as bt, data, llm
 from .config import DATA_DIR, Config
 from .engine import POSITION_NAMES, Engine
 
@@ -110,32 +105,9 @@ def prompt_for(db, batch: list[dict]) -> str:
     return "\n".join(L)
 
 
-def _claude_exe() -> str:
-    """直接调 claude.exe：经过 npm 的 claude.cmd 时，空参数（--tools ""）和多行参数会被 cmd.exe 弄丢 / 截断"""
-    shim = shutil.which("claude")
-    if shim:
-        exe = Path(shim).parent / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
-        if exe.exists():
-            return str(exe)
-    return shim or "claude"
-
-
 def ask(prompt: str, model: str) -> tuple[dict | None, float, str]:
     """一次无头调用。返回 (结构化结果, 折合 API 价格, 错误信息)"""
-    cmd = [_claude_exe(), "-p", "--model", model, "--safe-mode", "--tools", "", "--system-prompt", SYSTEM,
-           "--no-session-persistence", "--json-schema", json.dumps(SCHEMA), "--output-format", "json"]
-    try:
-        # --safe-mode：不加载 CLAUDE.md / MCP / 技能；空目录里跑，避免读到项目文件
-        with tempfile.TemporaryDirectory() as cwd:
-            r = subprocess.run(cmd, input=prompt.encode("utf-8"), capture_output=True, timeout=900, cwd=cwd)
-    except subprocess.TimeoutExpired:
-        return None, 0.0, "超时"
-    line = r.stdout.decode("utf-8", "replace").strip().splitlines()
-    try:
-        d = json.loads(line[-1])
-    except (IndexError, json.JSONDecodeError):
-        return None, 0.0, r.stderr.decode("utf-8", "replace")[-300:]
-    return d.get("structured_output"), float(d.get("total_cost_usd") or 0), "" if d.get("structured_output") else str(d.get("result"))[:300]
+    return llm.ask_json(prompt, SYSTEM, SCHEMA, model)
 
 
 def run(cfg: Config, n: int = 300, model: str = "claude-opus-5-5", workers: int = 3, log=print) -> str:

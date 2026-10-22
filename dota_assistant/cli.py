@@ -189,6 +189,9 @@ def main(argv: list[str] | None = None) -> int:
     ap2.add_argument("--workers", type=int, default=3)
     cs = sub.add_parser("coach-sim", help="局内缺口提醒：录像重放")
     cs.add_argument("match_ids", type=int, nargs="+")
+    bs = sub.add_parser("brief-sim", help="本局要点：拿录像看选完人时会给什么")
+    bs.add_argument("match_ids", type=int, nargs="+")
+    bs.add_argument("--ai", action="store_true", help="同时让大模型写前 / 中 / 后期打法（走 Claude Code 订阅）")
     kp = sub.add_parser("kb", help="当前版本知识库")
     kp.add_argument("action", choices=["hero", "item", "find", "update"])
     kp.add_argument("query", nargs="*")
@@ -240,6 +243,11 @@ def main(argv: list[str] | None = None) -> int:
         from .coach import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid), end=chr(10) * 2)
+        return 0
+    if args.cmd == "brief-sim":
+        from .brief import simulate
+        for mid in args.match_ids:
+            print(simulate(cfg, mid, ai=args.ai), end=chr(10) * 2)
         return 0
     if args.cmd == "kb":
         return cmd_kb(cfg, args)

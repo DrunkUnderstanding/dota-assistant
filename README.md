@@ -141,6 +141,7 @@ python -m dota_assistant kb hero 小黑       # 当前版本官方技能 / 天�
 python -m dota_assistant kb item BKB       # 物品说明（支持 BKB、MKB、跳刀等简称）
 python -m dota_assistant kb find 克敌机先   # 在所有技能和物品说明里搜关键词
 python -m dota_assistant coach-sim 9054096051   # 拿一局录像重放，看「这局缺什么」的提醒当时会怎么说
+python -m dota_assistant brief-sim 9054096051  # 拿一局录像看选完人时「本局要点」卡片会写什么（加 --ai 同时看 AI 打法）
 ```
 
 知识库来自 Valve 官方数据，`update` 时版本号变了会自动重拉。你确认过的经验判断写在 `knowledge/rules.toml`（会跟着项目走）。

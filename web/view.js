@@ -69,10 +69,23 @@ function noticeHTML(v) {
     <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${esc(l.text)}</p>`).join('')}</section>`;
 }
 
+// 本局要点：两页（数据：对线 / 起手 / 强势期 / 对面要防 / 关键装备；打法：AI 写的前中后期），热键翻页
+function briefHTML(v) {
+  const close = v.closable ? '<button class="ov-close" type="button" title="关闭">×</button>' : '';
+  const tabs = (v.tabs || []).map((t) => `<span class="brief-tab ${t.on ? 'is-on' : ''}">${esc(t.label)}</span>`).join('');
+  const sections = v.sections.map((s) => `
+    <section class="brief-sec"><h3>${esc(s.title)}</h3>
+      ${s.lines.map((l) => `<p class="brief-${esc(l.kind)}">${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`).join('')}</section>`).join('');
+  return `
+    <header class="ov-head"><span class="ov-pos">${esc(v.title)}</span><span class="ov-brand">选人助手</span>${close}</header>
+    ${tabs ? `<div class="brief-tabs">${tabs}<em>${esc(v.hint || '')}</em></div>` : ''}
+    ${sections}`;
+}
+
 // 只在内容真的变了时重画，避免动画每秒重放
 export function renderOverlay(root, view) {
   const html = !view || !view.kind ? '<div class="ov-empty">等待助手…</div>'
-    : view.kind === 'notice' ? noticeHTML(view) : draftHTML(view);
+    : view.kind === 'notice' ? noticeHTML(view) : view.kind === 'brief' ? briefHTML(view) : draftHTML(view);
   if (root._html === html) return false;
   root._html = html;
   root.innerHTML = html;

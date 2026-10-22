@@ -1,8 +1,8 @@
 """演示：不开 Dota，在桌面上直接看叠加层 + 语音的效果。
 
 按真实对局（默认玩家 2026-10-21 00:20 那局卓尔）的选人顺序，每隔几秒往控制面板里填一个英雄，
-叠加层和语音跟着变；选完后当一个「假 Dota」：把这局录像（OpenDota 已解析）按 GSI 的格式加速推给本地 GSI 端口，
-走和真实游戏一样的路（GSI 服务 → 主控 → 局内缺口提醒 → 叠加层弹卡片）。
+叠加层和语音跟着变；选完后当一个「假 Dota」：先停在策略时间（弹本局要点），再把这局录像（OpenDota 已解析）
+按 GSI 的格式加速推给本地 GSI 端口，走和真实游戏一样的路（GSI 服务 → 主控 → 本局要点 / 局内缺口提醒 → 叠加层弹卡片）。
 """
 from __future__ import annotations
 
@@ -20,11 +20,14 @@ DEMO_PICKS = [("敌", "风行者"), ("友", "巫妖"), ("友", "司夜刺客"), 
 DEMO_BANS = "赏金猎人,自然先知,大地之灵,修补匠,幽鬼,暗影萨满"
 FRAME_SECONDS = 0.5                            # 和 GSI 配置里的 throttle 一样，每 0.5 秒推一次
 RESPAWN = 30                                   # 录像里只有死亡时间，复活时间粗略按 30 秒算（只影响 hero.alive）
+STRATEGY_SECONDS = 12                          # 策略时间至少停多久（真实秒），给本局要点拉数据 + 看一眼
+STRATEGY_MAX = 120                             # AI 打法还没写完就多停一会，最多这么久
 
 
-def gsi_frames(m: dict, me: dict, hero_key: str, speed: float):
+def gsi_frames(m: dict, me: dict, hero_key: str, speed: float, hold=lambda: False):
     """把一局录像变成一串 GSI 推送（玩家视角）。speed = 每真实秒走多少游戏秒。
-    录像里没有「当时身上有什么」，装备用到这一刻为止买过的全部东西代替（和 coach-sim 口径一致）。"""
+    录像里没有「当时身上有什么」，装备用到这一刻为止买过的全部东西代替（和 coach-sim 口径一致）。
+    hold()：返回 True 时策略时间继续停（等 AI 打法写完），最多 STRATEGY_MAX 秒。"""
     team = "radiant" if me["player_slot"] < 128 else "dire"
     hero = {"id": me["hero_id"], "name": f"npc_dota_hero_{hero_key}"}
     deaths = sorted(d["time"] for d in me.get("deaths_log") or [])
@@ -42,6 +45,10 @@ def gsi_frames(m: dict, me: dict, hero_key: str, speed: float):
             "hero": {**hero, "alive": not any(d <= t < d + RESPAWN for d in deaths)},
             "items": {f"slot{j}": {"name": f"item_{k}"} for j, k in enumerate(owned)},
         }
+    waited = 0.0
+    while waited < STRATEGY_SECONDS or (hold() and waited < STRATEGY_MAX):
+        yield frame("DOTA_GAMERULES_STATE_STRATEGY_TIME", -90)
+        waited += FRAME_SECONDS
     t = -90.0
     while t < 0:
         yield frame("DOTA_GAMERULES_STATE_PRE_GAME", t)
@@ -109,9 +116,22 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
         if not me or not me.get("purchase_log"):
             why = match.get("error") or "录像里找不到你 / 还没解析"
             return live.submit(notice, "演示结束", "dim", f"局内部分演示不了：{why}")
-        live.submit(lambda: setattr(live, "mode", "auto"))   # 对局中不截屏识别（GSI 说不在选人），叠加层按局内规则显示
         url = f"http://127.0.0.1:{cfg.gsi_port}/"
-        for f in gsi_frames(match, me, live.db.by_id[me["hero_id"]].key, game_speed):
+        started = False
+        # AI 打法写完后再多看 10 秒才出门
+        done_at = []
+
+        def hold() -> bool:
+            b = live.brief
+            if b is None or (cfg.ai_plan and b.plan is None and "正在写" in b.plan_note):
+                return True
+            done_at.append(done_at[0] if done_at else time.time())
+            return time.time() - done_at[0] < 10
+        for f in gsi_frames(match, me, live.db.by_id[me["hero_id"]].key, game_speed, hold):
+            if not started and f["map"]["game_state"] != "DOTA_GAMERULES_STATE_STRATEGY_TIME":
+                # 出门后切回自动：叠加层按局内规则显示（策略时间还算选人阶段，自动模式会去截屏识别，所以等到这时）
+                started = True
+                live.submit(lambda: setattr(live, "mode", "auto"))
             requests.post(url, json=f, timeout=5)
             time.sleep(FRAME_SECONDS)
         live.submit(lambda: (setattr(live, "mode", "manual"), notice("演示结束", "dim", "关掉控制面板即可退出")))
