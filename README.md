@@ -206,3 +206,7 @@ python -m dota_assistant brief-sim 9054096051  # 拿一局录像看选完人时�
 ```
 python -m unittest        # 引擎、识别（拿官方头像合成的假截图）、GSI、播报文案，都不联网不出声
 ```
+
+## 许可证
+
+[MIT](LICENSE)
