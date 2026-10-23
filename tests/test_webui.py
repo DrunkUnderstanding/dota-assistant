@@ -8,14 +8,16 @@ import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
-from dota_assistant import advisor as adv
-from dota_assistant import brief, coach, gameplan
+from dota_assistant import advisor as adv, grid
+from dota_assistant import brief, coach, death, gameplan
+from dota_assistant import live as live_mod
 from dota_assistant.config import Config
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
 from pathlib import Path
 from dota_assistant.heroes import HeroDB
 from dota_assistant.live import Live
+from dota_assistant.vision import Calibration
 from dota_assistant.webui import WebServer, overlay_config
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, make_stats
 
@@ -39,7 +41,7 @@ class FakeBank:
 
 def fake_advisor(cfg: Config) -> adv.Advisor:
     a = adv.Advisor.__new__(adv.Advisor)
-    a.cfg, a.db, a.me, a.pool = cfg, HeroDB(HEROES), None, []
+    a.cfg, a.db, a.me, a.pool, a.kb = cfg, HeroDB(HEROES), None, [], None
     a.engine = Engine(a.db, make_stats({(TIDE.id, PL.id): (20000, 0.56)}))
     return a
 
@@ -52,11 +54,12 @@ def no_brief(*args):
 
 
 def make_live(overlay_file: Path | None = None, coach_prepare=None, brief_build=no_brief, plan_build=no_brief) -> Live:
-    cfg = Config(position_filter=False, top=2, top_other=2)
+    cfg = Config(position_filter=False, top=2, top_other=2, voice=True)
     return Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
-                advisor=fake_advisor(cfg), bank=FakeBank(), calibration=None,
+                advisor=fake_advisor(cfg), bank=FakeBank(), calibration=Calibration(),   # 空校准，不读本机 calibration.json
                 overlay_file=overlay_file or TMP / f"overlay-{time.monotonic_ns()}.json",
-                coach_prepare=coach_prepare, brief_build=brief_build, plan_build=plan_build)
+                coach_prepare=coach_prepare, brief_build=brief_build, plan_build=plan_build,
+                ban_watcher=grid.BanWatcher(TMP / f"grid-{time.monotonic_ns()}.json"))   # 不读本机 data/grid_map.json
 
 
 def wait(fut):
@@ -74,6 +77,7 @@ class RenderViewTest(unittest.TestCase):
         self.assertEqual(item["id"], TIDE.id)
         self.assertEqual("；".join(t["text"] for t in item["tags"]), s.reason())
         self.assertEqual(item["tags"][0]["kind"], "good")
+        self.assertEqual(item["vs"], [{"id": PL.id, "name": PL.name_cn, "delta": 2.5}])   # 对每个敌人的克制，百分点
         self.assertEqual(v["threat"]["delta"], 2.0)
         json.dumps(v, ensure_ascii=False)          # 能直接转 JSON
 
@@ -187,16 +191,94 @@ class CoachLiveTest(unittest.TestCase):
     def tearDown(self):
         self.live.close()
 
-    def push(self, minute, state="DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", deaths=0, items=()):
+    def push(self, minute, state="DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", deaths=0, items=(), hp=None, alive=True,
+             now=None):
         st = self.live.gsi.state
-        st.raw = {"map": {"matchid": "123", "game_state": state, "clock_time": int(minute * 60)},
-                  "player": {"team_name": "radiant", "deaths": deaths, "last_hits": 40},
-                  "hero": {"name": "npc_dota_hero_phantom_lancer", "alive": True},
-                  "items": {f"slot{i}": {"name": f"item_{k}"} for i, k in enumerate(items)}
-                           | {"slot8": {"name": "empty"}}}
-        st.updated = time.time()
+        hero = {"name": "npc_dota_hero_phantom_lancer", "alive": alive}
+        if hp is not None:
+            hero |= {"health": hp, "max_health": 100}
+        st.update({"map": {"matchid": "123", "game_state": state, "clock_time": int(minute * 60)},
+                   "player": {"team_name": "radiant", "deaths": deaths, "last_hits": 40},
+                   "hero": hero,
+                   "items": {f"slot{i}": {"name": f"item_{k}"} for i, k in enumerate(items)}
+                            | {"slot8": {"name": "empty"}}}, now)
         wait(self.live.submit(self.live.coach_tick))
         return json.loads(self.live.current_snapshot)["overlay"]
+
+    def wait_coach(self):
+        for _ in range(50):                                     # 后台线程准备好
+            if self.live.coach:
+                return
+            time.sleep(0.05)
+
+    def test_new_draft_restores_closed_overlay(self):
+        # 上一局点 × 收起了叠加层：进下一局选人自动显示，不用按 F8
+        self.live.user_hidden = True
+        self.live.gsi.state.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                                    "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        self.assertFalse(self.live.user_hidden)
+
+    def test_auto_position_from_role_label(self):
+        # 天梯选人：顶栏认出我排的是 4 号位 → 推荐按 4 号位；下一局（加速，认不出）回到原来的位置
+        calls = []
+        def fake_roles(img, cal, side, name, slot):
+            calls.append((side, name, slot))
+            return [3, 5, 2, 4, 1], 3
+        self.live._read_roles = fake_roles
+        self.live.cal = SimpleNamespace(ready=True)
+        st = self.live.gsi.state
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "radiant", "name": "醉后才知道", "team_slot": 3}})
+        wait(self.live.submit(self.live.coach_tick))
+        wait(self.live.submit(self.live.scan_role, object()))
+        for _ in range(50):
+            if self.live.position_auto:
+                break
+            time.sleep(0.05)
+        self.assertEqual((self.live.position, self.live.position_auto), (4, True))
+        self.assertEqual(calls, [("radiant", "醉后才知道", 3)])
+        self.assertTrue(json.loads(self.live.current_snapshot)["overlay"]["view"]["position_auto"])
+        wait(self.live.submit(self.live.scan_role, object()))            # 这局认出来了，不再认
+        self.assertEqual(len(calls), 1)
+
+        st.update({"map": {"matchid": "2", "game_state": "DOTA_GAMERULES_STATE_PRE_GAME"}, "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        st.update({"map": {"matchid": "3", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"}, "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        self.assertEqual((self.live.position, self.live.position_auto), (self.live.cfg.position, False))
+
+    def test_manual_position_wins(self):
+        self.live._read_roles = lambda *a: ([None, None, None, 4, None], 3)
+        self.live.cal = SimpleNamespace(ready=True)
+        self.live.gsi.state.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                                    "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        wait(self.live.submit(self.live.action, {"type": "set", "key": "position", "value": 2}))
+        wait(self.live.submit(self.live.scan_role, object()))
+        time.sleep(0.2)
+        self.assertEqual((self.live.position, self.live.position_auto), (2, False))
+
+    def test_top_bar_confirmed_by_grid(self):
+        # 顶栏分数没过阈值，但网格里这个英雄已被选走：算认出
+        from dota_assistant.vision import DraftView, Slot
+        view = DraftView([Slot(None, 0.63, PL.id), Slot(None, 0.63, TIDE.id)] + [Slot(None, 0.2, 0)] * 3,
+                         [Slot(None, 0.2, 0)] * 5, [])
+        self.live.grid.taken = {PL.id}
+        self.live._confirm_with_grid(view)
+        self.assertEqual([s.hero_id for s in view.radiant[:2]], [PL.id, None])
+
+    def test_local_games_with_zero_matchid(self):
+        # 本地 / 机器人局 matchid 一直是 0：回到选人阶段就算新的一局，本局要点要重做
+        def go(state):
+            self.live.gsi.state.update({"map": {"matchid": "0", "game_state": f"DOTA_GAMERULES_STATE_{state}", "clock_time": -60},
+                                        "player": {"team_name": "radiant"}, "hero": {"name": "npc_dota_hero_phantom_lancer"}})
+            wait(self.live.submit(self.live.coach_tick))
+        go("HERO_SELECTION"); go("PRE_GAME")
+        first = self.live.brief_match
+        self.assertIsNotNone(first)
+        go("HERO_SELECTION"); go("PRE_GAME")
+        self.assertNotEqual(self.live.brief_match, first)
 
     def test_gsi_items_parsed(self):
         self.push(0, items=("black_king_bar", "tango"))
@@ -204,10 +286,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_popup_on_death_and_checkpoint_then_close(self):
         ov = self.push(0)
-        for _ in range(50):                                     # 后台线程准备好
-            if self.live.coach:
-                break
-            time.sleep(0.05)
+        self.wait_coach()
         self.assertEqual(self.prepared, [(PL.id, [AXE.id, TIDE.id], 1)])
         ov = self.push(0.1)
         self.assertEqual(ov["view"]["title"], "开局提示")
@@ -233,6 +312,30 @@ class CoachLiveTest(unittest.TestCase):
         self.live.coach_card = {"kind": "notice", "title": "x", "lines": [], "closable": True}
         self.push(40, state="DOTA_GAMERULES_STATE_POST_GAME")
         self.assertIsNone(self.live.coach_card)                 # 比赛结束收起
+
+    def test_death_recap_then_respawn(self):
+        """死亡：同一张卡片先说怎么死的，再列缺口；复活后自动收起"""
+        death.DUMP_DIR = TMP / "deaths"
+        self.live._death_names = ("phantom_lancer", {}, set())     # 不读知识库
+        self.push(0)
+        self.wait_coach()
+        wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))
+        t = 1000.0
+        for i, hp in enumerate([100] * 6 + [60, 20]):
+            self.push(19.5 + i / 120, hp=hp, now=t + i * 0.5)          # 19 分半：黑皇杖还没到提醒时间
+        ov = self.push(20.2, deaths=1, alive=False, now=t + 4)
+        self.assertEqual(ov["view"]["title"], "死亡复盘 · 20:12 · 第 1 次")
+        lines = ov["view"]["lines"]
+        self.assertTrue(lines[0]["text"].startswith("被瞬间打爆"), lines)
+        self.assertEqual(lines[-2:], [{"kind": "head", "text": "还缺"}, {"kind": "warn", "text": "缺黑皇杖"}])
+        self.assertEqual(len(list(death.DUMP_DIR.glob("*.json"))), 1)   # 死前推送存了一份
+        old = live_mod.DEATH_MIN_SHOW
+        live_mod.DEATH_MIN_SHOW = 0
+        try:
+            self.assertTrue(self.push(20.3, deaths=1, alive=False)["visible"])   # 还没复活
+            self.assertFalse(self.push(20.8, deaths=1)["visible"])              # 复活：收起
+        finally:
+            live_mod.DEATH_MIN_SHOW = old
 
 
 class BriefLiveTest(unittest.TestCase):
@@ -302,8 +405,75 @@ class BriefLiveTest(unittest.TestCase):
         wait(self.live.submit(self.live.action, {"type": "show_brief"}))         # 热键 / 面板按钮再看：先看打法
         ov = json.loads(self.live.current_snapshot)["overlay"]
         self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief" and ov["view"]["page"] == "plan")
+        ov = self.push("GAME_IN_PROGRESS", 0.5)                                  # 下一轮 tick：不能又被收起
+        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief")
         wait(self.live.submit(self.live.toggle_overlay))                         # F8 关掉
         self.assertIsNone(self.live.coach_card)
+
+
+class PickLiveTest(unittest.TestCase):
+    """选人时点推荐英雄：先出「如果选它」的数据页，AI 写完翻到打法页；× 回到推荐；阵容变了标出来"""
+
+    def setUp(self):
+        self.built = []
+        self.plan_go = threading.Event()
+
+        def build(cfg, my_id, ally_ids, enemy_ids, pos):
+            self.built.append((my_id, sorted(ally_ids), sorted(enemy_ids), pos))
+            b = brief.Brief("本局要点")
+            b.add("对线", [("row", "对上斧王和平时差不多")])
+            return b
+
+        def plan(cfg, my_id, ally_ids, enemy_ids, lane_ids, text):
+            self.plan_go.wait(5)
+            return gameplan.Plan([("对线期（0~10 分钟）", [gameplan.Tip("先补刀", "强势期数据", "对上斧王")])])
+
+        self.live = make_live(brief_build=build, plan_build=plan)
+        self.live.slots["dire"][:1] = ["斧王"]
+        self.live.start()
+        wait(self.live.submit(self.live.refresh))
+
+    def tearDown(self):
+        self.live.close()
+
+    def view(self):
+        time.sleep(0.1)                                         # 后台线程做完再排进来
+        wait(self.live.submit(lambda: None))
+        return json.loads(self.live.current_snapshot)["overlay"]["view"]
+
+    def test_click_pick_then_plan_then_close(self):
+        wait(self.live.submit(self.live.action, {"type": "explain_pick", "hero_id": PL.id}))
+        v = self.view()
+        self.assertEqual(self.built, [(PL.id, [], [AXE.id], 1)])
+        self.assertEqual(v["kind"], "brief")
+        self.assertTrue(v["title"].startswith("如果选幻影长矛手"))
+        self.assertEqual(v["page"], "data")
+        self.assertIn("正在写", self.live.pick_brief.plan_note)
+
+        wait(self.live.submit(self.live.action, {"type": "explain_pick", "hero_id": PL.id}))   # 同一局面再点：不重做
+        self.assertEqual(len(self.built), 1)
+
+        self.plan_go.set()
+        v = self.view()
+        self.assertEqual(v["page"], "plan")
+        self.assertEqual(v["sections"][0]["lines"][0]["text"], "先补刀")
+        wait(self.live.submit(self.live.action, {"type": "brief_page", "page": "data"}))
+        self.assertEqual(self.view()["page"], "data")
+
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "dire", "index": 1, "text": "潮汐猎人"}))
+        self.assertIn("阵容变了", self.view()["title"])
+
+        wait(self.live.submit(self.live.close_overlay))          # ×：回到推荐，叠加层不收起
+        snap = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertEqual(snap["view"]["kind"], "draft")
+        self.assertTrue(snap["visible"])
+
+    def test_build_error_shown(self):
+        self.live._brief_build = no_brief
+        wait(self.live.submit(self.live.action, {"type": "explain_pick", "hero_id": TIDE.id}))
+        v = self.view()
+        self.assertEqual(v["kind"], "notice")
+        self.assertIn("测试里不联网", v["lines"][0]["text"])
 
 
 class WebServerTest(unittest.TestCase):

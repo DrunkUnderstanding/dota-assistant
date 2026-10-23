@@ -1,6 +1,6 @@
 // 控制面板：把 Python 推来的快照画出来，把操作发回去。局面以 Python 那边为准，这里不存状态。
 import { act, connect, getJSON } from './api.js';
-import { portrait, renderOverlay } from './view.js';
+import { bindOverlayClicks, portrait, renderOverlay } from './view.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -223,8 +223,8 @@ ac.addEventListener('mousedown', (e) => {
   if (item && acState) { e.preventDefault(); pick(Number(item.dataset.k)); }
 });
 
-// 右侧预览里的局内提醒也能直接关
-$('#preview').addEventListener('click', (e) => { if (e.target.closest('.ov-close')) act('dismiss_coach'); });
+// 右侧预览和叠加层一样能点：推荐英雄 → 选它怎么打，标签 → 翻页，× → 关卡片
+bindOverlayClicks($('#preview'), run);
 
 // ---------- 启动 ----------
 

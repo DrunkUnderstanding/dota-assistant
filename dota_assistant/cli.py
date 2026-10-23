@@ -18,6 +18,9 @@
                                查当前版本官方技能 / 物品说明
   kb mistake [--wrong 错误说法 --right 正确说法 --hero X --item Y --who 开发助手 --evidence 原文 --has-tag 标签]
                                列出 / 记录 AI 常见误判（knowledge/mistakes.toml）
+  logs [-n 行数] [--open]       看最新一份日志的末尾（--open 打开日志文件夹）
+
+运行类命令（start / run / demo / update …）每次在 logs/ 下写一个日志文件，见 log.py。
 """
 from __future__ import annotations
 
@@ -26,6 +29,11 @@ import sys
 from pathlib import Path
 
 from . import config, data
+from . import log as logs
+
+# 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
+FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
+                     "coach-sim", "brief-sim"}
 
 
 def _split(s: str | None) -> list[str]:
@@ -183,6 +191,20 @@ def _kb_mistake(base, mistakes, args) -> int:
     return 0
 
 
+def cmd_logs(args) -> int:
+    if args.open:
+        print(f"已打开 {logs.open_dir()}")
+        return 0
+    path = logs.latest()
+    if path is None:
+        print(f"还没有日志（{logs.LOG_DIR}）")
+        return 1
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    print(f"== {path}（共 {len(lines)} 行，下面是最后 {min(args.n, len(lines))} 行）")
+    print("\n".join(lines[-args.n:]))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -239,8 +261,13 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("gsi-dump", help="记录 GSI 推送内容")
     yp = sub.add_parser("say", help="测试语音")
     yp.add_argument("text", nargs="+")
+    op = sub.add_parser("logs", help="看最新的日志")
+    op.add_argument("-n", type=int, default=60, help="显示最后多少行")
+    op.add_argument("--open", action="store_true", help="打开日志文件夹")
     args = ap.parse_args(argv)
     cfg = config.load()
+    logs.setup(cfg, args.cmd, to_file=args.cmd in FILE_LOG_COMMANDS
+               or (args.cmd == "kb" and args.action == "update"))
 
     if args.cmd == "update":
         (data.update_player if args.player else data.update)(cfg)
@@ -303,4 +330,6 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(max(2.0, len("".join(args.text)) * 0.25))
         s.close()
         return 0
+    if args.cmd == "logs":
+        return cmd_logs(args)
     return 1

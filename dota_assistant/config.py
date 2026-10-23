@@ -29,7 +29,7 @@ class Config:
     scan_interval: float = 1.0        # 识别间隔（秒）
     match_threshold: float = 0.70     # 头像相似度低于此视为空位 / 认不出（用 recognize 看实际分数再调）
     gsi_port: int = 3000              # Game State Integration 本地端口
-    voice: bool = True
+    voice: bool = False               # 语音播报先关掉、面板开关也隐藏了（玩家 2026-10-22 决定），这里改 true 能打开
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
     ai_plan: bool = True              # 本局要点里加「AI 打法」（走 Claude Code 订阅，每局一次，几十秒）
@@ -43,6 +43,7 @@ class Config:
     hotkey_rescan: str = "F9"         # 立即重新识别并播报
     hotkey_shot: str = "F10"          # 保存一张全屏截图到 shots/（收集校准 / 学习素材）
     hotkey_brief: str = "F6"          # 再看一次本局要点（号角响后会自动收起）
+    log_level: str = "INFO"           # 日志详细程度（logs/ 下）：INFO / DEBUG（排查问题时用，会多记每秒一次的识别分数和每次 GSI 推送）
 
 
 def load(path: Path | None = None) -> Config:

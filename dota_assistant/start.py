@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import json
+import logging
 import re
 import shutil
 import subprocess
@@ -20,6 +22,13 @@ from .config import DATA_DIR, ROOT
 FULL_UPDATE_DAYS = 3
 PLAYER_UPDATE_HOURS = 12
 FIRST_RUN_MARK = DATA_DIR / ".gsi_hint_shown"
+log = logging.getLogger(__name__)
+
+
+def _say(msg: str) -> None:
+    """给玩家看的提示：打印到窗口，同时记进日志"""
+    print(msg, flush=True)
+    log.info(msg.strip())
 
 
 def _ask(prompt: str) -> str:
@@ -32,7 +41,7 @@ def _ask(prompt: str) -> str:
 def ensure_config() -> config.Config:
     path = ROOT / "config.toml"
     if not path.exists():
-        print("第一次使用，需要两样东西（直接回车跳过，之后可以在 config.toml 里补）")
+        _say("第一次使用，需要两样东西（直接回车跳过，之后可以在 config.toml 里补）")
         acc = _ask("  Steam 好友代码（游戏里个人资料能看到的那串数字）：")
         tok = _ask("  STRATZ token（stratz.com/api 登录后复制，没有就回车）：")
         text = (ROOT / "config.example.toml").read_text(encoding="utf-8")
@@ -41,7 +50,7 @@ def ensure_config() -> config.Config:
         if tok:
             text = re.sub(r'^stratz_token = ""', f'stratz_token = "{tok}"', text, flags=re.M)
         path.write_text(text, encoding="utf-8")
-        print(f"  已生成 {path.name}\n")
+        _say(f"  已生成 {path.name}\n")
     return config.load()
 
 
@@ -51,15 +60,16 @@ def ensure_electron() -> bool:
         return True
     npm = shutil.which("npm")
     if not npm:
-        print("界面需要 Node.js：到 https://nodejs.org 下载 LTS 版安装，装完重新双击「启动助手」。")
+        _say("界面需要 Node.js：到 https://nodejs.org 下载 LTS 版安装，装完重新双击「启动助手」。")
         return False
-    print("第一次使用，安装界面组件（Electron，约 1~3 分钟）…")
+    _say("第一次使用，安装界面组件（Electron，约 1~3 分钟）…")
     r = subprocess.run([npm, "install", "--no-fund", "--no-audit"], cwd=ELECTRON_DIR)
+    log.info("npm install 返回 %s", r.returncode)
     if r.returncode == 0 and not find_electron() and shutil.which("node"):
         # 实测 npm 11 装完有时没下载 Electron 本体（安装脚本没跑），手动补跑一次
         subprocess.run([shutil.which("node"), "node_modules/electron/install.js"], cwd=ELECTRON_DIR)
     if r.returncode != 0 or not find_electron():
-        print("界面组件安装失败，看上面的报错；网络不好可以多试一次。")
+        _say("界面组件安装失败，看上面的报错；网络不好可以多试一次。")
         return False
     return True
 
@@ -85,20 +95,37 @@ def find_dota() -> Path | None:
 
 
 def ensure_gsi(cfg: config.Config) -> None:
-    from .gsi import CFG_NAME, install_cfg
+    from .gsi import CFG_NAME, CFG_TEMPLATE, install_cfg
     dota = find_dota()
     if dota is None:
-        print("没找到 Dota 2 安装目录，跳过 GSI（阵营要在控制面板手动选）。")
+        _say("没找到 Dota 2 安装目录，跳过 GSI（阵营要在控制面板手动选）。")
         return
     target = dota / "game" / "dota" / "cfg" / "gamestate_integration" / CFG_NAME
-    if not target.exists() or f":{cfg.gsi_port}/" not in target.read_text(encoding="utf-8"):
+    # 端口或订阅的字段变了都重写（例如死亡复盘要的 abilities）；Dota 启动时才读，开着的话要重开 Dota
+    if not target.exists() or target.read_text(encoding="utf-8") != CFG_TEMPLATE.format(port=cfg.gsi_port):
         install_cfg(dota, cfg.gsi_port)
-        print(f"已写入 GSI 配置：{target}")
+        _say(f"已写入 GSI 配置：{target}（Dota 开着的话要重开才生效）")
     if not FIRST_RUN_MARK.exists():
-        print("提醒（只说一次）：Steam 库里右键 Dota 2 → 属性 → 启动选项，加上  -gamestateintegration\n"
+        _say("提醒（只说一次）：Steam 库里右键 Dota 2 → 属性 → 启动选项，加上  -gamestateintegration\n"
               "              Dota 设置：显示模式改「无边框窗口」，社交里打开「公开比赛数据」。\n")
         DATA_DIR.mkdir(exist_ok=True)
         FIRST_RUN_MARK.write_text("1", encoding="utf-8")
+
+
+def ensure_grid_portraits() -> None:
+    """选人网格认禁用要用游戏自己的英雄图（gamefiles.py）；游戏更新了才重新导出"""
+    from . import gamefiles
+    dota = find_dota()
+    heroes_file = DATA_DIR / "heroes.json"
+    if dota is None or not heroes_file.exists():
+        return
+    try:
+        n, missing = gamefiles.extract_selection(dota, json.loads(heroes_file.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as e:
+        log.warning("网格图导出失败，禁用识别用不了：%s", e)
+        return
+    if n:
+        _say(f"已从游戏资源导出 {n} 张选人网格图（识别禁用用）" + (f"，没取到：{', '.join(missing)}" if missing else ""))
 
 
 def _age_hours(p: Path) -> float:
@@ -109,13 +136,14 @@ def ensure_data(cfg: config.Config) -> None:
     stats = data.stats_path(cfg)
     try:
         if _age_hours(stats) > FULL_UPDATE_DAYS * 24 or not (DATA_DIR / "heroes.json").exists():
-            print("更新数据（3 天一次，约 5 分钟）…")
+            _say("更新数据（3 天一次，约 5 分钟）…")
             data.update(cfg)
         elif cfg.account_id and _age_hours(DATA_DIR / "player.json") > PLAYER_UPDATE_HOURS:
             data.update_player(cfg)
     except Exception as e:                       # 没网时用旧数据照样能开
         if not stats.exists():
             raise
+        log.info("数据更新失败的详细信息", exc_info=True)
         print(f"数据更新失败（{e}），先用旧数据。")
 
 
@@ -125,6 +153,7 @@ def main() -> int:
         return 1
     ensure_gsi(cfg)
     ensure_data(cfg)
-    print("启动助手…（关掉控制面板窗口即退出）")
+    ensure_grid_portraits()
+    _say("启动助手…（关掉控制面板窗口即退出）")
     from .webui import run
     return run(cfg)

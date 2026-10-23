@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import statistics
 import time
 from dataclasses import dataclass, field
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from . import data, kb
 from .config import DATA_DIR, Config
 
+log = logging.getLogger(__name__)
 BENCH_DIR = DATA_DIR / "bench"
 ITEMS_CONST = DATA_DIR / "opendota_items.json"
 
@@ -122,12 +124,11 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
     # 1. 黑皇杖：对面控制多
     ctrl = [(e, e.with_tag(*kb.CONTROL_TAGS)) for e in enemies]
     ctrl = [(e, hits) for e, hits in ctrl if hits]
-    if len(ctrl) >= BKB_CONTROL_MIN and "提供技能免疫" not in my_tags:
-        due = BKB_FALLBACK_MIN
-        if bench:
-            share, med = item_timings(bench).get(base.item_ids.get("item_black_king_bar"), (0, 0))
-            if share >= 0.15:
-                due = med + CORE_LATE
+    share, med = (item_timings(bench).get(base.item_ids.get("item_black_king_bar"), (0, 0)) if bench else (0, 0))
+    # 自带技能免疫的英雄（噬魂鬼狂暴）一般不用黑皇杖；但同分段多数人照样做的（哈斯卡跳跃只免疫一下）还是提醒
+    self_immune = "提供技能免疫" in my_tags and share < 0.3
+    if len(ctrl) >= BKB_CONTROL_MIN and not self_immune:
+        due = med + CORE_LATE if share >= 0.15 else BKB_FALLBACK_MIN
         who = "、".join(f"{e.name}（{hits[0][0].name}）" for e, hits in ctrl)
         pierce = [f"{e.name}的{ab.name}" for e, hits in ctrl for ab, _, _ in hits if ab.pierces_immunity]
         text = f"对面 {len(ctrl)} 个英雄有控制，你还没有黑皇杖，优先做"
@@ -244,6 +245,7 @@ def prepare(cfg: Config, my_id: int, enemy_ids: list[int], pos: int) -> tuple[Co
         try:
             bench = fetch_bench(cfg, my_id, pos)
         except Exception as e:                   # 没网也照样提醒对抗装，只是没有节奏对比
+            log.warning("局内提醒：同分段数据没拉到：%s", e, exc_info=not isinstance(e, data.NETWORK_ERRORS))
             notes.append(f"同分段数据没拉到（{e}），这局只提醒对抗装")
     if not enemies:
         notes.append("没有对面阵容（选人时没识别 / 没填），这局只看出装节奏")

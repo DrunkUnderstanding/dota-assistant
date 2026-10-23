@@ -9,11 +9,13 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections import defaultdict
 from pathlib import Path
 
 import requests
+from urllib3.util.retry import Retry
 
 from .config import DATA_DIR, Config
 from .heroes import Hero, HeroDB
@@ -25,14 +27,32 @@ STRATZ = "https://api.stratz.com/graphql"
 IDS_PER_DAY = 1_550_000   # match_id 每天大约增长这么多（2026-10 实测）
 CHUNK_IDS = 1_000_000     # 单次 explorer 查询的 match_id 跨度（约 30 万局，6~9 秒）；超时会自动对半拆
 MIN_DURATION = 15 * 60    # 少于 15 分钟的局多半是掉线 / 秒退，不计
+logger = logging.getLogger(__name__)  # 不叫 log：下面不少函数有 log 参数（进度提示）
+
+
+class APIError(RuntimeError):
+    """数据源自己报错（STRATZ errors / explorer err）：和断网、503 一样算网络问题"""
+
+
+NETWORK_ERRORS = (requests.RequestException, APIError)   # 日志里只记一行，不记堆栈（不是程序 bug）
+
+
+def _say(msg: str) -> None:
+    """进度提示：打印出来，同时记进日志"""
+    print(msg, flush=True)
+    logger.info(msg.strip())
 
 _session = requests.Session()
+# 网络不稳时 STRATZ / OpenDota 偶尔直接断连接（SSL EOF / 10054）：连接层自动重试，HTTP 状态码仍由下面自己处理
+_session.mount("https://", requests.adapters.HTTPAdapter(max_retries=Retry(
+    total=6, backoff_factor=1, allowed_methods=None, status_forcelist=(), raise_on_status=False)))
 
 
 def _get(url: str, **params):
     for attempt in range(4):
         r = _session.get(url, params=params, timeout=120)
         if r.status_code == 429:
+            logger.warning("OpenDota 限速（429），%d 秒后重试：%s", 5 * (attempt + 1), url)
             time.sleep(5 * (attempt + 1))
             continue
         if r.status_code == 400 and "explorer" in url:
@@ -48,18 +68,20 @@ def _stratz(cfg: Config, query: str, **variables) -> dict:
                           headers={"Authorization": f"Bearer {cfg.stratz_token}", "User-Agent": "STRATZ_API"})
         if r.status_code != 429:
             break
+        logger.warning("STRATZ 限速（429），%d 秒后重试", 3 * (attempt + 1))
         time.sleep(3 * (attempt + 1))      # 免费 token 有每秒 / 每分钟限速
     r.raise_for_status()
     res = r.json()
     if res.get("errors"):
-        raise RuntimeError(f"STRATZ 出错：{res['errors'][0].get('message')}")
+        logger.warning("STRATZ 返回错误：%s", res["errors"])
+        raise APIError(f"STRATZ 出错：{res['errors'][0].get('message')}")
     return res["data"]
 
 
 def _sql(q: str) -> list[dict]:
     res = _get(f"{OPENDOTA}/explorer", sql=q)
     if res.get("err"):
-        raise RuntimeError(f"OpenDota explorer 出错：{res['err']}")
+        raise APIError(f"OpenDota explorer 出错：{res['err']}")
     return res["rows"]
 
 
@@ -85,7 +107,7 @@ CDN = "https://cdn.cloudflare.steamstatic.com"
 PORTRAIT_DIR = DATA_DIR / "portraits"
 
 
-def fetch_portraits(log=print) -> None:
+def fetch_portraits(log=_say) -> None:
     """下载每个英雄的横版头像（256×144），屏幕识别的初始模板。已有的跳过。"""
     PORTRAIT_DIR.mkdir(parents=True, exist_ok=True)
     heroes = json.loads((DATA_DIR / "heroes.json").read_text(encoding="utf-8"))
@@ -132,7 +154,7 @@ def _chunk_queries(lo_id: int, hi_id: int, bracket: str) -> tuple[str, str]:
     return vs, syn
 
 
-def fetch_stats(cfg: Config, log=print) -> dict:
+def fetch_stats(cfg: Config, log=_say) -> dict:
     latest = max(m["match_id"] for m in _get(f"{OPENDOTA}/publicMatches"))
     start = latest - cfg.days * IDS_PER_DAY
     bracket = _bracket_sql(cfg)
@@ -261,11 +283,19 @@ def _player_matches_opendota(cfg: Config) -> list[tuple[int, int, bool]]:
     return [(m["hero_id"], 0, (m["player_slot"] < 128) == m["radiant_win"]) for m in matches]
 
 
-def fetch_player(cfg: Config) -> dict:
+def fetch_player(cfg: Config, log=_say) -> dict:
     """段位 + 最近 cfg.history_matches 局天梯每个英雄在每个位置的局数 / 胜场。
     有 STRATZ token 时带位置（未解析的局记为位置 0），否则全部记为位置 0。需要游戏里开了「公开比赛数据」。"""
     prof = _get(f"{OPENDOTA}/players/{cfg.account_id}")
-    matches = _player_matches_stratz(cfg) if cfg.stratz_token else _player_matches_opendota(cfg)
+    matches = None
+    if cfg.stratz_token:
+        try:
+            matches = _player_matches_stratz(cfg)
+        except (RuntimeError, requests.RequestException) as e:
+            # STRATZ 数据库偶尔整体超时（NPGSQL TIMEOUT）：先用 OpenDota 顶上，这次没有位置信息
+            log(f"  STRATZ 拉不到对局（{e}），改用 OpenDota（不带位置）")
+    if matches is None:
+        matches = _player_matches_opendota(cfg)
     heroes: dict[str, dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for hero, pos, win in matches:
         heroes[str(hero)][str(pos)][0] += 1
@@ -280,12 +310,12 @@ def fetch_player(cfg: Config) -> dict:
     }
 
 
-def update_player(cfg: Config, log=print) -> None:
+def update_player(cfg: Config, log=_say) -> None:
     if not cfg.account_id:
         return
     DATA_DIR.mkdir(exist_ok=True)
     log("拉取个人数据 …")
-    me = fetch_player(cfg)
+    me = fetch_player(cfg, log)
     (DATA_DIR / "player.json").write_text(json.dumps(me, ensure_ascii=False), encoding="utf-8")
     by_pos: dict[str, int] = defaultdict(int)
     for v in me["heroes"].values():
@@ -337,7 +367,7 @@ def _main_position(positions: dict[int, dict[int, tuple[int, int]]], hero: int) 
 
 # ---------- 汇总 ----------
 
-def update(cfg: Config, log=print) -> None:
+def update(cfg: Config, log=_say) -> None:
     DATA_DIR.mkdir(exist_ok=True)
     log("拉取英雄表 …")
     heroes = fetch_heroes()

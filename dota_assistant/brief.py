@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import itertools
 import json
+import logging
 import time
 from dataclasses import dataclass, field
 
@@ -19,6 +20,7 @@ from . import coach, data, kb
 from .config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 
+log = logging.getLogger(__name__)
 BRIEF_DIR = DATA_DIR / "brief"
 CACHE_DAYS = 3
 
@@ -137,8 +139,13 @@ class Brief:
     plan_note: str = ""           # 打法那页没内容时显示什么（生成中 / 出错 / 没开）
 
     def add(self, title: str, lines: list[tuple[str, str]]) -> None:
-        if lines:
-            self.sections.append((title, lines))
+        if not lines:
+            return
+        for t, ls in self.sections:
+            if t == title:                       # 同名小节合并（例如几条「说明」）
+                ls.extend(lines)
+                return
+        self.sections.append((title, lines))
 
     def view(self, page: str = "data", hint: str = "") -> dict:
         """两页：data = 统计数据（本局要点），plan = AI 打法"""
@@ -152,7 +159,8 @@ class Brief:
         else:
             sections = [{"title": t, "lines": [{"kind": k, "text": x} for k, x in ls]} for t, ls in self.sections]
         return {"kind": "brief", "title": self.title, "closable": True, "page": page, "hint": hint,
-                "tabs": [{"label": "数据", "on": page == "data"}, {"label": "打法", "on": page == "plan"}],
+                "tabs": [{"label": "数据", "page": "data", "on": page == "data"},
+                         {"label": "打法", "page": "plan", "on": page == "plan"}],
                 "sections": sections}
 
     def text(self) -> str:
@@ -184,6 +192,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
             try:
                 v = fn()
             except Exception as e:
+                log.warning("本局要点：STRATZ %s 没拉到：%s", what, e, exc_info=not isinstance(e, data.NETWORK_ERRORS))
                 b.add("说明", [("dim", f"STRATZ 数据没拉到（{what}：{e}）")])
                 continue
             hero, bench, curves = (v, bench, curves) if what == "hero" else (hero, v, curves) if what == "bench" \

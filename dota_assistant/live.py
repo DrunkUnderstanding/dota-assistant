@@ -1,6 +1,8 @@
 """实时助手的主控（不依赖任何界面库）：定时识别、局面、推荐、语音、热键，状态整理成 JSON 推给网页界面。
 选完人（GSI 策略时间）弹「本局要点」卡片（brief.py），后台再让大模型写「打法」第二页（gameplan.py），号角响后收起；
-对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片。
+对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片；
+死亡时同一张卡片先说「刚才是怎么死的」（death.py，看 GSI 里自己死前 20 秒的血量 / 状态 / 保命装备），复活后自动收起。
+选人时点某个推荐英雄，就按「如果选它」先做一张同样的要点卡片（数据页 + AI 打法页），看完点 × 回到推荐。
 
 「控制面板的格子」就是这里的 self.slots，识别和网页输入都只往里写。
 所有改状态的操作都放进同一个工作线程按顺序执行（网页请求、热键、定时识别都只是往队列里丢任务）：
@@ -11,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import queue
 import threading
 import time
@@ -20,10 +23,11 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, coach, gameplan
+from . import brief, coach, death, gameplan, grid, roles
+from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
-from .gsi import STRATEGY_STATE, GSIServer
+from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer
 from .heroes import Hero
 from .hotkeys import Hotkeys
 from .speech import Speaker
@@ -32,8 +36,28 @@ from .vision import EMPTY, Calibration, DraftView, TemplateBank, recognize, writ
 SHOTS_DIR = ROOT / "shots"
 OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
 SIDES = ("radiant", "dire")
+DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒（复活很快 / 演示加速时也看得到）
 SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
+ROLE_RETRY = 3.0                               # 认位置：没认出来隔几秒再试
+GRID_CONFIRM_MIN = 0.5                         # 顶栏分数至少这么多，再加上网格核对才算认出
 SCAN_MODES = ("auto", "manual")                # 自动识别 / 手动输入
+log = logging.getLogger(__name__)
+
+
+def _names(hs) -> str:
+    return "、".join(h.name_cn for h in hs) or "无"
+
+
+def _slot_text(db, s) -> str:
+    """识别结果的一个格子：认出来的写名字，认不出写「?最像的」，后面带相似度"""
+    if s.hero_id in db.by_id:
+        return f"{db.by_id[s.hero_id].name_cn}({s.score:.2f})"
+    guess = db.by_id.get(s.guess)
+    return f"?{guess.name_cn if guess else ''}({s.score:.2f})"
+
+
+def _view_text(db, view, kinds=("radiant", "dire", "bans")) -> list[str]:
+    return [" ".join(_slot_text(db, s) for s in getattr(view, k)) or "-" for k in kinds]
 
 
 class Live:
@@ -41,7 +65,8 @@ class Live:
                  speaker: Speaker | None = None, advisor: adv.Advisor | None = None,
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
                  overlay_file: Path | None = None, coach_prepare: Callable | None = None,
-                 brief_build: Callable | None = None, plan_build: Callable | None = None):
+                 brief_build: Callable | None = None, plan_build: Callable | None = None,
+                 ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.advisor = advisor or adv.Advisor(cfg)
@@ -59,8 +84,9 @@ class Live:
         if use_gsi:
             try:
                 self.gsi = GSIServer(cfg.gsi_port).start()
-            except OSError:
+            except OSError as e:
                 self.gsi = None                  # 端口被占用：照样能用，只是没有 GSI
+                log.warning("GSI 端口 %d 用不了（%s），这次没有 GSI", cfg.gsi_port, e)
 
         # ---- 当前局面（控制面板的格子是唯一的「当前局面」，识别和手动输入都只是往里写）----
         self.slots: dict[str, list[str]] = {s: [""] * 5 for s in SIDES}
@@ -89,13 +115,36 @@ class Live:
         self.brief_match: str | None = None      # 本局要点为哪一局做的
         self.brief: brief.Brief | None = None    # 做好的本局要点（关掉以后按热键还能再看）
         self.brief_page = "data"                 # 卡片显示哪一页：data 数据 / plan AI 打法
+        self._horn_match: str | None = None      # 哪一局已经在号角响时收起过本局要点
+        self._drafts_seen = 0                    # 进过几次选人阶段：本地 / 机器人局 matchid 一直是 0，靠它区分换局
+        self._in_selection = False
         self._plan_build = plan_build or gameplan.generate
         self.coach_voice = cfg.coach_voice       # 先不念（玩家 2026-10-22 决定），config 里能打开
         self._coach_deaths = 0
         self._coach_checkpoint = 0
+        self._death_names: tuple | None = None   # 死亡复盘用的中文名 + 保命技能（按英雄缓存）
+        self._death_shown = 0.0                  # 死亡卡片弹出的时间；复活后收起
+
+        # ---- 选人时「如果选它」：点推荐英雄做的要点卡片 ----
+        self.pick_key: tuple | None = None       # (英雄 id, 局面 key, 位置)；None = 没在看
+        self.pick_brief: brief.Brief | None = None
+        self.pick_page = "data"
+        self.pick_note = ""                      # 还没做好 / 出错时显示什么
 
         self.last_view: DraftView | None = None
         self.pending_key = None
+        # 选人网格上的禁用（红斜线），见 grid.py；新布局在后台建图
+        self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher()
+        self._grid_building = False
+        self._grid_retry_at = 0.0                # 建图失败后隔一会儿再试
+        self._grid_last_boxes: tuple = ()
+        # 自动认位置（roles.py）：天梯选人时顶栏名字下面的「优势路 / 纯辅助…」
+        self._read_roles = read_roles or roles.read_roles
+        self.position_auto = False               # 当前位置是不是自动认出来的
+        self._base_position = self.position      # 认不出时回到的位置（config 或玩家手动选的）
+        self._role_draft = -1                    # 哪一局已经认出来了（或者玩家手动改过），不再认
+        self._role_busy = False
+        self._role_next = 0.0
         self.prev_draft: adv.Draft | None = None
         self.last_scan = 0.0
         self.view: dict = {}
@@ -109,11 +158,18 @@ class Live:
 
         self.hotkeys = None
         if use_hotkeys:
-            self.hotkeys = Hotkeys({cfg.hotkey_toggle: lambda: self.submit(self.toggle_overlay),
-                                    cfg.hotkey_lock: lambda: self.submit(self.toggle_lock),
-                                    cfg.hotkey_rescan: lambda: self.submit(self.scan, True),
-                                    cfg.hotkey_shot: lambda: self.submit(self.save_shot),
-                                    cfg.hotkey_brief: lambda: self.submit(self.show_brief)}).start()
+            def key(name: str, fn: Callable, *args):
+                def press():
+                    log.info("热键 %s", name)
+                    self.submit(fn, *args)
+                return press
+            self.hotkeys = Hotkeys({cfg.hotkey_toggle: key(cfg.hotkey_toggle, self.toggle_overlay),
+                                    cfg.hotkey_lock: key(cfg.hotkey_lock, self.toggle_lock),
+                                    cfg.hotkey_rescan: key(cfg.hotkey_rescan, self.scan, True),
+                                    cfg.hotkey_shot: key(cfg.hotkey_shot, self.save_shot),
+                                    cfg.hotkey_brief: key(cfg.hotkey_brief, self.show_brief)}).start()
+        log.info("校准：%s；模板：官方 %s 张 + 学习 %s 张", "已校准" if self.cal and self.cal.ready else "没校准",
+                 self.bank.portraits, self.bank.learned)
 
     # ---------- 线程 / 订阅 ----------
 
@@ -148,7 +204,8 @@ class Live:
             if fut:
                 fut.set_result(res)
         except Exception as e:                   # 单个操作出错不能拖垮整个助手
-            self.message = f"出错：{e}"
+            log.exception("操作出错：%s%s", getattr(fn, "__name__", fn), args or "")
+            self.message = f"出错：{e}（详情见日志）"
             if fut:
                 fut.set_exception(e)
         self.publish()
@@ -184,6 +241,7 @@ class Live:
     def action(self, a: dict) -> str | None:
         """在工作线程里执行一条网页操作，返回状态栏提示。未知操作抛 ValueError。"""
         t = a.get("type")
+        log.info("网页操作 %s", a)
         if t == "set_slot":
             side, i = a["side"], int(a["index"])
             if side not in SIDES or not 0 <= i < 5:
@@ -197,6 +255,9 @@ class Live:
             key, value = a.get("key"), a.get("value")
             if key == "position" and int(value) in POSITION_NAMES:
                 self.position = int(value)
+                self.position_auto = False
+                self._base_position = self.position
+                self._role_draft = self._drafts_seen         # 玩家手动选了，这局不再自动改
                 self.refresh(force_speech=True)
             elif key == "side_mode" and value in SIDE_MODES:
                 self.side_mode = value
@@ -223,9 +284,16 @@ class Live:
         elif t == "shot":
             self.save_shot()
         elif t == "dismiss_coach":
-            self.coach_card = None
+            if self.coach_card:
+                self.coach_card = None
+            else:
+                self.pick_key = None
         elif t == "show_brief":
             self.show_brief()
+        elif t == "explain_pick":
+            self.explain_pick(int(a["hero_id"]))
+        elif t == "brief_page":
+            self.set_brief_page(str(a.get("page")))
         elif t == "toggle_overlay":
             self.toggle_overlay()
         elif t == "toggle_lock":
@@ -234,6 +302,8 @@ class Live:
             self.close_overlay()
         elif t == "overlay_moved":
             self.overlay_moved(float(a["x"]), float(a["y"]))
+        elif t == "open_logs":
+            self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
             raise ValueError(f"不认识的操作 {t!r}")
         return self.message
@@ -261,6 +331,9 @@ class Live:
         bans = [h for t in self.bans_text.replace("，", ",").split(",") if (h := self._hero(t))]
         if self.last_view and self.mode == "auto":
             bans += [self.db.by_id[i] for i in self.last_view.ids("bans") if i in self.db.by_id]
+        if self.mode == "auto":
+            bans += [self.db.by_id[i] for i in sorted(self.grid.bans) if i in self.db.by_id]
+        bans = list({h.id: h for h in bans}.values())
         my = None
         if self.gsi and self.gsi.state.alive and self.gsi.state.my_hero_key:
             my = next((h for h in self.db if h.key == self.gsi.state.my_hero_key), None)
@@ -271,10 +344,18 @@ class Live:
         draft = self.current_draft()
         advice = self.advisor.advise(draft, self.position)
         self.view = adv.render_view(advice, self.side())
+        self.view["position_auto"] = self.position_auto
         self.notice = None
-        if force_speech or self.prev_draft is None or draft.key() != self.prev_draft.key():
+        changed = self.prev_draft is None or draft.key() != self.prev_draft.key()
+        if changed:
+            log.info("局面：我 %s · 队友 %s · 对面 %s · 禁用 %s · %d 号位 → 推荐 %s",
+                     draft.my_hero.name_cn if draft.my_hero else "未选", _names(draft.allies), _names(draft.enemies),
+                     _names(draft.bans), self.position,
+                     "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.mine + advice.other) or "无")
+        if force_speech or changed:
             text = adv.speech(self.prev_draft, advice, force=force_speech)
             if text:
+                log.info("播报：%s", text)
                 self.speaker.say(text)
         self.prev_draft = draft
 
@@ -282,6 +363,7 @@ class Live:
         self.slots = {s: [""] * 5 for s in SIDES}
         self.hints = {s: [{} for _ in range(5)] for s in SIDES}
         self.bans_text = ""
+        self.grid.reset()
         self.prev_draft = None
         self.refresh()
 
@@ -298,23 +380,114 @@ class Live:
             return self.gsi.state.in_draft
         return self.scan_without_gsi
 
+    def should_scan_bans(self) -> bool:
+        """禁用只在选人阶段出现；不需要顶栏校准"""
+        if self.mode != "auto":
+            return False
+        if self.gsi and self.gsi.state.alive:
+            return self.gsi.state.game_state == SELECTION_STATE
+        return self.scan_without_gsi
+
     def tick(self) -> None:
-        if self.should_scan():
-            self.scan()
-        self.coach_tick()
+        self.coach_tick()                        # 先更新阶段（进新一局选人要先清掉上一局的禁用）
+        scan, bans = self.should_scan(), self.should_scan_bans()
+        if scan or bans:
+            img = self.grab()                    # 顶栏识别和禁用识别共用一帧
+            if bans and img is not None:
+                self.scan_bans(img)              # 先看网格：顶栏认不准的格子拿「网格里已被选走」核对
+                self.scan_role(img)
+            if scan:
+                self.scan(img=img)
+
+    def scan_bans(self, img) -> None:
+        boxes = grid.find_cells(img)
+        # 只在 GSI 确认是选人阶段时建新布局，免得把桌面上别的图片墙当成选人网格
+        # 格子位置连续两帧一样才建（刚进选人时有过场动画，2026-10-23 实测第一帧建出了 134 格的错图）
+        selecting = bool(self.gsi and self.gsi.state.alive and self.gsi.state.game_state == SELECTION_STATE)
+        sig = tuple(boxes)
+        steady, self._grid_last_boxes = sig == self._grid_last_boxes, sig
+        if (selecting and steady and not self._grid_building and time.monotonic() >= self._grid_retry_at
+                and self.grid.needs_map(img, boxes)):
+            self._grid_building = True
+            log.info("选人网格：新布局（%d 格），后台建图", len(boxes))
+
+            def work():
+                t0 = time.monotonic()
+                try:
+                    gmap = self.grid.build(img, boxes)
+                    log.info("选人网格建好了（%.1f 秒）：%d 格认出 %d 个，%s", time.monotonic() - t0, len(gmap.cells),
+                             sum(h is not None for h in gmap.heroes), "干净画面" if gmap.clean else "画面里已有禁用，先凑合用")
+                except Exception:
+                    log.exception("选人网格建图失败")
+                    gmap = None
+                self.submit(self._grid_ready, gmap)
+            threading.Thread(target=work, daemon=True, name="grid").start()
+        if self.grid.update(img, boxes):
+            log.info("网格识别：禁用 %s；已选 %s", _names(self._ids(self.grid.bans)), _names(self._ids(self.grid.taken)))
+            self.refresh()
+
+    def scan_role(self, img) -> None:
+        """选人阶段每 3 秒试一次认自己的位置，认出来这局就不再认"""
+        st = self.gsi.state if self.gsi else None
+        if (self._role_busy or self._role_draft == self._drafts_seen or time.monotonic() < self._role_next
+                or not (self.cal and self.cal.ready and st and st.alive and st.team)):
+            return
+        self._role_busy, self._role_next = True, time.monotonic() + ROLE_RETRY
+        draft, side, name, slot = self._drafts_seen, st.team, st.player_name, st.team_slot
+
+        def work():
+            try:
+                res = self._read_roles(img, self.cal, side, name, slot)
+            except Exception as e:               # 没有 OCR 之类：这局不再试
+                log.warning("认位置失败：%s", e)
+                res = None
+            self.submit(self._role_ready, draft, res)
+        threading.Thread(target=work, daemon=True, name="roles").start()
+
+    def _role_ready(self, draft: int, res) -> None:
+        self._role_busy = False
+        if res is None:
+            self._role_draft = draft
+            return
+        team, me = res
+        if draft != self._drafts_seen or self._role_draft == draft:
+            return                               # 已经换局 / 玩家这期间手动改了
+        if me is None or team[me] is None:
+            return                               # 没有位置这行字（加速、普通匹配）或者被挡住了：过几秒再试
+        self._role_draft = draft
+        log.info("认出位置：我在第 %d 格，排的是 %d 号位（我方：%s）", me + 1, team[me],
+                 " ".join(str(r) if r else "?" for r in team))
+        if team[me] != self.position or not self.position_auto:
+            self.position, self.position_auto = team[me], True
+            self.message = f"自动认出你这局打{POSITION_NAMES[team[me]]}"
+            self.refresh(force_speech=True)
+
+    def _grid_ready(self, gmap: grid.GridMap | None) -> None:
+        self._grid_building = False
+        if gmap is None:
+            self._grid_retry_at = time.monotonic() + 60
+            return
+        self.grid.add_map(gmap)
+
+    def _ids(self, ids) -> list[Hero]:
+        return [self.db.by_id[i] for i in sorted(ids) if i in self.db.by_id]
 
     def grab(self):
         if self.screen is None:
             self.screen = self._screen_factory()
         return self.screen.grab()
 
-    def scan(self, force: bool = False) -> None:
+    def scan(self, force: bool = False, img=None) -> None:
         if not (self.cal and self.cal.ready):
             self.message = "还没校准：先运行 python -m dota_assistant calibrate <截图>"
             return
-        view = recognize(self.grab(), self.cal, self.bank, self.cfg.match_threshold, keep_images=True)
+        img = self.grab() if img is None else img
+        view = recognize(img, self.cal, self.bank, self.cfg.match_threshold, keep_images=True)
+        self._confirm_with_grid(view)
         self.last_scan = time.time()
         key = view.key()
+        if log.isEnabledFor(logging.DEBUG):                  # 每秒一次，只在 DEBUG 时记（调 match_threshold 用）
+            log.debug("识别：天辉 %s | 夜魇 %s", *_view_text(self.db, view, SIDES))
         stable = force or key == self.pending_key            # 连续两次一致才采用，躲开动画过程
         self.pending_key = key
         if not stable:
@@ -322,8 +495,17 @@ class Live:
         changed = self.last_view is None or self.last_view.key() != key
         self.last_view = view
         if changed or force:
+            log.info("识别结果%s：天辉 %s | 夜魇 %s | 禁用 %s", "变了" if changed else "（手动重识别）",
+                     *_view_text(self.db, view))
             self.fill_slots(view)
             self.refresh(force_speech=force)
+
+    def _confirm_with_grid(self, view: DraftView) -> None:
+        """顶栏分数没过阈值、但最像的英雄在选人网格里确实已被选走（变暗没斜线）的，也算认出来。
+        2026-10-23 实测：拉比克在顶栏只有 0.63（阈值 0.70），网格里已经变暗。"""
+        for s in view.radiant + view.dire:
+            if s.hero_id is None and s.guess in self.grid.taken and s.score >= GRID_CONFIRM_MIN:
+                s.hero_id = s.guess
 
     def fill_slots(self, view: DraftView) -> None:
         """正在手动改的格子由网页自己保护（输入框有焦点时不覆盖），这里照常写"""
@@ -349,39 +531,77 @@ class Live:
                 self.bank.learn(h.id if h else EMPTY, s.image)
                 n += 1
         self.message = f"已记住 {n} 个格子，模板共 {self.bank.portraits} 张官方 + {self.bank.learned} 张学习"
+        log.info(self.message)
 
     # ---------- 局内缺口提醒 ----------
 
     def coach_tick(self) -> None:
         st = self.gsi.state if self.gsi else None
+        selecting = bool(st and st.alive and st.game_state == SELECTION_STATE)
+        if selecting and not self._in_selection:
+            self._drafts_seen += 1
+            self.grid.reset()                    # 新一局：上一局的禁用不算
+            # 上一局点 × 收起的叠加层、点开的「如果选它」卡片，新一局选人时自动恢复，不用再按热键
+            self.user_hidden = False
+            self.pick_key = None
+            if self.position_auto:               # 上一局自动认的位置不带到这一局（这局可能是加速，没有位置字样）
+                self.position, self.position_auto = self._base_position, False
+            log.info("进入选人阶段（第 %d 次）：叠加层自动显示", self._drafts_seen)
+        self._in_selection = selecting
         strategy = bool(st and st.alive and st.game_state == STRATEGY_STATE)
         if not (st and st.alive and (st.in_match or strategy)):
             self.coach_card = None               # 比赛结束 / 回到选人：收起卡片
             return
-        key = st.match_id or "?"
+        # 天梯的 matchid 选人时就有；本地 / 机器人局一直是 0（2026-10-23 实测），连开两局会被当成同一局
+        key = st.match_id if st.match_id not in ("", "0") else f"本地{self._drafts_seen}"
         if key != self.brief_match:              # 策略时间就做；错过了（中途开助手）进游戏也补一张
             self._start_brief(key)
         if strategy:
             return
-        if self.coach_card and self.coach_card.get("kind") == "brief" and st.clock_minutes >= 0:
-            self.coach_card = None               # 号角响了：本局要点收起，按热键还能再看
+        if st.clock_minutes >= 0 and key != self._horn_match:
+            self._horn_match = key               # 号角响了：本局要点收起一次，之后按热键再看就不收了
+            if self._showing_brief():
+                self.coach_card = None
         if key != self.coach_match:
             self._start_coach(key)
-            return
-        if self.coach is None:                   # 还在准备（后台线程）或者准备失败
             return
         minute = st.clock_minutes
         died = st.deaths > self._coach_deaths
         self._coach_deaths = st.deaths
-        passed = [c for c in coach.CHECKPOINTS if self._coach_checkpoint < c <= minute]
+        respawned = (st.raw.get("hero") or {}).get("alive") is True
+        if self._death_shown and respawned and time.monotonic() - self._death_shown >= DEATH_MIN_SHOW:
+            self._death_shown = 0.0              # 复活了：死亡卡片收起（别的卡片不动）
+            if self.coach_card and self.coach_card.get("death"):
+                self.coach_card = None
+        recap = self._death_recap(st) if died else None
+        passed = [c for c in coach.CHECKPOINTS if self._coach_checkpoint < c <= minute] if self.coach else []
         if passed:
             self._coach_checkpoint = passed[-1]
-        if not (died or passed):
-            return
-        needs = self.coach.tick(coach.State(minute, st.items, st.last_hits, st.net_worth), checkpoint=bool(passed))
-        if needs:
-            self._show_coach(f"局内提醒 · {coach._mmss(minute)} {'死亡' if died else '时间点'}",
-                             [("warn" if n.priority == 0 else "row", n.text) for n in needs])
+        needs = []
+        if self.coach and (died or passed):     # coach 是 None：还在准备（后台线程）或者准备失败
+            needs = self.coach.tick(coach.State(minute, st.items, st.last_hits, st.net_worth),
+                                    checkpoint=bool(passed))
+        lines = [("warn" if n.priority == 0 else "row", n.text) for n in needs]
+        if recap and recap.lines:
+            self._show_coach(recap.title, recap.lines + ([("head", "还缺")] + lines if lines else []), on_death=True)
+        elif lines:
+            self._show_coach(f"局内提醒 · {coach._mmss(minute)} {'死亡' if died else '时间点'}", lines, on_death=died)
+
+    def _death_recap(self, st) -> death.Recap | None:
+        """刚死：把死前那段推送整理成「怎么死的」，顺手原样存一份（核对字段 / 调阈值用）"""
+        if self._death_names is None or self._death_names[0] != st.my_hero_key:
+            from . import kb
+            base = kb.KnowledgeBase.load()
+            self._death_names = (st.my_hero_key, *(death.names_from_kb(base, st.my_hero_key) if base else ({}, set())))
+        history = st.history()
+        rec = death.analyze(history, st.team, *self._death_names[1:])
+        try:
+            death.dump(history, rec)
+        except OSError:
+            log.warning("死亡复盘：推送没存下来", exc_info=True)
+        if rec is None:
+            log.info("死亡复盘：历史里没有死前的推送（刚开助手？）")
+        return rec
 
     def _start_coach(self, key: str) -> None:
         """敌方阵容用选人时格子里的（识别 / 手动填的），自己的英雄用 GSI 的"""
@@ -389,12 +609,17 @@ class Live:
         if not draft.my_hero:
             return                               # GSI 还没给英雄，下一轮再试
         self.coach_match, self.coach = key, None
+        self._coach_deaths = self.gsi.state.deaths  # 中途开助手：之前的死亡不算
         my_id, enemy_ids, pos = draft.my_hero.id, [h.id for h in draft.enemies], self.position
+        log.info("比赛 %s：准备局内提醒（%s · %d 号位 · 对面 %s）", key, draft.my_hero.name_cn, pos, _names(draft.enemies))
 
         def work():
+            t0 = time.monotonic()
             try:
                 res, err = self._coach_prepare(self.cfg, my_id, enemy_ids, pos), None
+                log.info("局内提醒准备好了（%.1f 秒）", time.monotonic() - t0)
             except Exception as e:
+                log.exception("局内提醒准备失败")
                 res, err = None, e
             self.submit(self._coach_ready, key, res, err)
         threading.Thread(target=work, daemon=True, name="coach").start()
@@ -418,12 +643,18 @@ class Live:
         if not draft.my_hero:
             return                               # GSI 还没给英雄，下一轮再试
         self.brief_match, self.brief = key, None
+        self.pick_key = None                     # 真的选完了，「如果选它」的卡片就不用了
         ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
+        log.info("比赛 %s：做本局要点（%s · 队友 %s · 对面 %s）", key, draft.my_hero.name_cn, _names(draft.allies),
+                 _names(draft.enemies))
 
         def work():
+            t0 = time.monotonic()
             try:
                 res, err = self._brief_build(self.cfg, *ids, self.position), None
+                log.info("本局要点做好了（%.1f 秒）", time.monotonic() - t0)
             except Exception as e:
+                log.exception("本局要点没做出来")
                 res, err = None, e
             self.submit(self._brief_ready, key, res, err, ids)
         threading.Thread(target=work, daemon=True, name="brief").start()
@@ -449,9 +680,12 @@ class Live:
         b.plan_note = "AI 正在写本局打法…（一般 30~60 秒，做好会自动切到这页）"
 
         def work():
+            t0 = time.monotonic()
             try:
                 res, err = self._plan_build(self.cfg, *ids, b.lane_ids, b.text()), None
+                log.info("AI 打法做好了（%.1f 秒）", time.monotonic() - t0)
             except Exception as e:
+                log.exception("AI 打法没做出来")
                 res, err = None, e
             self.submit(self._plan_ready, key, res, err)
         threading.Thread(target=work, daemon=True, name="plan").start()
@@ -478,6 +712,10 @@ class Live:
 
     def show_brief(self) -> None:
         """热键：没在看就打开（打法做好了先看打法），正在看就翻页"""
+        if not self._showing_brief() and self.pick_brief and self.pick_key:
+            self.pick_page = "plan" if self.pick_page == "data" else "data"
+            self.user_hidden = False
+            return
         if not self.brief:
             self.message = "这局还没有本局要点（要等选完人、GSI 告诉我你的英雄）"
             return
@@ -488,9 +726,95 @@ class Live:
         self.coach_card = self._brief_view()
         self.user_hidden = False
 
-    def _show_coach(self, title: str, lines: list[tuple[str, str]]) -> None:
-        self.coach_card = {"kind": "notice", "title": title, "closable": True,
+    # ---------- 选人时「如果选它」 ----------
+
+    def explain_pick(self, hero_id: int) -> None:
+        """点了某个推荐英雄：按当前局面做「如果选它」的要点（联网，后台），做好再让 AI 写打法"""
+        h = self.db.by_id.get(hero_id)
+        if h is None:
+            raise ValueError("没有这个英雄")
+        draft = self.current_draft()
+        key = (hero_id, draft.key(), self.position)
+        self.user_hidden = False
+        if key == self.pick_key:
+            return                               # 同一个局面已经在做 / 做好了，直接看
+        self.pick_key, self.pick_brief, self.pick_page = key, None, "data"
+        self.pick_note = f"正在整理选{h.name_cn}的对线 / 装备数据…"
+        ids = (hero_id, [a.id for a in draft.allies], [e.id for e in draft.enemies])
+        log.info("如果选%s：做要点卡片（%d 号位）", h.name_cn, self.position)
+
+        def work():
+            t0 = time.monotonic()
+            try:
+                res, err = self._brief_build(self.cfg, *ids, self.position), None
+                log.info("如果选%s：要点做好了（%.1f 秒）", h.name_cn, time.monotonic() - t0)
+            except Exception as e:
+                log.exception("如果选%s：要点没做出来", h.name_cn)
+                res, err = None, e
+            self.submit(self._pick_ready, key, res, err, ids)
+        threading.Thread(target=work, daemon=True, name="pick").start()
+
+    def _pick_ready(self, key: tuple, res, err, ids: tuple) -> None:
+        if key != self.pick_key:
+            return
+        if err:
+            self.pick_note = f"没做出来：{err}"
+            return
+        res.title = f"如果选{self.db.by_id[key[0]].name_cn} · {POSITION_NAMES[key[2]]}"
+        self.pick_brief = res
+        if not self.cfg.ai_plan:
+            res.plan_note = "AI 打法没开（config.toml 里 ai_plan = true 打开）"
+            return
+        res.plan_note = "AI 正在写选它怎么打…（一般 30~60 秒，做好会自动切到这页）"
+
+        def work():
+            t0 = time.monotonic()
+            try:
+                plan, perr = self._plan_build(self.cfg, *ids, res.lane_ids, res.text()), None
+                log.info("如果选它：AI 打法做好了（%.1f 秒）", time.monotonic() - t0)
+            except Exception as e:
+                log.exception("如果选它：AI 打法没做出来")
+                plan, perr = None, e
+            self.submit(self._pick_plan_ready, key, plan, perr)
+        threading.Thread(target=work, daemon=True, name="pick-plan").start()
+
+    def _pick_plan_ready(self, key: tuple, plan, err) -> None:
+        if key != self.pick_key or not self.pick_brief:
+            return
+        if err:
+            self.pick_brief.plan_note = f"AI 打法没做出来：{err}"
+            return
+        self.pick_brief.plan = plan
+        self.pick_brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
+        self.pick_page = "plan"
+
+    def set_brief_page(self, page: str) -> None:
+        if page not in ("data", "plan"):
+            raise ValueError(f"没有这一页 {page!r}")
+        if self._showing_brief():
+            self.brief_page = page
+            self.coach_card = self._brief_view()
+        elif self.pick_key:
+            self.pick_page = page
+
+    def pick_view(self) -> dict | None:
+        if not self.pick_key:
+            return None
+        name = self.db.by_id[self.pick_key[0]].name_cn
+        stale = self.prev_draft is not None and (self.prev_draft.key(), self.position) != self.pick_key[1:]
+        if not self.pick_brief:
+            return {"kind": "notice", "title": f"如果选{name}", "closable": True,
+                    "lines": [{"kind": "dim", "text": self.pick_note}]}
+        v = self.pick_brief.view(self.pick_page, f"点标签或按 {self.cfg.hotkey_brief} 翻页 · × 回到推荐")
+        if stale:
+            v["title"] += "（阵容变了，再点一次英雄更新）"
+        return v
+
+    def _show_coach(self, title: str, lines: list[tuple[str, str]], on_death: bool = False) -> None:
+        self.coach_card = {"kind": "notice", "title": title, "closable": True, "death": on_death,
                            "lines": [{"kind": k, "text": t} for k, t in lines]}
+        self._death_shown = time.monotonic() if on_death else 0.0
+        log.info("弹卡片「%s」：%s", title, " / ".join(t for _, t in lines))
         self.user_hidden = False                 # 新提醒总要让人看见；不想看就关掉这张卡片
         if self.coach_voice:
             self.speaker.say("；".join(t for _, t in lines))
@@ -499,6 +823,7 @@ class Live:
         path = SHOTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.png"
         write_image(path, self.grab())
         self.message = f"截图已保存：{path}"
+        log.info(self.message)
 
     # ---------- 显示 ----------
 
@@ -506,6 +831,8 @@ class Live:
         """有局内提醒弹着时先关提醒（局内叠加层鼠标点不到，靠热键关）"""
         if self.coach_card:
             self.coach_card = None
+        elif self.pick_key:
+            self.pick_key = None
         else:
             self.user_hidden = not self.user_hidden
 
@@ -513,6 +840,9 @@ class Live:
         """叠加层右上角的 ×：弹着局内提醒就只关提醒，否则把整个叠加层收起（解锁着也一并固定）"""
         if self.coach_card:
             self.coach_card = None
+            return
+        if self.pick_key:
+            self.pick_key = None
             return
         self.user_hidden = True
         if not self.overlay_locked:
@@ -552,7 +882,7 @@ class Live:
             return True
         if self.user_hidden:
             return False
-        if self.coach_card:
+        if self.coach_card or self.pick_key:
             return True
         in_game_not_draft = bool(self.gsi and self.gsi.state.alive and not self.gsi.state.in_draft
                                  and self.mode == "auto")
@@ -590,13 +920,13 @@ class Live:
                 slots[side].append({"text": text, "hero_id": h.id if h else None,
                                     "valid": not text or h is not None, **hint})
         return {
-            "settings": {"position": self.position, "side_mode": self.side_mode, "mode": self.mode,
+            "settings": {"position": self.position, "position_auto": self.position_auto, "side_mode": self.side_mode, "mode": self.mode,
                          "voice": self.voice, "scan_without_gsi": self.scan_without_gsi},
             "slots": slots,
             "bans_text": self.bans_text,
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle,
-                        "view": self.coach_card or self.notice or self.view},
+                        "view": self.coach_card or self.pick_view() or self.notice or self.view},
             "status": self.status(),
         }
 
@@ -605,6 +935,7 @@ class Live:
                       key=lambda h: h["name"])
 
     def close(self) -> None:
+        log.info("主控关闭")
         self._stop.set()
         if self.hotkeys:
             self.hotkeys.stop()

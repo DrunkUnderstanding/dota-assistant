@@ -57,6 +57,7 @@ img { display: block; }
 .side-radiant { color: var(--radiant); background: rgba(99, 193, 116, 0.1); }
 .side-dire { color: var(--dire); background: rgba(217, 96, 74, 0.1); }
 .side-unknown { color: var(--text-dim); }
+.ov-auto { font-size: 10px; padding: 0 5px; border-radius: 4px; color: var(--gold); background: var(--gold-soft); line-height: 16px; }
 .ov-brand { margin-left: auto; font-size: 11px; color: var(--text-faint); letter-spacing: 1px; }
 
 /* 双方已选 */
@@ -83,6 +84,15 @@ img { display: block; }
 .face:not(:has(img)) .face-name { inset: 0; display: grid; place-items: center; background: none; font-size: 10px; }
 .lineup-enemy .face { box-shadow: inset 0 -2px 0 var(--dire); }
 .lineup-ally .face { box-shadow: inset 0 -2px 0 var(--radiant); }
+/* 禁用：小一号、去色、压一道斜线（和游戏里一样） */
+.lineup-ban .lineup-label { background: rgba(255, 255, 255, 0.06); color: var(--text-faint); }
+.lineup-ban .face { width: 44px; height: 25px; }
+.lineup-ban .face img { filter: grayscale(0.5) brightness(0.9); }
+.lineup-ban .face-name { display: none; }
+.lineup-ban .face::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(to top right, transparent calc(50% - 1px), rgba(229, 103, 92, 0.9) 50%, transparent calc(50% + 1px));
+}
 .face-sm { width: 40px; height: 22px; }
 .face-sm .face-name { display: none; }
 
@@ -123,6 +133,28 @@ img { display: block; }
 .pick-bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
 .pick-bar i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #8a6a2c, var(--gold)); }
 .pick-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.pick[data-id] { cursor: pointer; }
+.pick[data-id]:hover { background-color: rgba(255, 255, 255, 0.04); }
+/* 对位克制：每个已选敌人一格（小头像 + 胜率差） */
+.pick-vs { display: flex; align-items: flex-end; gap: 4px; }
+.pick-vs-label { font-size: 10px; color: var(--text-faint); margin-right: 2px; align-self: center; }
+.vs { display: flex; flex-direction: column; align-items: center; gap: 1px; width: 38px; }
+.face-xs { width: 36px; height: 20px; border-radius: 3px; box-shadow: inset 0 -2px 0 var(--dire); }
+.face-xs .face-name { display: none; }
+.face-xs:not(:has(img)) .face-name { display: grid; font-size: 9px; }
+.vs b {
+  font-family: var(--num); font-variant-numeric: tabular-nums; font-size: 11px; font-weight: 600;
+  line-height: 13px; color: var(--text-faint);
+}
+.vs-good b { color: var(--good); }
+.vs-bad b { color: var(--bad); }
+.vs-bad .face-xs { opacity: 0.85; }
+.pick-why { display: flex; flex-direction: column; gap: 1px; }
+.why { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--text-dim); }
+.why-good { color: color-mix(in srgb, var(--good) 75%, var(--text-dim)); }
+.why-bad { color: color-mix(in srgb, var(--bad) 75%, var(--text-dim)); }
+.ov-tip { margin-top: 6px; font-size: 11px; color: var(--text-faint); text-align: right; }
+.brief-tab[data-page] { cursor: pointer; }
 .tag {
   font-size: 11px; line-height: 16px; padding: 1px 6px; border-radius: 4px;
   background: rgba(255, 255, 255, 0.06); color: var(--text-dim);
@@ -155,6 +187,10 @@ img { display: block; }
 }
 .ov-notice .notice-warn { border-left-color: var(--risk); color: #f6d3ad; }
 .ov-notice .notice-dim { border-left-color: var(--line-strong); color: var(--text-dim); }
+.ov-notice .notice-head {
+  margin: 10px 0 4px; padding: 0; background: none; border: 0;
+  font-size: 11px; font-weight: 600; letter-spacing: 1px; color: var(--text-faint);
+}
 .ov-close {
   width: 24px; height: 24px; margin-left: 2px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px;
   background: rgba(255, 255, 255, 0.05); color: var(--text-dim); font: 16px/1 var(--font); cursor: pointer;

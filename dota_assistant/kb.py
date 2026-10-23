@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import tomllib
@@ -26,6 +27,13 @@ KB_DIR = DATA_DIR / "kb"
 RULES_PATH = ROOT / "knowledge" / "rules.toml"
 MISTAKES_PATH = ROOT / "knowledge" / "mistakes.toml"
 FEED = "https://www.dota2.com/datafeed"
+logger = logging.getLogger(__name__)  # 不叫 log：下面不少函数有 log 参数（进度提示）
+
+
+def _say(msg: str) -> None:
+    """进度提示：打印出来，同时记进日志"""
+    print(msg, flush=True)
+    logger.info(msg.strip())
 NOT_NEUTRAL = 4294967295
 
 # 标签 → (原文里的关键词, 排除词)。只认官方措辞，宁缺毋滥；命中会附原句，方便人核对。
@@ -42,10 +50,14 @@ TAGS = {
     "施加破坏": (r"施加破坏|破坏(其|目标的)?被动|破坏效果|被动技能(无效|失效)", r"^破坏(会|只会|不会)|破坏的负面效果"),
     "怕破坏": (r"^破坏(会|只会)使", None),
     "无视技能免疫": (r"无视(技能|减益)免疫|穿透(技能|减益)免疫", r"不无视|无法无视"),
-    "提供技能免疫": (r"获得.{0,4}(技能|减益)免疫", None),
+    # 官方现在叫「减益免疫」，说法有「获得 / 变成 / 为 / 提供」几种（噬魂鬼狂暴是「变成减益免疫」）；
+    # 排除「获得无视减益免疫的减速」「对减益免疫单位有效」「幻象为减益免疫」「友方单位变为减益免疫」这类不是自己免疫的句子
+    "提供技能免疫": (r"(获得|变成|变为|提供|为)[^。，；]{0,6}(技能|减益)免疫",
+                     r"无视(技能|减益)免疫|将挣脱|将移除|将会中止|对(技能|减益)免疫|(技能|减益)免疫(单位|的|下)|幻象|友方|友军"),
     "隐身": (r"(进入|获得|变为|变成|处于|带有|是|为)[^。，；]{0,6}隐(身|匿)|隐藏起来",
              r"隐身单位|脱离|打破|阻止|不会产生|显形"),
-    "反隐 / 显形": (r"显形|真视", None),
+    # 只算「让隐身的敌人现形」：排除自己现形（攻击后显形）、不会使…显形、迷雾中显形（那是视野，不是反隐）
+    "反隐 / 显形": (r"显形|真视|真实视域", r"不会(被|使)|将会显形|迷雾中显形|自己显形"),
     "沉默": (r"沉默(?!术士)|阻止.{0,12}施法", r"无法成为目标"),
     "眩晕": (r"眩晕|击晕", None),
     "缴械": (r"缴械", r"(他|自身|期间|这段时间内)被缴械|面朝方向被锁定|无法成为目标"),
@@ -100,8 +112,16 @@ ITEM_ALIASES = {
 
 def _get(url: str) -> dict:
     import requests
-    for attempt in range(4):
-        r = requests.get(url, timeout=60)
+    for attempt in range(6):
+        try:
+            r = requests.get(url, timeout=60)
+        except requests.exceptions.RequestException as e:
+            # dota2.com 并发时偶尔直接断连接（SSL EOF / 10054），歇一下重试
+            if attempt == 5:
+                raise
+            logger.info("连接断开，重试（%s）：%s", e, url)
+            time.sleep(2 * (attempt + 1))
+            continue
         if r.status_code == 200:
             return r.json()
         time.sleep(2 * (attempt + 1))
@@ -113,7 +133,7 @@ def current_patch() -> str:
     return max(patches, key=lambda p: p["patch_timestamp"])["patch_number"]
 
 
-def fetch(hero_ids: list[int], log=print, workers: int = 8) -> dict:
+def fetch(hero_ids: list[int], log=_say, workers: int = 8) -> dict:
     """整版知识库：英雄 + 物品。约 550 个请求，并发 8，一两分钟。"""
     patch = current_patch()
     log(f"  当前版本 {patch}，拉英雄 {len(hero_ids)} 个 …")
@@ -137,7 +157,7 @@ def fetch(hero_ids: list[int], log=print, workers: int = 8) -> dict:
     return {"patch": patch, "fetched_at": int(time.time()), "heroes": heroes, "items": items}
 
 
-def update(hero_ids: list[int], log=print, force: bool = False) -> bool:
+def update(hero_ids: list[int], log=_say, force: bool = False) -> bool:
     """版本号没变就不重拉。返回是否更新了。"""
     KB_DIR.mkdir(parents=True, exist_ok=True)
     meta = KB_DIR / "kb.json"

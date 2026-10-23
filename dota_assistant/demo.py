@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import logging
 import threading
 import time
 
@@ -76,6 +77,7 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
         try:
             match.update(requests.get(f"https://api.opendota.com/api/matches/{DEMO_MATCH}", timeout=60).json())
         except Exception as e:
+            logging.getLogger(__name__).warning("演示录像没拉到", exc_info=True)
             match["error"] = str(e)
     threading.Thread(target=fetch, daemon=True).start()
 

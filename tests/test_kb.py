@@ -28,6 +28,14 @@ class TagTest(unittest.TestCase):
         self.assertNotIn("提供闪避", kb.tag_sentences("每次攻击均有80%几率无视闪避。"))
         self.assertIn("无视闪避", kb.tag_sentences("每次攻击均有80%几率无视闪避。"))
 
+    def test_debuff_immunity_wordings(self):
+        # 2026-10-23：噬魂鬼狂暴写的是「变成减益免疫」，以前只认「获得…免疫」，漏了
+        for s in ("进入狂暴状态，变成减益免疫，提升魔法抗性和移动速度。", "使主宰获得减益免疫状态。", "哈斯卡在跳跃过程中为减益免疫。"):
+            self.assertIn("提供技能免疫", kb.tag_sentences(s), s)
+        for s in ("3级苍龙：攻击获得无视减益免疫的移动速度和攻击速度降低效果。", "对减益免疫单位有效。",
+                  "幻象为减益免疫状态。", "持续施法期间其他附近友方单位变为减益免疫状态。"):
+            self.assertNotIn("提供技能免疫", kb.tag_sentences(s), s)
+
     def test_invisibility_means_self_invis(self):
         self.assertIn("隐身", kb.tag_sentences("司夜刺客进入隐身状态并获得移动速度加成。"))
         for sent in ("不能伤害隐身单位。", "不能作用于减益免疫或隐身单位。", "阻止英雄进入隐身状态。"):

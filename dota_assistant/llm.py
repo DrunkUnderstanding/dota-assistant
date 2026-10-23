@@ -5,10 +5,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 def claude_exe() -> str:
@@ -23,6 +27,14 @@ def claude_exe() -> str:
 
 def ask_json(prompt: str, system: str, schema: dict, model: str, timeout: float = 900) -> tuple[dict | None, float, str]:
     """返回 (结构化结果, 折合 API 价格, 错误信息)"""
+    out, cost, err = _ask_json(prompt, system, schema, model, timeout)
+    if err:
+        log.warning("Claude Code 调用失败（%s）：%s", model, err)
+    return out, cost, err
+
+
+def _ask_json(prompt: str, system: str, schema: dict, model: str, timeout: float) -> tuple[dict | None, float, str]:
+    t0 = time.monotonic()
     cmd = [claude_exe(), "-p", "--model", model, "--safe-mode", "--tools", "", "--system-prompt", system,
            "--no-session-persistence", "--json-schema", json.dumps(schema), "--output-format", "json"]
     try:
@@ -39,4 +51,6 @@ def ask_json(prompt: str, system: str, schema: dict, model: str, timeout: float 
     except (IndexError, json.JSONDecodeError):
         return None, 0.0, r.stderr.decode("utf-8", "replace")[-300:]
     out = d.get("structured_output")
+    log.info("Claude Code（%s）返回：%.0f 秒，折合 $%.3f，提示词 %d 字", model, time.monotonic() - t0,
+             float(d.get("total_cost_usd") or 0), len(prompt))
     return out, float(d.get("total_cost_usd") or 0), "" if out else str(d.get("result"))[:300]

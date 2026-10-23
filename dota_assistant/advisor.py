@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from . import data
+from . import data, explain, kb
 from .config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .heroes import Hero, HeroDB
@@ -28,6 +28,7 @@ class Advice:
     mine: list[Suggestion]
     other: list[Suggestion]
     threat: tuple[Hero, float] | None     # 对我方威胁最大的敌方英雄（够显著才有）
+    why: dict[int, list[explain.Why]] = field(default_factory=dict)   # 推荐英雄 id → 机制上克 / 怕谁（知识库原文）
 
 
 class Advisor:
@@ -37,6 +38,7 @@ class Advisor:
         self.engine = Engine(self.db, data.load_stats(cfg), data.load_positions(cfg))
         self.me = data.load_player(cfg)
         self.pool = self.db.find_many(cfg.pool)
+        self.kb = kb.KnowledgeBase.load()      # 没有知识库也能推荐，只是没有机制说明
 
     def advise(self, draft: Draft, position: int) -> Advice:
         history, by_pos = (data.player_history(self.me, position, self.engine.positions)
@@ -55,7 +57,14 @@ class Advisor:
                                   position_filter=self.cfg.position_filter, top=None)
         mine = [s for s in res if s.in_pool][:self.cfg.top]
         other = [s for s in res if not s.in_pool][:self.cfg.top_other]
-        return Advice(position, draft, mine, other, threat)
+        return Advice(position, draft, mine, other, threat, self.explain(mine + other, draft.enemies))
+
+    def explain(self, picks: list[Suggestion], enemies: list[Hero]) -> dict[int, list[explain.Why]]:
+        if not (self.kb and enemies):
+            return {}
+        foes = [self.kb.heroes[e.id] for e in enemies if e.id in self.kb.heroes]
+        return {s.hero.id: explain.matchups(self.kb.heroes[s.hero.id], foes, limit=2)
+                for s in picks if s.hero.id in self.kb.heroes}
 
 
 def best(advice: Advice) -> list[Suggestion]:
@@ -96,7 +105,11 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
     for title, group in (("你的英雄", advice.mine), ("其他选择", advice.other)):
         if group:
             out.append(("head", title))
-            out += [("row", f"{s.hero.name_cn}  {s.winrate:.1f}%　{s.reason()}") for s in group]
+            for s in group:
+                out.append(("row", f"{s.hero.name_cn}  {s.winrate:.1f}%　{s.reason()}"))
+                if s.vs:
+                    out.append(("dim", "　对位 " + "  ".join(f"{e.name_cn} {pct(v):+.1f}" for e, v in s.vs)))
+                out += [("dim", f"　{'✓' if w.kind == 'good' else '✗'} {w.text}") for w in advice.why.get(s.hero.id, [])]
     if advice.threat:
         e, v = advice.threat
         out.append(("warn", f"注意：{e.name_cn} 对我方威胁最大（{pct(v):+.1f}%）"))
@@ -115,7 +128,10 @@ def render_view(advice: Advice, side: str | None) -> dict:
         if group:
             groups.append({"title": title, "items": [
                 {**hero_ref(s.hero), "winrate": round(s.winrate, 1),
-                 "tags": [{"kind": k, "text": t} for k, t in s.reason_parts()]} for s in group]})
+                 "tags": [{"kind": k, "text": t} for k, t in s.reason_parts()],
+                 # 对每个已选敌人的克制（百分点，正 = 这个推荐克他），按敌方选人顺序，各卡片列对齐
+                 "vs": [{**hero_ref(e), "delta": round(pct(v), 1)} for e, v in s.vs],
+                 "why": [w.__dict__ for w in advice.why.get(s.hero.id, [])]} for s in group]})
     threat = None
     if advice.threat:
         e, v = advice.threat
@@ -128,6 +144,7 @@ def render_view(advice: Advice, side: str | None) -> dict:
         "side_name": {"radiant": "天辉", "dire": "夜魇"}.get(side or "", "阵营未知"),
         "enemies": [hero_ref(h) for h in d.enemies],
         "allies": [hero_ref(h) for h in d.allies],
+        "bans": [hero_ref(h) for h in d.bans],
         "my_hero": hero_ref(d.my_hero) if d.my_hero else None,
         "groups": groups,
         "threat": threat,

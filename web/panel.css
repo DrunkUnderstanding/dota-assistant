@@ -54,6 +54,7 @@ kbd {
 .seg button.on { background: var(--surface-3); color: var(--gold); box-shadow: inset 0 0 0 1px rgba(216, 167, 78, 0.35); }
 .field-toggles { gap: 16px; margin-left: auto; }
 .switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--text-dim); user-select: none; }
+.switch[hidden] { display: none; }
 .switch input { display: none; }
 .switch i {
   width: 30px; height: 17px; border-radius: 999px; background: var(--surface-3);

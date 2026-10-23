@@ -8,7 +8,10 @@
 //           不靠页面的 mouseover / mouseout：窗口一从穿透切到接鼠标，Chromium 就会补发一次 mouseout，
 //           页面以为鼠标离开了按钮又切回穿透，按钮永远点不到（2026-10-22 实测出的问题）。
 //   控制面板：普通窗口，关掉它 = 退出助手。
+// 日志：往 stdout 写「级别 内容」一行，Python（webui._pipe_electron）收进 logs/ 下的日志文件；页面脚本报错也转过去。
 const path = require('path');
+// 页面是本机服务的固定文件，不需要 Electron 开发模式的 CSP 安全提示（打包后本来也不显示），免得每次启动刷两条警告
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 
 const arg = process.argv.find((a) => a.startsWith('--server='));
@@ -22,11 +25,38 @@ let drag = null;         // 拖动中：{ dx, dy, timer }
 let hitRects = [];       // 页面报来的可点区域（窗口内 CSS 像素 = 逻辑像素）：固定时是锁和 ×，解锁时是整张卡片
 let grabbing = false;    // 窗口现在是否接鼠标
 
+function log(level, ...parts) {
+  const text = parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ');
+  try {
+    process.stdout.write(`${level} ${text.replace(/\r?\n/g, ' | ')}\n`);
+  } catch {
+    // Python 那边已经退出了，没处写
+  }
+}
+
+process.on('uncaughtException', (err) => log('ERROR', '主进程出错', err && err.stack ? err.stack : String(err)));
+
+// 页面里的报错 / 警告、页面崩溃、加载失败都记下来（开着界面时看不到控制台）
+function watch(win, name) {
+  const wc = win.webContents;
+  // 只收一个参数：多写参数 Electron 会报「console-message arguments are deprecated」
+  wc.on('console-message', (e) => {
+    if (e.level === 'warning' || e.level === 'error') {
+      log(e.level === 'error' ? 'ERROR' : 'WARN', `[${name}] ${e.message} (${e.sourceId}:${e.lineNumber})`);
+    }
+  });
+  wc.on('render-process-gone', (_e, d) => log('ERROR', `[${name}] 页面进程没了：${d.reason}（${d.exitCode}）`));
+  wc.on('did-fail-load', (_e, code, desc, url) => log('ERROR', `[${name}] 页面加载失败 ${code} ${desc} ${url}`));
+  win.on('unresponsive', () => log('WARN', `[${name}] 窗口没响应`));
+  win.on('responsive', () => log('INFO', `[${name}] 窗口恢复响应`));
+}
+
 async function loadConfig() {
   try {
     const res = await fetch(`${SERVER}/api/config`);
     return await res.json();
-  } catch {
+  } catch (err) {
+    log('WARN', '读不到叠加层配置，用默认值', String(err));
     return { monitor: 1, x: 0.8, y: 0.22, width: 420, opacity: 0.85 };
   }
 }
@@ -34,6 +64,9 @@ async function loadConfig() {
 function pickDisplay(monitor) {
   // 和 mss 的编号对齐：1 = 主屏，2、3… 按 Electron 列出的顺序（多屏时以实测为准）
   const all = screen.getAllDisplays();
+  // 多屏 + 不同缩放没实测过，把每块屏的位置和缩放记下来，对不上时看日志
+  all.forEach((d, i) => log('INFO', `屏幕 ${i + 1}：${d.bounds.width}x${d.bounds.height} @ (${d.bounds.x},${d.bounds.y})，缩放 ${d.scaleFactor}${d.id === screen.getPrimaryDisplay().id ? '（主屏）' : ''}`));
+  if (monitor > all.length) log('WARN', `config 里 monitor = ${monitor}，但只有 ${all.length} 块屏，改用主屏`);
   if (monitor <= 1 || monitor > all.length) return screen.getPrimaryDisplay();
   return all[monitor - 1];
 }
@@ -59,6 +92,8 @@ function createOverlay(cfg) {
     backgroundColor: '#00000000',
     webPreferences: { backgroundThrottling: false, preload: path.join(__dirname, 'preload.js') },
   });
+  log('INFO', `叠加层：(${x},${y}) ${cfg.width}x${height}，配置 ${JSON.stringify(cfg)}`);
+  watch(overlay, '叠加层');
   overlay.setAlwaysOnTop(true, 'screen-saver');
   overlay.setIgnoreMouseEvents(true);
   grabbing = false;
@@ -113,11 +148,12 @@ function stopDrag(save = true) {
   overlay.setBounds({ ...b, height: fitHeight(b.y) });
   applyMouse();
   const { bounds } = display;
+  log('INFO', `叠加层拖到 (${b.x},${b.y})`);
   fetch(`${SERVER}/api/action`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'overlay_moved', x: (b.x - bounds.x) / bounds.width, y: (b.y - bounds.y) / bounds.height }),
-  }).catch(() => {});
+  }).catch((err) => log('WARN', '叠加层位置没存上', String(err)));
 }
 
 const fromOverlay = (e) => overlay && !overlay.isDestroyed() && e.sender === overlay.webContents;
@@ -125,6 +161,7 @@ const fromOverlay = (e) => overlay && !overlay.isDestroyed() && e.sender === ove
 ipcMain.on('overlay:locked', (e, v) => {
   if (!fromOverlay(e) || v === locked) return;
   locked = v;
+  log('INFO', locked ? '叠加层固定' : '叠加层解锁');
   if (locked) stopDrag();
 });
 ipcMain.on('overlay:hit-rects', (e, rects) => {
@@ -145,12 +182,14 @@ function createPanel() {
     autoHideMenuBar: true,
     show: false,
   });
+  watch(panel, '控制面板');
   panel.loadURL(`${SERVER}/panel.html`);
   panel.once('ready-to-show', () => panel.show());
   panel.on('closed', () => { panel = null; app.quit(); });
 }
 
 app.whenReady().then(async () => {
+  log('INFO', `Electron ${process.versions.electron} 启动，服务 ${SERVER}`);
   const cfg = await loadConfig();
   createOverlay(cfg);
   createPanel();

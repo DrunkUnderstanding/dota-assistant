@@ -33,7 +33,7 @@
     </div>
   </div>
   <div class="field field-toggles">
-    <label class="switch"><input type="checkbox" id="opt-voice"><i></i>语音</label>
+    <label class="switch" hidden><input type="checkbox" id="opt-voice"><i></i>语音</label>
     <label class="switch" title="没连上 GSI 时也按间隔截屏识别"><input type="checkbox" id="opt-scan"><i></i>无 GSI 也识别</label>
   </div>
 </section>
@@ -62,6 +62,7 @@
       <button class="btn" data-act="learn" title="按格子里的名字，把这次识别到的头像存成模板，以后认得更准">记住这次识别</button>
       <button class="btn" data-act="shot">保存截图</button>
       <span class="spacer"></span>
+      <button class="btn btn-ghost" data-act="open_logs" title="出问题时把最新的 .log 文件发给开发者">打开日志</button>
       <button class="btn btn-ghost" data-act="clear">清空</button>
     </div>
   </section>

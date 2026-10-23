@@ -2,20 +2,29 @@
 
 官方功能、不碰游戏进程。玩家身份下拿不到敌方信息，这里只用它知道：
   我在天辉还是夜魇、现在是不是选人阶段、我选了哪个英雄；
-  对局中：游戏时间、自己的装备 / 正补 / 死亡次数（给局内缺口提醒用）。
+  对局中：游戏时间、自己的装备 / 正补 / 死亡次数（给局内缺口提醒用）；
+  自己英雄的血量 / 状态 / 装备和技能冷却，留最近一分钟的推送（给死亡复盘用，death.py）。
 启用方法见 README「GSI」一节（放 cfg 文件 + 启动项 -gamestateintegration）。
 """
 from __future__ import annotations
 
 import json
+import logging
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from collections import deque
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+from .log import HTTPServer
+
 STRATEGY_STATE = "DOTA_GAMERULES_STATE_STRATEGY_TIME"   # 选完人到出门之间
-DRAFT_STATES = {"DOTA_GAMERULES_STATE_HERO_SELECTION", STRATEGY_STATE}
+SELECTION_STATE = "DOTA_GAMERULES_STATE_HERO_SELECTION"
+DRAFT_STATES = {SELECTION_STATE, STRATEGY_STATE}
 MATCH_STATES = {"DOTA_GAMERULES_STATE_PRE_GAME", "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"}
+
+HISTORY_SECONDS = 60         # 对局中留最近多久的推送（死亡复盘往回看 20 秒，多留点余量）
+log = logging.getLogger(__name__)
 
 CFG_NAME = "gamestate_integration_dota_assistant.cfg"
 CFG_TEMPLATE = """"Dota Assistant"
@@ -31,7 +40,7 @@ CFG_TEMPLATE = """"Dota Assistant"
         "map"       "1"
         "player"    "1"
         "hero"      "1"
-        "abilities" "0"
+        "abilities" "1"
         "items"     "1"
         "draft"     "1"
         "wearables" "0"
@@ -56,6 +65,24 @@ class GameState:
         self.raw: dict = {}
         self.updated = 0.0
         self._last_logged = ""
+        self._history: deque[tuple[float, dict]] = deque()  # 对局中的 (收到时间, 推送)
+        self._lock = threading.Lock()                         # GSI 线程写、主控线程读
+
+    def update(self, raw: dict, now: float | None = None) -> None:
+        """now：记进历史的时间（测试用），默认就是收到的时间"""
+        self.raw, self.updated = raw, time.time()
+        now = self.updated if now is None else now
+        with self._lock:
+            if not self.in_match:
+                self._history.clear()
+                return
+            self._history.append((now, raw))
+            while self._history[0][0] < now - HISTORY_SECONDS:
+                self._history.popleft()
+
+    def history(self) -> list[tuple[float, dict]]:
+        with self._lock:
+            return list(self._history)
 
     def log_draft(self) -> None:
         """选人阶段的推送自动存到 shots/gsi/，用来确认玩家视角下 GSI 给不给双方阵容（不用另开 gsi-dump）。
@@ -133,9 +160,23 @@ class GameState:
         return t if t in ("radiant", "dire") else None
 
     @property
+    def player_name(self) -> str:
+        return str((self.raw.get("player") or {}).get("name") or "")
+
+    @property
+    def team_slot(self) -> int | None:
+        """我在自己队里是第几个（0~4，和顶栏从左到右的顺序一致）"""
+        v = (self.raw.get("player") or {}).get("team_slot")
+        return v if isinstance(v, int) else None
+
+    @property
     def my_hero_key(self) -> str | None:
         name = (self.raw.get("hero") or {}).get("name") or ""
         return name.removeprefix("npc_dota_hero_") or None
+
+    def summary(self) -> tuple:
+        """日志用：这几项变了才记一行（推送每 0.5 秒一次，全记会刷屏）"""
+        return self.game_state, self.team, self.my_hero_key, self.match_id
 
 
 class GSIServer:
@@ -147,19 +188,28 @@ class GSIServer:
             def do_POST(self):
                 body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 try:
-                    state.raw = json.loads(body or b"{}")
-                    state.updated = time.time()
-                    state.log_draft()
+                    raw = json.loads(body or b"{}")
                 except json.JSONDecodeError:
-                    pass
+                    log.warning("GSI 推送不是 JSON：%r", body[:200])
+                else:
+                    was_alive, before = state.alive, state.summary()
+                    state.update(raw)
+                    if not was_alive:
+                        log.info("GSI 收到游戏推送（字段 %s）", sorted(raw))
+                    if state.summary() != before or not was_alive:
+                        log.info("GSI：阶段 %s · 阵营 %s · 英雄 %s · 比赛 %s", *state.summary())
+                    log.debug("GSI 推送：时间 %.1f 分 · 死亡 %s · 正补 %s", state.clock_minutes, state.deaths,
+                              state.last_hits)
+                    state.log_draft()
                 self.send_response(200)
                 self.end_headers()
 
             def log_message(self, *args):
                 pass
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.server = HTTPServer(("127.0.0.1", port), Handler)
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="gsi")
+        log.info("GSI 服务在 127.0.0.1:%d 等游戏推送", port)
 
     def start(self) -> GSIServer:
         self.thread.start()

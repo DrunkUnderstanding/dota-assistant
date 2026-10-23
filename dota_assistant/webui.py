@@ -15,17 +15,22 @@
 from __future__ import annotations
 
 import json
+import logging
 import mimetypes
 import os
 import queue
 import subprocess
 import threading
 import webbrowser
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .config import DATA_DIR, ROOT, Config
+from .log import HTTPServer
+
+log = logging.getLogger(__name__)
+elog = logging.getLogger("dota_assistant.electron")      # Electron 主进程 / 页面的输出
 
 WEB_DIR = ROOT / "web"
 ELECTRON_DIR = ROOT / "electron"
@@ -74,7 +79,10 @@ class WebServer:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                     msg = server.live.submit(server.live.action, body).result(timeout=20)
                     self._json(200, {"ok": True, "message": msg or ""})
-                except Exception as e:
+                except TimeoutError:                                # 工作线程卡住了：最值得查的一种
+                    log.warning("网页操作 20 秒没做完：%s", body)
+                    self._json(400, {"ok": False, "message": "助手忙不过来，操作超时（详情见日志）"})
+                except Exception as e:                              # 操作本身的错误 Live 已经记过日志
                     self._json(400, {"ok": False, "message": str(e)})
 
             def _file(self, base: Path, rel: str):
@@ -101,8 +109,7 @@ class WebServer:
             def log_message(self, *args):
                 pass
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-        self.server.daemon_threads = True
+        self.server = HTTPServer(("127.0.0.1", port), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="webui")
 
     @property
@@ -149,26 +156,49 @@ def serve(live, browser: bool = False) -> int:
         if browser:
             webbrowser.open(srv.url + "/panel.html")
             webbrowser.open(srv.url + "/overlay.html?preview=1")
+            log.info("浏览器模式：%s", srv.url)
             print(f"界面：{srv.url}/panel.html（叠加层预览：{srv.url}/overlay.html?preview=1），Ctrl+C 退出")
             threading.Event().wait()
             return 0
         exe = find_electron()
         if exe is None:
+            log.warning("没找到 Electron（%s）", ELECTRON_DIR / "node_modules")
             print("没找到 Electron。先装一次：cd electron && npm install（需要 Node.js）\n"
                   "或者先用 run --browser 在浏览器里看界面（叠加层盖不到游戏上）。")
             return 1
         env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
-        proc = subprocess.Popen([str(exe), str(ELECTRON_DIR), f"--server={srv.url}"], env=env)
+        proc = subprocess.Popen([str(exe), str(ELECTRON_DIR), f"--server={srv.url}"], env=env,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        log.info("界面服务 %s，已启动 Electron（pid %d）", srv.url, proc.pid)
+        threading.Thread(target=_pipe_electron, args=(proc.stdout,), daemon=True, name="electron-log").start()
         try:
-            return proc.wait()
+            code = proc.wait()
+            log.info("Electron 退出，返回 %s", code)
+            return code
         except KeyboardInterrupt:
             proc.terminate()
             return 0
     except KeyboardInterrupt:
         return 0
     finally:
+        log.info("助手退出")
         live.close()
         srv.stop()
+
+
+def _pipe_electron(stream) -> None:
+    """Electron 的输出逐行转进日志。main.js 自己写的行以级别开头（INFO / WARN / ERROR），
+    其余是 Chromium 自己的输出（GPU 之类），按 INFO 记，不刷控制台。"""
+    levels = {"DEBUG": logging.DEBUG, "INFO": logging.INFO, "WARN": logging.WARNING, "ERROR": logging.ERROR}
+    for raw in iter(stream.readline, b""):
+        line = raw.decode("utf-8", "replace").rstrip()
+        if not line:
+            continue
+        head, _, rest = line.partition(" ")
+        if head in levels:
+            elog.log(levels[head], rest)
+        else:
+            elog.info(line)
 
 
 def run(cfg: Config, browser: bool = False) -> int:
