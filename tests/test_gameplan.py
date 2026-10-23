@@ -43,6 +43,18 @@ class FactsTest(unittest.TestCase):
         self.assertIn("# 常见误判", text)
         self.assertIn("金箍棒能破隐身", text)
 
+    def test_lane_partner_gets_full_text(self):
+        # 同路队友给技能全文（写两人怎么配合要用），其他队友只给摘要
+        base = kb.KnowledgeBase.load()
+        hid = {h.name: i for i, h in base.heroes.items()}
+        text = gameplan.facts(base, [], hid["卓尔游侠"], [hid["暗影萨满"], hid["帕克"]], [hid["莱恩"]],
+                              [hid["莱恩"], hid["暗影萨满"]], "数据")
+        self.assertIn("# 敌方 莱恩（你的对线对手）", text)
+        self.assertIn("# 队友 暗影萨满（你的同路队友）", text)
+        self.assertIn("【枷锁】", text)
+        self.assertNotIn("# 队友 帕克", text)
+        self.assertIn("帕克", text.split("# 队友（机制摘要）")[1])
+
 
 if __name__ == "__main__":
     unittest.main()

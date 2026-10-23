@@ -10,7 +10,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-python -c "import requests, numpy, cv2, mss" >nul 2>nul
+python -c "import requests, numpy, cv2, mss, anthropic" >nul 2>nul
 if errorlevel 1 (
   echo 第一次使用，安装 Python 依赖…
   python -m pip install -r requirements.txt

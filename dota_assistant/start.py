@@ -1,7 +1,7 @@
 """一键启动：双击「启动助手.bat」走这里。能自动做的准备工作都自动做，只在缺东西时问一句。
 
-  1. 没有 config.toml → 问好友代码和 STRATZ token，其余用默认值
-  2. 没装 Electron 界面 → 有 Node.js 就自动 npm install；没有就提示去装
+  1. 没有 config.toml → 从 config.example.toml 生成；好友代码、token、AI 来源在控制面板「设置」里填（第一次会自动弹出）
+  2. 没装 Electron 界面 → 有 Node.js 就自动 npm install；没有就提示去装（打包版自带，不用装）
   3. 找到 Dota 安装目录 → 自动写 GSI 配置（第一次会提醒加启动项 -gamestateintegration）
   4. 数据过期 → 自动更新（全量 3 天一次，个人数据半天一次）
   5. 启动助手
@@ -31,26 +31,11 @@ def _say(msg: str) -> None:
     log.info(msg.strip())
 
 
-def _ask(prompt: str) -> str:
-    try:
-        return input(prompt).strip()
-    except EOFError:
-        return ""
-
-
 def ensure_config() -> config.Config:
     path = ROOT / "config.toml"
     if not path.exists():
-        _say("第一次使用，需要两样东西（直接回车跳过，之后可以在 config.toml 里补）")
-        acc = _ask("  Steam 好友代码（游戏里个人资料能看到的那串数字）：")
-        tok = _ask("  STRATZ token（stratz.com/api 登录后复制，没有就回车）：")
-        text = (ROOT / "config.example.toml").read_text(encoding="utf-8")
-        if acc.isdigit():
-            text = re.sub(r"^account_id = 0", f"account_id = {acc}", text, flags=re.M)
-        if tok:
-            text = re.sub(r'^stratz_token = ""', f'stratz_token = "{tok}"', text, flags=re.M)
-        path.write_text(text, encoding="utf-8")
-        _say(f"  已生成 {path.name}\n")
+        config.save({}, path)
+        _say(f"已生成 {path.name}。好友代码、STRATZ token、AI 打法用哪家，在控制面板右上角「设置」里填\n")
     return config.load()
 
 
@@ -58,6 +43,9 @@ def ensure_electron() -> bool:
     from .webui import ELECTRON_DIR, find_electron
     if find_electron():
         return True
+    if config.FROZEN:
+        _say("界面文件不全（ui 文件夹缺了），重新解压一次完整的压缩包。")
+        return False
     npm = shutil.which("npm")
     if not npm:
         _say("界面需要 Node.js：到 https://nodejs.org 下载 LTS 版安装，装完重新双击「启动助手」。")

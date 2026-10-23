@@ -38,6 +38,14 @@
   body.unlocked .ov-wrap { cursor: grab; user-select: none; }
   body.unlocked.dragging .ov-wrap { cursor: grabbing; }
   body.unlocked .ov { outline: 2px dashed var(--gold); outline-offset: -2px; }
+  /* 解锁时右边缘有个拉手：按住左右拖改宽度（宽到 640px 以上内容分两栏） */
+  .ov-resize { display: none; position: absolute; top: 0; right: 0; bottom: 0; width: 14px; cursor: ew-resize; }
+  .ov-resize::after {
+    content: ""; position: absolute; top: 50%; right: 4px; width: 4px; height: 44px; margin-top: -22px;
+    border-radius: 2px; background: var(--gold); opacity: 0.8;
+  }
+  body.unlocked .ov-resize { display: block; }
+  body.resizing, body.resizing .ov-wrap { cursor: ew-resize; }
 </style>
 </head>
 <body>
@@ -56,10 +64,11 @@
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
     </button>
   </div>
+  <div class="ov-resize" id="resize" title="按住左右拖：改叠加层宽度"></div>
 </div>
 <script type="module">
-import { act, connect, getJSON } from './api.js';
-import { bindOverlayClicks, renderOverlay } from './view.js';
+import { act, connect } from './api.js';
+import { applyOverlayStyle, bindOverlayClicks, renderOverlay } from './view.js';
 
 const root = document.getElementById('ov');
 const wrap = document.getElementById('wrap');
@@ -69,10 +78,10 @@ const shell = window.overlayShell;   // Electron 预加载脚本给的；浏览�
 let locked = true;
 let dragging = false;
 if (new URLSearchParams(location.search).has('preview')) document.body.classList.add('preview');
-getJSON('/api/config').then((c) => document.documentElement.style.setProperty('--ov-alpha', Math.max(0.2, Math.min(1, c.opacity))));
 
 connect((s) => {
   renderOverlay(root, s.overlay.view);
+  applyOverlayStyle(root, s.overlay.style);
   root.classList.toggle('is-hidden', !s.overlay.visible);
   locked = s.overlay.locked;
   document.body.classList.toggle('unlocked', !locked);
@@ -81,6 +90,7 @@ connect((s) => {
   const tkey = s.overlay.toggle_key ? `（${s.overlay.toggle_key}）` : '';
   closeBtn.title = s.overlay.view?.closable ? `关闭这条提醒${tkey}` : `关闭叠加层 · 按 ${s.overlay.toggle_key || '热键'} 或控制面板重新打开`;
   shell?.setLocked(locked);
+  fitHeight();
   reportHitRects();
 }, (ok) => {
   if (!ok) renderOverlay(root, { kind: 'notice', title: '选人助手', lines: [{ kind: 'dim', text: '和助手断开了，正在重连…' }] });
@@ -98,10 +108,49 @@ function reportHitRects() {
   lastRects = key;
   shell?.setHitRects(rects);
 }
-new ResizeObserver(reportHitRects).observe(wrap);
+new ResizeObserver(() => { fitHeight(); reportHitRects(); }).observe(wrap);
+
+// ---------- 放不下就缩小：卡片比窗口（到屏幕底）高时整体等比缩小，最小 55% ----------
+// zoom 缩的是字和间距；宽度按缩放换算，卡片仍然正好占满窗口宽度（缩小后一行能放更多，宽到 640 还会分两栏）
+const MIN_ZOOM = 0.55;
+let zoom = 1;
+function setZoom(z) {
+  zoom = z;
+  wrap.style.zoom = z === 1 ? '' : String(z);
+  wrap.style.width = z === 1 ? '' : `${(window.innerWidth - 4) / z}px`;   // 4 = body 左右 padding
+}
+function fitHeight() {
+  // 从 100% 往下一档一档试，取第一个放得下的。不按比例直接算：缩小会换排版（换行、宽了分两栏），高度不跟缩放成比例
+  const avail = window.innerHeight - 6;
+  for (let z = 1; ; z = Math.round((z - 0.05) * 100) / 100) {
+    setZoom(Math.max(MIN_ZOOM, z));
+    if (zoom <= MIN_ZOOM || wrap.getBoundingClientRect().height <= avail) break;
+  }
+}
+window.addEventListener('resize', fitHeight);
 root.addEventListener('transitionend', reportHitRects);   // 显示 / 隐藏的过渡结束后按钮位置才稳定
 
 // ---------- 解锁后拖动 ----------
+const resizeEl = document.getElementById('resize');
+let resizing = false;
+resizeEl.addEventListener('pointerdown', (e) => {
+  if (locked || e.button !== 0) return;
+  e.stopPropagation();                             // 不要同时触发拖动
+  resizeEl.setPointerCapture(e.pointerId);
+  resizing = true;
+  document.body.classList.add('resizing');
+  shell?.resizeStart();
+});
+const endResize = () => {
+  if (!resizing) return;
+  resizing = false;
+  document.body.classList.remove('resizing');
+  shell?.resizeEnd();
+};
+resizeEl.addEventListener('pointerup', endResize);
+resizeEl.addEventListener('pointercancel', endResize);
+resizeEl.addEventListener('lostpointercapture', endResize);
+
 wrap.addEventListener('pointerdown', (e) => {
   if (locked || e.button !== 0 || e.target.closest('button')) return;
   wrap.setPointerCapture(e.pointerId);

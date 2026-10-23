@@ -40,7 +40,7 @@ class Hotkeys:
         for hid, (vk, name, _) in self._map.items():
             if not user32.RegisterHotKey(None, hid, MOD_NOREPEAT, vk):
                 self.failed.append(name)          # 一般是被别的程序占了
-                log.warning("热键 %s 注册失败（多半被别的程序占了，可以在 config.toml 里换一个）", name)
+                log.warning("热键 %s 注册失败（多半被别的程序占了，可以在面板「设置」里换一个）", name)
         log.info("热键已注册：%s", "、".join(n for _, n, _ in self._map.values() if n not in self.failed) or "无")
         msg = wintypes.MSG()
         while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) > 0:
@@ -55,3 +55,4 @@ class Hotkeys:
     def stop(self) -> None:
         if self._thread_id:
             ctypes.windll.user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)   # WM_QUIT
+            self._thread.join(timeout=2)          # 等旧的注销完，马上重新注册同一个键才不会撞

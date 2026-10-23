@@ -114,6 +114,9 @@ def _header(cfg: Config, command: str) -> None:
 
 
 def _git_rev() -> str:
+    stamp = ROOT / "VERSION.txt"                              # 打包版没有 .git，打包时写好的版本号
+    if stamp.exists():
+        return stamp.read_text(encoding="utf-8").strip()
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True,
                            timeout=5, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))

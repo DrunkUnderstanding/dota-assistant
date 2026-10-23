@@ -1,9 +1,9 @@
 """把「当前选人局面」变成要显示 / 要念的建议。不依赖界面，方便测试。"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
-from . import data, explain, kb
+from . import data, explain, kb, lanes
 from .config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .heroes import Hero, HeroDB
@@ -15,6 +15,7 @@ class Draft:
     enemies: list[Hero] = field(default_factory=list)
     bans: list[Hero] = field(default_factory=list)
     my_hero: Hero | None = None                         # 我已经选了的英雄（GSI 告诉我们）
+    ally_pos: dict[int, int] = field(default_factory=dict)   # 队友英雄 id → 位置（选人界面 OCR 认出来的）
 
     def key(self) -> tuple:
         ids = lambda hs: tuple(sorted(h.id for h in hs))
@@ -29,6 +30,8 @@ class Advice:
     other: list[Suggestion]
     threat: tuple[Hero, float] | None     # 对我方威胁最大的敌方英雄（够显著才有）
     why: dict[int, list[explain.Why]] = field(default_factory=dict)   # 推荐英雄 id → 机制上克 / 怕谁（知识库原文）
+    lanes: lanes.Lanes | None = None      # 对面分路（猜的）
+    lane_tips: list[explain.Why] = field(default_factory=list)       # 我选了英雄后：我这路怎么打（知识库原文）
 
 
 class Advisor:
@@ -49,15 +52,24 @@ class Advisor:
             e, v = self.engine.threats(draft.enemies, team)[0]
             if pct(v) >= 1.5:
                 threat = (e, v)
+        lane = lanes.assign([e.id for e in draft.enemies], [a.id for a in draft.allies], position, None,
+                            self.engine.positions, draft.ally_pos) if draft.enemies and self.engine.positions else None
         if draft.my_hero:
-            return Advice(position, draft, [], [], threat)
+            return Advice(position, draft, [], [], threat, lanes=lane, lane_tips=self.lane_tips(draft.my_hero, lane))
         res = self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
                                   bans=draft.bans, pool=self.pool, only_pool=self.cfg.only_pool,
                                   history=history, history_by_position=by_pos,
                                   position_filter=self.cfg.position_filter, top=None)
         mine = [s for s in res if s.in_pool][:self.cfg.top]
         other = [s for s in res if not s.in_pool][:self.cfg.top_other]
-        return Advice(position, draft, mine, other, threat, self.explain(mine + other, draft.enemies))
+        return Advice(position, draft, mine, other, threat, self.explain(mine + other, draft.enemies), lane)
+
+    def lane_tips(self, me: Hero, lane: lanes.Lanes | None) -> list[explain.Why]:
+        if not (self.kb and lane and me.id in self.kb.heroes):
+            return []
+        foes = [self.kb.heroes[g.hero] for g in lane.opponents() if g.hero in self.kb.heroes]
+        partner = lane.partner()
+        return lanes.tips(self.kb.heroes[me.id], foes, self.kb.heroes.get(partner.hero) if partner else None)
 
     def explain(self, picks: list[Suggestion], enemies: list[Hero]) -> dict[int, list[explain.Why]]:
         if not (self.kb and enemies):
@@ -100,8 +112,11 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
         out.append(("dim", "敌：" + " ".join(h.name_cn for h in d.enemies)))
     if d.allies:
         out.append(("dim", "友：" + " ".join(h.name_cn for h in d.allies)))
+    if advice.lanes:
+        out.append(("dim", "分路（猜）：" + lanes.lane_line(replace(advice.lanes, side=side), _namer(d))))
     if d.my_hero:
         out.append(("head", f"你已选：{d.my_hero.name_cn}"))
+        out += [("dim", f"　{'✓' if w.kind == 'good' else '✗'} {w.text}") for w in advice.lane_tips]
     for title, group in (("你的英雄", advice.mine), ("其他选择", advice.other)):
         if group:
             out.append(("head", title))
@@ -118,6 +133,12 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
 
 def hero_ref(h: Hero) -> dict:
     return {"id": h.id, "name": h.name_cn}
+
+
+def _namer(d: Draft):
+    """英雄 id → 中文名（这局阵容里的）"""
+    names = {h.id: h.name_cn for h in [*d.allies, *d.enemies, *([d.my_hero] if d.my_hero else [])]}
+    return lambda i: names.get(i, str(i))
 
 
 def render_view(advice: Advice, side: str | None) -> dict:
@@ -148,4 +169,7 @@ def render_view(advice: Advice, side: str | None) -> dict:
         "my_hero": hero_ref(d.my_hero) if d.my_hero else None,
         "groups": groups,
         "threat": threat,
+        # 对面分路（猜的）+ 我选好英雄后我这路的对线提示
+        "lanes": lanes.view(replace(advice.lanes, side=side), lambda i: {"id": i, "name": _namer(d)(i)},
+                            advice.lane_tips) if advice.lanes else None,
     }

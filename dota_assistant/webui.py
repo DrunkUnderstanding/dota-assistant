@@ -34,14 +34,15 @@ elog = logging.getLogger("dota_assistant.electron")      # Electron 主进程 / 
 
 WEB_DIR = ROOT / "web"
 ELECTRON_DIR = ROOT / "electron"
+UI_DIR = ROOT / "ui"            # 打包版（packaging/build.py）：Electron 本体 + resources/app 里的 main.js，双击就能跑
 PORTRAIT_DIR = DATA_DIR / "portraits"
 JSON_TYPE = "application/json; charset=utf-8"
 
 
 def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
-    """pos：用户拖过的位置（比例），优先于 config.toml 里的 overlay_x / overlay_y"""
+    """pos：用户拖过的位置（比例）和拉过的宽度，优先于 config.toml 里的 overlay_x / overlay_y / overlay_width"""
     pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
-    return {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": cfg.overlay_width,
+    return {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
             "opacity": cfg.overlay_opacity}
 
 
@@ -144,8 +145,16 @@ class WebServer:
 
 
 def find_electron() -> Path | None:
-    exe = ELECTRON_DIR / "node_modules" / "electron" / "dist" / "electron.exe"
-    return exe if exe.exists() else None
+    for exe in (UI_DIR / "electron.exe", ELECTRON_DIR / "node_modules" / "electron" / "dist" / "electron.exe"):
+        if exe.exists():
+            return exe
+    return None
+
+
+def electron_command(exe: Path, url: str) -> list[str]:
+    """打包版的界面代码在 ui/resources/app，Electron 自己会加载；开发版要把 electron/ 目录传给它"""
+    app = [] if exe.parent == UI_DIR else [str(ELECTRON_DIR)]
+    return [str(exe), *app, f"--server={url}"]
 
 
 def serve(live, browser: bool = False) -> int:
@@ -167,7 +176,7 @@ def serve(live, browser: bool = False) -> int:
                   "或者先用 run --browser 在浏览器里看界面（叠加层盖不到游戏上）。")
             return 1
         env = {k: v for k, v in os.environ.items() if k != "ELECTRON_RUN_AS_NODE"}
-        proc = subprocess.Popen([str(exe), str(ELECTRON_DIR), f"--server={srv.url}"], env=env,
+        proc = subprocess.Popen(electron_command(exe, srv.url), env=env,
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         log.info("界面服务 %s，已启动 Electron（pid %d）", srv.url, proc.pid)
         threading.Thread(target=_pipe_electron, args=(proc.stdout,), daemon=True, name="electron-log").start()

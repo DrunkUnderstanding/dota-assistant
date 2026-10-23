@@ -28,6 +28,29 @@ function vsRow(item) {
   return `<div class="pick-vs"><span class="pick-vs-label">对位</span>${cells}</div>`;
 }
 
+// 对面分路（按常见位置猜）：三路各一行，我这路高亮；我选好英雄后下面接我这路的对线提示（原句在悬停提示里）
+function laneFace(h) {
+  const tip = `${h.name}：猜 ${h.pos} 号位（${Math.round(h.conf * 100)}% 把握）`;
+  return `<span class="lane-hero ${h.sure ? '' : 'is-unsure'}" title="${esc(tip)}">${face(h, 'face-sm')}<b>${h.pos}${h.sure ? '' : '?'}</b></span>`;
+}
+
+function lanesHTML(l) {
+  if (!l) return { rows: '', tips: '' };
+  const rows = l.rows.map((r) => {
+    const empty = '<span class="lane-empty" title="对面这个位置还没选">?</span>'.repeat(r.missing);
+    const mine = r.mine ? `<em>你这路${l.partner ? ` · 队友 ${esc(l.partner.name)}` : ''}</em>` : '';
+    return `<div class="lane ${r.mine ? 'is-mine' : ''}"><span class="lane-label">${esc(r.label)}</span><div class="lane-faces">${r.heroes.map(laneFace).join('')}${empty}</div>${mine}</div>`;
+  }).join('');
+  const tips = (l.tips || []).map((w) => `<p class="why why-${esc(w.kind)}" title="${esc(w.quote)}">${w.kind === 'good' ? '✓' : '✗'} ${esc(w.text)}</p>`).join('');
+  return {
+    rows: `
+    <section class="ov-lanes" title="对面谁走哪路是按每个英雄在本分段最常打的位置猜的，数字是猜的位置，? = 没把握">
+      <h3>对面分路<small>按常见位置猜</small></h3>${rows}
+    </section>`,
+    tips: tips ? `<section class="lane-tips"><h4>你这路怎么打</h4>${tips}</section>` : '',
+  };
+}
+
 function card(item, rank) {
   const tags = item.tags.map((t) => `<span class="tag tag-${t.kind}">${esc(t.text)}</span>`).join('');
   // 机制上为什么克 / 怕（知识库原句放在悬停提示里）
@@ -48,16 +71,23 @@ function card(item, rank) {
     </div>`;
 }
 
+// 内容分两栏：A = 阵容 + 分路，B = 我这路怎么打 / 推荐 / 威胁。窄的时候上下接着排（顺序不变），
+// 叠加层拉宽到 640px 以上左右并排（base.css 的容器查询），整张卡片矮一半，不容易超出屏幕
 function draftHTML(v) {
   const sideCls = v.side === 'radiant' ? 'side-radiant' : v.side === 'dire' ? 'side-dire' : 'side-unknown';
-  let html = `
+  const head = `
     <header class="ov-head">
       <span class="ov-pos">${esc(v.position_name)}</span>${v.position_auto ? '<span class="ov-auto" title="从选人界面名字下面的位置自动认出来的">自动</span>' : ''}
       <span class="ov-side ${sideCls}">${esc(v.side_name)}</span>
       <span class="ov-brand">选人助手</span>
     </header>`;
+  let a = '';
+  let html = '';
   const lines = lineup('敌', v.enemies, 'lineup-enemy') + lineup('友', v.allies, 'lineup-ally') + lineup('禁', v.bans || [], 'lineup-ban');
-  if (lines) html += `<section class="ov-lineups">${lines}</section>`;
+  if (lines) a += `<section class="ov-lineups">${lines}</section>`;
+  const lanes = lanesHTML(v.lanes);
+  a += lanes.rows;
+  html += lanes.tips;
   if (v.my_hero) {
     html += `
       <section class="ov-picked">
@@ -76,7 +106,8 @@ function draftHTML(v) {
   if (v.threat) {
     html += `<div class="ov-threat">${face(v.threat, 'face-sm')}<span>注意 <b>${esc(v.threat.name)}</b> 对我方威胁最大</span><em>${v.threat.delta > 0 ? '+' : ''}${v.threat.delta.toFixed(1)}%</em></div>`;
   }
-  return html;
+  if (!a || !html) return head + a + html;           // 只有一栏的内容，不用分
+  return `${head}<div class="ov-cols"><div class="ov-col">${a}</div><div class="ov-col">${html}</div></div>`;
 }
 
 // closable：局内提醒，带关闭按钮（点它或按显隐热键关掉）
@@ -87,20 +118,27 @@ function noticeHTML(v) {
     <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${esc(l.text)}</p>`).join('')}</section>`;
 }
 
-// 本局要点：两页（数据：对线 / 起手 / 强势期 / 对面要防 / 关键装备；打法：AI 写的前中后期），热键翻页
+// 本局要点：两页（数据：分路 + 对线 / 起手 / 强势期 / 对面要防 / 关键装备；打法：AI 写的前中后期），热键翻页
 function briefHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭">×</button>' : '';
   const tabs = (v.tabs || []).map((t) => `<span class="brief-tab ${t.on ? 'is-on' : ''}" data-page="${esc(t.page)}">${esc(t.label)}</span>`).join('');
   const sections = v.sections.map((s) => `
     <section class="brief-sec"><h3>${esc(s.title)}</h3>
-      ${s.lines.map((l) => `<p class="brief-${esc(l.kind)}">${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`).join('')}</section>`).join('');
+      ${s.lines.map((l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`).join('')}</section>`).join('');
   return `
     <header class="ov-head"><span class="ov-pos">${esc(v.title)}</span><span class="ov-brand">选人助手</span>${close}</header>
     ${tabs ? `<div class="brief-tabs">${tabs}<em>${esc(v.hint || '')}</em></div>` : ''}
-    ${sections}`;
+    <div class="brief-body">${sections}</div>`;
 }
 
 // 只在内容真的变了时重画，避免动画每秒重放
+// 叠加层外观（config 里的 overlay_color / overlay_opacity）：只改卡片底色，文字和标签不跟着透明
+export function applyOverlayStyle(el, style) {
+  if (!style) return;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(style.color.slice(i, i + 2), 16));
+  el.style.setProperty('--ov-fill', `rgba(${r}, ${g}, ${b}, ${style.opacity})`);
+}
+
 export function renderOverlay(root, view) {
   const html = !view || !view.kind ? '<div class="ov-empty">等待助手…</div>'
     : view.kind === 'notice' ? noticeHTML(view) : view.kind === 'brief' ? briefHTML(view) : draftHTML(view);

@@ -6,3 +6,5 @@ shots/
 node_modules/
 .playwright-mcp/
 logs/
+build/
+config.toml.bak

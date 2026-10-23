@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import logging
 import queue
+import re
 import threading
 import time
 from concurrent.futures import Future
@@ -23,18 +24,20 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, coach, death, gameplan, grid, roles
+from . import brief, coach, config, death, gameplan, grid, llm, roles
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
 from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer
 from .heroes import Hero
-from .hotkeys import Hotkeys
+from .hotkeys import Hotkeys, vk_code
 from .speech import Speaker
 from .vision import EMPTY, Calibration, DraftView, TemplateBank, recognize, write_image
 
 SHOTS_DIR = ROOT / "shots"
 OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
+OPACITY_MIN = 0.3                              # 叠加层底色再透就看不清字了
+OVERLAY_WIDTH = (300, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内
 SIDES = ("radiant", "dire")
 DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒（复活很快 / 演示加速时也看得到）
 SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
@@ -56,8 +59,41 @@ def _slot_text(db, s) -> str:
     return f"?{guess.name_cn if guess else ''}({s.score:.2f})"
 
 
+def _check_hotkeys(cfg: Config, keys: dict) -> dict:
+    """设置里改的热键：键名能注册、几个功能不撞键；返回要写进 config 的字段"""
+    updates = {}
+    for field, name in keys.items():
+        if field not in HOTKEY_ACTIONS:
+            raise ValueError(f"不认识的热键项 {field!r}")
+        name = str(name or "").strip().upper()
+        vk_code(name)                                  # 不支持的键名直接报错
+        updates[field] = name
+    merged = {f: updates.get(f, getattr(cfg, f)).upper() for f in HOTKEY_ACTIONS}
+    seen: dict[str, str] = {}
+    for f, name in merged.items():
+        if name in seen:
+            raise ValueError(f"{name} 同时绑了「{HOTKEY_ACTIONS[seen[name]][0]}」和「{HOTKEY_ACTIONS[f][0]}」，换一个")
+        seen[name] = f
+    return updates
+
+
 def _view_text(db, view, kinds=("radiant", "dire", "bans")) -> list[str]:
     return [" ".join(_slot_text(db, s) for s in getattr(view, k)) or "-" for k in kinds]
+
+
+SECRET_FIELDS = {"stratz_token": "STRATZ token", "ai_api_key": "API Key"}   # 不发给页面、不进日志
+# 热键：config 字段 → (完整说明, 面板窗口窄时的短说明)；按哪个键在「设置」里改
+HOTKEY_ACTIONS = {
+    "hotkey_toggle": ("显隐 / 关提醒", "显隐"),
+    "hotkey_lock": ("解锁 / 固定位置", "解锁"),
+    "hotkey_rescan": ("重识别", "重识别"),
+    "hotkey_shot": ("截图", "截图"),
+    "hotkey_brief": ("本局要点 / 翻页", "要点"),
+}
+
+
+def _mask(secret: str) -> dict:
+    return {"set": bool(secret), "tail": secret[-4:] if len(secret) >= 8 else ""}
 
 
 class Live:
@@ -69,6 +105,7 @@ class Live:
                  ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
+        self.config_file: Path | None = None    # 账号设置写到哪；None = 项目根目录的 config.toml，测试里换成临时文件
         self.advisor = advisor or adv.Advisor(cfg)
         self.db = self.advisor.db
         self.speaker = speaker or Speaker(cfg.voice_rate, cfg.voice)
@@ -101,7 +138,7 @@ class Live:
         self.user_hidden = False
         self.overlay_file = overlay_file or OVERLAY_FILE
         self.overlay_locked = True               # 固定：鼠标穿透；解锁：可以拖动叠加层
-        self.overlay_pos: dict | None = None     # 拖过的位置（占屏幕宽 / 高的比例），没拖过就用 config 里的
+        self.overlay_pos: dict | None = None     # 拖过的位置（占屏幕宽 / 高的比例）和拉过的宽度，没拖过就用 config 里的
         self._load_overlay_state()
         self.message = ""                        # 状态栏最后一条操作提示
         self.notice: dict | None = None          # 演示用：临时盖住选人推荐的内容
@@ -141,6 +178,7 @@ class Live:
         # 自动认位置（roles.py）：天梯选人时顶栏名字下面的「优势路 / 纯辅助…」
         self._read_roles = read_roles or roles.read_roles
         self.position_auto = False               # 当前位置是不是自动认出来的
+        self.team_roles: list[int | None] = []   # 这局我方 5 格各自排的位置（OCR 认出来的，猜队友分路用）
         self._base_position = self.position      # 认不出时回到的位置（config 或玩家手动选的）
         self._role_draft = -1                    # 哪一局已经认出来了（或者玩家手动改过），不再认
         self._role_busy = False
@@ -158,18 +196,25 @@ class Live:
 
         self.hotkeys = None
         if use_hotkeys:
-            def key(name: str, fn: Callable, *args):
-                def press():
-                    log.info("热键 %s", name)
-                    self.submit(fn, *args)
-                return press
-            self.hotkeys = Hotkeys({cfg.hotkey_toggle: key(cfg.hotkey_toggle, self.toggle_overlay),
-                                    cfg.hotkey_lock: key(cfg.hotkey_lock, self.toggle_lock),
-                                    cfg.hotkey_rescan: key(cfg.hotkey_rescan, self.scan, True),
-                                    cfg.hotkey_shot: key(cfg.hotkey_shot, self.save_shot),
-                                    cfg.hotkey_brief: key(cfg.hotkey_brief, self.show_brief)}).start()
+            self._start_hotkeys()
         log.info("校准：%s；模板：官方 %s 张 + 学习 %s 张", "已校准" if self.cal and self.cal.ready else "没校准",
                  self.bank.portraits, self.bank.learned)
+
+    def _start_hotkeys(self) -> None:
+        """按 cfg 里的键注册热键；设置里改了键就整组重新注册"""
+        actions = {"hotkey_toggle": (self.toggle_overlay,), "hotkey_lock": (self.toggle_lock,),
+                   "hotkey_rescan": (self.scan, True), "hotkey_shot": (self.save_shot,),
+                   "hotkey_brief": (self.show_brief,)}
+
+        def key(name: str, fn: Callable, *args):
+            def press():
+                log.info("热键 %s", name)
+                self.submit(fn, *args)
+            return press
+        if self.hotkeys:
+            self.hotkeys.stop()
+        self.hotkeys = Hotkeys({getattr(self.cfg, f): key(getattr(self.cfg, f), *actions[f])
+                                for f in HOTKEY_ACTIONS}).start()
 
     # ---------- 线程 / 订阅 ----------
 
@@ -241,7 +286,7 @@ class Live:
     def action(self, a: dict) -> str | None:
         """在工作线程里执行一条网页操作，返回状态栏提示。未知操作抛 ValueError。"""
         t = a.get("type")
-        log.info("网页操作 %s", a)
+        log.info("网页操作 %s", {k: ("***" if k in SECRET_FIELDS and v else v) for k, v in a.items()})
         if t == "set_slot":
             side, i = a["side"], int(a["index"])
             if side not in SIDES or not 0 <= i < 5:
@@ -271,6 +316,8 @@ class Live:
                 self.scan_without_gsi = bool(value)
             elif key == "overlay_locked":
                 self.set_locked(bool(value))
+            elif key in ("overlay_opacity", "overlay_color"):
+                self.set_overlay_style(key, value, save=bool(a.get("save", True)))
             else:
                 raise ValueError(f"不认识的设置 {key}={value!r}")
         elif t == "refresh":
@@ -301,12 +348,94 @@ class Live:
         elif t == "close_overlay":
             self.close_overlay()
         elif t == "overlay_moved":
-            self.overlay_moved(float(a["x"]), float(a["y"]))
+            self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"))
+        elif t == "save_settings":
+            self.save_settings(a)
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
             raise ValueError(f"不认识的操作 {t!r}")
         return self.message
+
+    def save_settings(self, a: dict) -> None:
+        """控制面板「设置」：账号（好友代码、STRATZ token）和 AI 打法来源写进 config.toml。
+        密钥字段没传 = 不改（面板不会把已存的密钥发回页面）；传空字符串 = 清掉。
+        AI 设置下一局就生效；账号要重启助手才会重新拉个人数据和分位置数据。"""
+        updates = {}
+        if "account_id" in a:
+            acc = str(a["account_id"] or "0").strip()
+            if not acc.isdigit():
+                raise ValueError("好友代码应该是一串数字")
+            updates["account_id"] = int(acc)
+        for key, name in SECRET_FIELDS.items():
+            if key in a:
+                val = str(a[key] or "").strip()
+                if any(c.isspace() or c == '"' for c in val):
+                    raise ValueError(f"{name}里不该有空格或引号，检查一下是不是复制多了")
+                updates[key] = val
+        if "ai_plan" in a:
+            updates["ai_plan"] = bool(a["ai_plan"])
+        if "ai_provider" in a:
+            if a["ai_provider"] not in llm.PROVIDERS:
+                raise ValueError(f"不认识的 AI 来源 {a['ai_provider']!r}")
+            updates["ai_provider"] = a["ai_provider"]
+        if "ai_model" in a:
+            model = str(a["ai_model"] or "").strip()
+            if not model:
+                raise ValueError("模型名不能空")
+            updates["ai_model"] = model
+        if "ai_base_url" in a:
+            url = str(a["ai_base_url"] or "").strip()
+            if url and not url.startswith(("http://", "https://")):
+                raise ValueError("接口地址要以 http:// 或 https:// 开头")
+            updates["ai_base_url"] = url
+        if "hotkeys" in a:
+            updates.update(_check_hotkeys(self.cfg, a["hotkeys"]))
+        if not updates:
+            return
+        hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in HOTKEY_ACTIONS)
+        account_changed = any(updates.get(k, getattr(self.cfg, k)) != getattr(self.cfg, k)
+                              for k in ("account_id", "stratz_token"))
+        path = config.save(updates, self.config_file)
+        for k, v in updates.items():
+            setattr(self.cfg, k, v)
+        log.info("设置已保存到 %s：%s", path, {k: ("已设置" if v else "未设置") if k in SECRET_FIELDS else v
+                                               for k, v in updates.items()})
+        if hotkeys_changed and self.hotkeys:
+            self._start_hotkeys()
+        self.message = ("设置已保存。账号改了要重启助手才会重新拉个人数据" if account_changed
+                        else "设置已保存，热键已换好" if hotkeys_changed
+                        else "设置已保存，AI 打法下一局按新设置")
+
+    def set_overlay_style(self, key: str, value, save: bool = True) -> None:
+        """叠加层底色 / 不透明度。面板上拖滑块时 save=False 只改内存（叠加层马上跟着变），松手再写进 config.toml"""
+        if key == "overlay_opacity":
+            value = round(min(1.0, max(OPACITY_MIN, float(value))), 2)
+        elif not re.fullmatch(r"#[0-9a-fA-F]{6}", str(value)):
+            raise ValueError(f"颜色要写成 #rrggbb，收到 {value!r}")
+        else:
+            value = str(value).lower()
+        setattr(self.cfg, key, value)
+        if save:
+            path = config.save({key: value}, self.config_file)
+            log.info("叠加层外观已保存到 %s：%s = %s", path, key, value)
+            self.message = "叠加层外观已保存"
+
+    def overlay_style(self) -> dict:
+        try:
+            opacity = min(1.0, max(OPACITY_MIN, float(self.cfg.overlay_opacity)))
+        except (TypeError, ValueError):
+            opacity = Config.overlay_opacity
+        color = self.cfg.overlay_color if re.fullmatch(r"#[0-9a-fA-F]{6}", str(self.cfg.overlay_color)) else Config.overlay_color
+        return {"opacity": opacity, "color": color}
+
+    def settings_view(self) -> dict:
+        """给面板「设置」窗口看的；密钥本身不发给页面，只给末 4 位让玩家认得出是哪个"""
+        c = self.cfg
+        return {"account_id": c.account_id, "stratz_token": _mask(c.stratz_token), "ai_plan": c.ai_plan,
+                "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": _mask(c.ai_api_key),
+                "ai_base_url": c.ai_base_url, "providers": llm.PROVIDERS,
+                "hotkeys": [{"field": f, "key": getattr(c, f), "text": text} for f, (text, _) in HOTKEY_ACTIONS.items()]}
 
     # ---------- 局面 ----------
 
@@ -338,7 +467,10 @@ class Live:
         if self.gsi and self.gsi.state.alive and self.gsi.state.my_hero_key:
             my = next((h for h in self.db if h.key == self.gsi.state.my_hero_key), None)
         allies = [h for h in team[side] if not my or h.id != my.id]
-        return adv.Draft(allies, team[other], bans, my)
+        # 队友排的位置（OCR）：格子顺序和 team_roles 一一对应
+        ally_pos = {h.id: r for t, r in zip(self.slots[side], self.team_roles)
+                    if r and (h := self._hero(t)) and h in allies}
+        return adv.Draft(allies, team[other], bans, my, ally_pos)
 
     def refresh(self, force_speech: bool = False) -> None:
         draft = self.current_draft()
@@ -455,6 +587,7 @@ class Live:
         if me is None or team[me] is None:
             return                               # 没有位置这行字（加速、普通匹配）或者被挡住了：过几秒再试
         self._role_draft = draft
+        self.team_roles = list(team)
         log.info("认出位置：我在第 %d 格，排的是 %d 号位（我方：%s）", me + 1, team[me],
                  " ".join(str(r) if r else "?" for r in team))
         if team[me] != self.position or not self.position_auto:
@@ -546,6 +679,7 @@ class Live:
             self.pick_key = None
             if self.position_auto:               # 上一局自动认的位置不带到这一局（这局可能是加速，没有位置字样）
                 self.position, self.position_auto = self._base_position, False
+            self.team_roles = []
             log.info("进入选人阶段（第 %d 次）：叠加层自动显示", self._drafts_seen)
         self._in_selection = selecting
         strategy = bool(st and st.alive and st.game_state == STRATEGY_STATE)
@@ -645,13 +779,14 @@ class Live:
         self.brief_match, self.brief = key, None
         self.pick_key = None                     # 真的选完了，「如果选它」的卡片就不用了
         ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
+        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
         log.info("比赛 %s：做本局要点（%s · 队友 %s · 对面 %s）", key, draft.my_hero.name_cn, _names(draft.allies),
                  _names(draft.enemies))
 
         def work():
             t0 = time.monotonic()
             try:
-                res, err = self._brief_build(self.cfg, *ids, self.position), None
+                res, err = self._brief_build(self.cfg, *ids, self.position, **lane_info), None
                 log.info("本局要点做好了（%.1f 秒）", time.monotonic() - t0)
             except Exception as e:
                 log.exception("本局要点没做出来")
@@ -669,7 +804,7 @@ class Live:
         if self.cfg.ai_plan:
             self._start_plan(key, res, ids)
         else:
-            res.plan_note = "AI 打法没开（config.toml 里 ai_plan = true 打开）"
+            res.plan_note = "AI 打法没开（控制面板右上角「设置」里打开）"
         st = self.gsi.state if self.gsi else None
         if st and st.alive and st.in_match and st.clock_minutes >= 0:
             self.message = f"本局要点已就绪（已经开打，按 {self.cfg.hotkey_brief} 查看）"
@@ -741,12 +876,13 @@ class Live:
         self.pick_key, self.pick_brief, self.pick_page = key, None, "data"
         self.pick_note = f"正在整理选{h.name_cn}的对线 / 装备数据…"
         ids = (hero_id, [a.id for a in draft.allies], [e.id for e in draft.enemies])
+        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
         log.info("如果选%s：做要点卡片（%d 号位）", h.name_cn, self.position)
 
         def work():
             t0 = time.monotonic()
             try:
-                res, err = self._brief_build(self.cfg, *ids, self.position), None
+                res, err = self._brief_build(self.cfg, *ids, self.position, **lane_info), None
                 log.info("如果选%s：要点做好了（%.1f 秒）", h.name_cn, time.monotonic() - t0)
             except Exception as e:
                 log.exception("如果选%s：要点没做出来", h.name_cn)
@@ -763,7 +899,7 @@ class Live:
         res.title = f"如果选{self.db.by_id[key[0]].name_cn} · {POSITION_NAMES[key[2]]}"
         self.pick_brief = res
         if not self.cfg.ai_plan:
-            res.plan_note = "AI 打法没开（config.toml 里 ai_plan = true 打开）"
+            res.plan_note = "AI 打法没开（控制面板右上角「设置」里打开）"
             return
         res.plan_note = "AI 正在写选它怎么打…（一般 30~60 秒，做好会自动切到这页）"
 
@@ -857,10 +993,15 @@ class Live:
         self.message = "叠加层位置已固定" if locked else f"叠加层已解锁：按住卡片拖动，放好后点右上角的锁（或按 {self.cfg.hotkey_lock}）固定"
         self._save_overlay_state()
 
-    def overlay_moved(self, x: float, y: float) -> None:
+    def overlay_moved(self, x: float, y: float, width: int | None = None) -> None:
         if not (-1 <= x <= 2 and -1 <= y <= 2):
             raise ValueError("叠加层位置不对")
+        width = width if width is not None else (self.overlay_pos or {}).get("width")
         self.overlay_pos = {"x": round(x, 4), "y": round(y, 4)}
+        if width is not None:
+            if not OVERLAY_WIDTH[0] <= int(width) <= OVERLAY_WIDTH[1]:
+                raise ValueError("叠加层宽度不对")
+            self.overlay_pos["width"] = int(width)
         self._save_overlay_state()
 
     def _load_overlay_state(self) -> None:
@@ -871,6 +1012,8 @@ class Live:
         self.overlay_locked = bool(raw.get("locked", True))
         if isinstance(raw.get("x"), (int, float)) and isinstance(raw.get("y"), (int, float)):
             self.overlay_pos = {"x": raw["x"], "y": raw["y"]}
+            if isinstance(raw.get("width"), int) and OVERLAY_WIDTH[0] <= raw["width"] <= OVERLAY_WIDTH[1]:
+                self.overlay_pos["width"] = raw["width"]
 
     def _save_overlay_state(self) -> None:
         self.overlay_file.parent.mkdir(parents=True, exist_ok=True)
@@ -902,11 +1045,8 @@ class Live:
             "gsi": gsi,
             "calibrated": bool(self.cal and self.cal.ready),
             "last_scan": time.strftime("%H:%M:%S", time.localtime(self.last_scan)) if self.last_scan else "",
-            "hotkeys": [{"key": self.cfg.hotkey_toggle, "text": "显隐 / 关提醒"},
-                        {"key": self.cfg.hotkey_lock, "text": "解锁 / 固定位置"},
-                        {"key": self.cfg.hotkey_rescan, "text": "重识别"},
-                        {"key": self.cfg.hotkey_shot, "text": "截图"},
-                        {"key": self.cfg.hotkey_brief, "text": "本局要点 / 翻页"}],
+            "hotkeys": [{"key": getattr(self.cfg, f), "text": text, "short": short}
+                        for f, (text, short) in HOTKEY_ACTIONS.items()],
             "hotkeys_failed": list(self.hotkeys.failed) if self.hotkeys else [],
             "message": self.message,
         }
@@ -922,10 +1062,11 @@ class Live:
         return {
             "settings": {"position": self.position, "position_auto": self.position_auto, "side_mode": self.side_mode, "mode": self.mode,
                          "voice": self.voice, "scan_without_gsi": self.scan_without_gsi},
+            "config": self.settings_view(),
             "slots": slots,
             "bans_text": self.bans_text,
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
-                        "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle,
+                        "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.coach_card or self.pick_view() or self.notice or self.view},
             "status": self.status(),
         }

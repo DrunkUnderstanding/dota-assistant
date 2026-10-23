@@ -5,7 +5,7 @@
 - 每条建议必须附一段从资料里原样复制的话（quote），程序核对它确实在资料里，对不上的整条丢掉；
 - 卡片上标明「AI 生成，未验证」；
 - 相关英雄的常见误判（knowledge/mistakes.toml）一起放进资料，让它别再犯。
-走玩家的 Claude Code 订阅（llm.py），结果按阵容缓存在 data/plans/，同一阵容不重复问；新记一条误判会让相关阵容的缓存失效。
+走玩家选的 AI 来源（llm.py：Claude Code 订阅 / API Key / OpenAI 兼容接口），结果按阵容缓存在 data/plans/，同一阵容不重复问；新记一条误判会让相关阵容的缓存失效。
 """
 from __future__ import annotations
 
@@ -34,6 +34,8 @@ SYSTEM = """你是 Dota 2 教练，给一名超凡入圣分段的天梯玩家写
 - 按玩家的位置写（一号位 / 中单 / 三号位是核心，四 / 五号位是辅助）。
 - 用上本局数据里的对线难易、强势期、关键装备时间、对面要防的技能。
 - 「对线劣势时」：对线被压时怎么少亏、怎么找回节奏，要针对这局对线对手的具体技能（例如冷却时间、施法条件）。
+- 本局数据「对线」里有对面分路（按常见位置猜的，带 ? 的没把握）、你这路的对手和同路队友，以及程序按原文规则给的对线提示：
+  对线期和「对线劣势时」围绕这一路写，可以补充、细化这些提示（例如两人怎么配合、几级能打一套），不要和它们重复，也不要和它们矛盾。
 - basis：依据，不超过 10 个字（例如「束缚击原文」「强势期数据」）。
 - quote：从资料里原样复制一段 6~40 个字，作为这条的出处，一个字都不能改；程序会核对，对不上的整条作废。"""
 
@@ -87,7 +89,8 @@ class Plan:
 
 def facts(base: kb.KnowledgeBase, rules: list[kb.Rule], my_id: int, ally_ids: list[int], enemy_ids: list[int],
           lane_ids: list[int], brief_text: str, mistakes: list[kb.Mistake] = ()) -> str:
-    """给大模型的全部资料。自己和对面五个人给技能全文，队友给机制摘要；常见误判跟着各英雄走"""
+    """给大模型的全部资料。自己、对面五个人和同路队友给技能全文，其他队友给机制摘要；常见误判跟着各英雄走。
+    lane_ids = 和你同路的英雄（对手，以及猜出来的同路队友）"""
     hero = lambda i: base.heroes[i]
     L = ["# 本局数据（统计）", brief_text, "", "# 你的英雄（官方原文）",
          kb.render_hero(hero(my_id), rules, base.patch, mistakes)]
@@ -95,7 +98,10 @@ def facts(base: kb.KnowledgeBase, rules: list[kb.Rule], my_id: int, ally_ids: li
         if i in base.heroes:
             mark = "（你的对线对手）" if i in lane_ids else ""
             L += ["", f"# 敌方 {hero(i).name}{mark}（官方原文）", kb.render_hero(hero(i), rules, base.patch, mistakes)]
-    allies = [kb.hero_brief(hero(i), rules, mistakes) for i in ally_ids if i in base.heroes]
+    for i in ally_ids:
+        if i in base.heroes and i in lane_ids:
+            L += ["", f"# 队友 {hero(i).name}（你的同路队友）（官方原文）", kb.render_hero(hero(i), rules, base.patch, mistakes)]
+    allies = [kb.hero_brief(hero(i), rules, mistakes) for i in ally_ids if i in base.heroes and i not in lane_ids]
     if allies:
         L += ["", "# 队友（机制摘要）", *allies]
     general = [r.text for r in rules if not r.hero]
@@ -118,7 +124,11 @@ def parse(res: dict, source: str) -> Plan:
     got: dict[str, list[Tip]] = {}
     plan = Plan()
     for sec in res.get("sections") or []:
+        if not isinstance(sec, dict):                     # OpenAI 兼容接口没有 schema 硬约束，格式不对的跳过
+            continue
         for t in sec.get("tips") or []:
+            if not isinstance(t, dict):
+                continue
             tip = Tip(str(t.get("text", "")).strip(), str(t.get("basis", "")).strip(), str(t.get("quote", "")).strip())
             if len(_norm(tip.quote)) >= MIN_QUOTE and _norm(tip.quote) in src and tip.text:
                 got.setdefault(sec.get("phase"), []).append(tip)
@@ -135,12 +145,13 @@ def generate(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int],
     if base is None:
         raise RuntimeError("还没有知识库，先运行 python -m dota_assistant kb update")
     source = facts(base, kb.load_rules(), my_id, ally_ids, enemy_ids, lane_ids, brief_text, kb.load_mistakes())
-    key = hashlib.sha1(f"{cfg.ai_model}\n{SYSTEM}\n{source}".encode("utf-8")).hexdigest()[:16]
+    via = "" if cfg.ai_provider == "claude_code" else f"{cfg.ai_provider}\n"     # 换了来源不串缓存；Claude Code 沿用以前的缓存
+    key = hashlib.sha1(f"{via}{cfg.ai_model}\n{SYSTEM}\n{source}".encode("utf-8")).hexdigest()[:16]
     path = PLAN_DIR / f"{key}.json"
     if path.exists():
         return Plan.from_json(json.loads(path.read_text(encoding="utf-8")))
     t0 = time.time()
-    res, cost, err = llm.ask_json(source, SYSTEM, SCHEMA, cfg.ai_model, timeout=240)
+    res, cost, err = llm.ask_json(source, SYSTEM, SCHEMA, cfg.ai_model, timeout=240, **llm.options(cfg))
     if res is None:
         raise RuntimeError(f"AI 没给出结果：{err}")
     plan = parse(res, source)

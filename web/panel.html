@@ -11,6 +11,12 @@
 <header class="topbar">
   <div class="brand"><span class="brand-mark"></span>Dota 选人助手</div>
   <div class="status" id="status"></div>
+  <button class="btn btn-icon" id="btn-settings" title="设置：好友代码、STRATZ token、AI 打法用哪家" aria-label="设置">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
 </header>
 
 <section class="toolbar">
@@ -76,10 +82,74 @@
     <div class="preview-stage">
       <div class="ov" id="preview"><div class="ov-empty">等待助手…</div></div>
     </div>
+    <div class="ov-style" title="游戏里的叠加层跟着马上变，松手后存进 config.toml">
+      <label class="ov-style-row"><span>不透明度</span>
+        <input type="range" id="ov-opacity" min="0.3" max="1" step="0.05"><b id="ov-opacity-val"></b>
+      </label>
+      <div class="ov-style-row"><span>底色</span>
+        <div class="swatches" id="ov-swatches"></div>
+        <label class="swatch swatch-custom" title="自己挑颜色（文字是浅色，底色选深一点）"><input type="color" id="ov-color"></label>
+      </div>
+    </div>
   </aside>
 </main>
 
 <footer class="footer" id="footer"></footer>
+
+<dialog class="dlg" id="settings">
+  <form method="dialog" id="settings-form" autocomplete="off">
+    <header class="dlg-head">
+      <h2>设置</h2>
+      <p class="dlg-note">保存在助手目录的 config.toml 里，只在这台电脑上用。密钥框留空 = 不改原来的，只输一个空格 = 清掉。</p>
+    </header>
+
+    <div class="dlg-body">
+      <section class="dlg-sec">
+        <div class="sec-head">
+          <div><h3>账号</h3><p class="dlg-sub">个人英雄池、分位置数据；改了要重启助手</p></div>
+        </div>
+        <label class="row"><span>Steam 好友代码</span>
+          <input name="account_id" inputmode="numeric" autofocus placeholder="游戏里个人资料能看到的那串数字">
+        </label>
+        <label class="row"><span>STRATZ token</span>
+          <input name="stratz_token" type="password" spellcheck="false">
+        </label>
+        <p class="row-hint">到 stratz.com/api 用 Steam 登录后免费领。没有也能用，只是少了分位置数据。</p>
+      </section>
+
+      <section class="dlg-sec sec-ai">
+        <div class="sec-head">
+          <div><h3>AI 打法</h3><p class="dlg-sub">选完人后写这局怎么打；下一局生效</p></div>
+          <label class="switch"><input type="checkbox" name="ai_plan"><i></i>开启</label>
+        </div>
+        <label class="row"><span>来源</span><select name="ai_provider"></select></label>
+        <p class="row-hint" id="provider-hint"></p>
+        <label class="row" data-for="claude_code anthropic openai"><span>API Key</span>
+          <input name="ai_api_key" type="password" spellcheck="false">
+        </label>
+        <label class="row" data-for="claude_code anthropic openai"><span>接口地址</span>
+          <input name="ai_base_url" spellcheck="false">
+        </label>
+        <label class="row"><span>模型</span>
+          <input name="ai_model" spellcheck="false">
+        </label>
+      </section>
+
+      <section class="dlg-sec" id="hotkeys-head">
+        <div class="sec-head">
+          <div><h3>热键</h3><p class="dlg-sub">游戏里随时按；保存后马上生效</p></div>
+        </div>
+        <div class="hk-grid" id="hotkeys"></div>
+        <p class="row-hint hk-hint">和 Dota 里自己绑的键撞了就换一个。注册失败的键会在顶栏标红。</p>
+      </section>
+    </div>
+
+    <footer class="dlg-actions">
+      <button type="button" class="btn btn-ghost" value="cancel" id="settings-cancel">取消</button>
+      <button type="submit" class="btn btn-primary" value="save">保存</button>
+    </footer>
+  </form>
+</dialog>
 
 <div class="ac" id="ac" hidden></div>
 <script type="module" src="panel.js"></script>

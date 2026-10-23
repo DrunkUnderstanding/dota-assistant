@@ -42,6 +42,15 @@ class BriefTest(unittest.TestCase):
         self.assertEqual([s["title"] for s in b.view()["sections"]], ["对线"])
         self.assertIn("⚠ 难打", b.text())
 
+    def test_line_quote(self):
+        # 对线提示带官方原句：界面悬停显示，文字版不带
+        b = brief.Brief("本局要点")
+        b.add("对线", [("warn", "小心莱恩的裂地尖刺", "莱恩·裂地尖刺：……被眩晕"), ("row", "对面同路：斧王")])
+        lines = b.view()["sections"][0]["lines"]
+        self.assertEqual(lines[0]["quote"], "莱恩·裂地尖刺：……被眩晕")
+        self.assertNotIn("quote", lines[1])
+        self.assertNotIn("被眩晕", b.text())
+
 
 if __name__ == "__main__":
     unittest.main()

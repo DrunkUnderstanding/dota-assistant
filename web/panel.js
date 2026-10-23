@@ -1,6 +1,6 @@
 // 控制面板：把 Python 推来的快照画出来，把操作发回去。局面以 Python 那边为准，这里不存状态。
 import { act, connect, getJSON } from './api.js';
-import { bindOverlayClicks, portrait, renderOverlay } from './view.js';
+import { applyOverlayStyle, bindOverlayClicks, portrait, renderOverlay } from './view.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -89,6 +89,127 @@ function paintSettings(st) {
   $('#opt-scan').checked = st.scan_without_gsi;
 }
 
+// ---------- 设置窗口（账号、AI 来源、热键） ----------
+// 密钥不从 Python 发过来，只知道设没设、末 4 位；框里留空 = 不改
+
+const dlg = $('#settings');
+const form = $('#settings-form');
+const PROVIDER_HINT = {
+  claude_code: '用这台电脑上的 Claude Code。Key 和地址都留空 = 用它自己登录的账号；用中转站（例如 DuckCoding 的 Claude Code 分组）就填中转站给的 Key 和地址。',
+  anthropic: '自己的 Anthropic API Key（console.anthropic.com），按用量付费，地址留空；支持直接 API 调用的中转站也可以填它的地址。',
+  openai: 'OpenAI 兼容接口：DeepSeek、通义千问、Kimi 等。填那家的接口地址、Key 和模型名。不是 Claude，打法质量没验证过。',
+};
+const DEFAULT_MODEL = { claude_code: 'claude-opus-5-5', anthropic: 'claude-opus-5-5', openai: '' };
+
+function secretPlaceholder(m, empty) {
+  return m.set ? `已设置${m.tail ? `（…${m.tail}）` : ''}，留空不改` : empty;
+}
+
+const URL_PLACEHOLDER = {
+  claude_code: '留空；中转站填它给的地址，例如 https://api.duckcoding.ai',
+  anthropic: '留空 = Anthropic 官方',
+  openai: '例如 https://api.deepseek.com/v1',
+};
+
+function showProvider() {
+  const p = form.ai_provider.value;
+  form.ai_base_url.placeholder = URL_PLACEHOLDER[p] || '';
+  if (!form.dataset.keySet) form.ai_api_key.placeholder = p === 'claude_code' ? '留空 = 用 Claude Code 自己的登录' : '必填';
+  $$('[data-for]', form).forEach((el) => { el.hidden = !el.dataset.for.split(' ').includes(p); });
+  $('#provider-hint').textContent = PROVIDER_HINT[p] || '';
+}
+
+function openSettings() {
+  const c = state?.config;
+  if (!c) return;
+  form.account_id.value = c.account_id || '';
+  form.stratz_token.value = '';
+  form.stratz_token.placeholder = secretPlaceholder(c.stratz_token, '没有可以不填');
+  form.ai_plan.checked = c.ai_plan;
+  form.ai_provider.innerHTML = Object.entries(c.providers).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  form.ai_provider.value = c.ai_provider;
+  form.ai_api_key.value = '';
+  form.ai_api_key.placeholder = secretPlaceholder(c.ai_api_key, '必填');
+  form.dataset.keySet = c.ai_api_key.set ? '1' : '';
+  form.ai_base_url.value = c.ai_base_url;
+  form.ai_model.value = c.ai_model;
+  form.dataset.provider = c.ai_provider;
+  showProvider();
+  paintHotkeyForm(c.hotkeys);
+  dlg.showModal();
+}
+
+// 热键：只给 F1~F12 选。单个字母虽然能注册，但会把 Dota 里这个键整个吃掉
+const KEY_CHOICES = Array.from({ length: 12 }, (_, i) => `F${i + 1}`);
+
+function paintHotkeyForm(list) {
+  $('#hotkeys').innerHTML = list.map((h) => {
+    const opts = KEY_CHOICES.includes(h.key) ? KEY_CHOICES : [h.key, ...KEY_CHOICES];   // config 里手写了别的键也留着
+    return `<label class="row"><span>${h.text}</span>
+      <select data-hotkey="${h.field}">${opts.map((k) => `<option${k === h.key ? ' selected' : ''}>${k}</option>`).join('')}</select>
+    </label>`;
+  }).join('');
+  markDupKeys();
+}
+
+function markDupKeys() {
+  const sels = $$('#hotkeys select');
+  const count = {};
+  sels.forEach((x) => { count[x.value] = (count[x.value] || 0) + 1; });
+  sels.forEach((x) => x.classList.toggle('is-dup', count[x.value] > 1));
+  return sels.some((x) => count[x.value] > 1);
+}
+
+$('#hotkeys').addEventListener('change', markDupKeys);
+
+form.ai_provider.addEventListener('change', () => {
+  // 换来源时，模型名还是上一家的默认值就跟着换（换到 OpenAI 兼容接口要自己填）
+  const prev = form.dataset.provider;
+  const next = form.ai_provider.value;
+  if (!form.ai_model.value.trim() || form.ai_model.value === DEFAULT_MODEL[prev]) form.ai_model.value = DEFAULT_MODEL[next];
+  form.dataset.provider = next;
+  showProvider();
+});
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    account_id: form.account_id.value.trim(),
+    ai_plan: form.ai_plan.checked,
+    ai_provider: form.ai_provider.value,
+    ai_model: form.ai_model.value.trim(),
+    ai_base_url: form.ai_base_url.value.trim(),
+  };
+  // 有输入才发：只输了空白 = 清掉，什么都没输 = 不改
+  if (form.stratz_token.value) payload.stratz_token = form.stratz_token.value.trim();
+  if (form.ai_api_key.value) payload.ai_api_key = form.ai_api_key.value.trim();
+  if (markDupKeys()) { showMessage('有两个功能绑了同一个键，换一个再保存', true); return; }
+  payload.hotkeys = Object.fromEntries($$('#hotkeys select').map((x) => [x.dataset.hotkey, x.value]));
+  const res = await act('save_settings', payload);
+  if (!res.ok) { showMessage(res.message, true); return; }
+  showMessage(res.message);
+  dlg.close();
+});
+
+$('#settings-cancel').addEventListener('click', () => dlg.close());
+$('#btn-settings').addEventListener('click', openSettings);
+// 点顶栏的快捷键直接跳到设置里的热键
+$('#status').addEventListener('click', (e) => {
+  if (!e.target.closest('.chip-key')) return;
+  openSettings();
+  $('#hotkeys-head').scrollIntoView({ block: 'start' });
+});
+
+// 第一次打开、什么都没填时主动弹一次（只弹一次，之后点右上角「设置」）
+let firstRunChecked = false;
+function maybeFirstRun(c) {
+  if (firstRunChecked || !c) return;
+  firstRunChecked = true;
+  let seen = false;
+  try { seen = localStorage.getItem('settings_seen') === '1'; localStorage.setItem('settings_seen', '1'); } catch { /* 存不了就每次都看情况 */ }
+  if (!seen && !c.account_id && !c.stratz_token.set) openSettings();
+}
+
 // ---------- 状态 / 按钮 ----------
 
 $$('[data-act]').forEach((b) => b.addEventListener('click', () => run(b.dataset.act)));
@@ -98,12 +219,14 @@ function paintStatus(s) {
   const gsiDot = { ok: 'dot-ok', off: '', disabled: '', busy: 'dot-bad' }[st.gsi.state];
   const keys = st.hotkeys.map((h) => {
     const failed = st.hotkeys_failed.includes(h.key);
-    return `<span class="chip ${failed ? 'chip-fail' : ''}" title="${failed ? '注册失败，被别的程序占用' : ''}"><kbd>${h.key}</kbd>${h.text}</span>`;
+    const tip = `${h.key} ${h.text}${failed ? '（注册失败，被别的程序占用）' : ''}，点这里改键`;
+    return `<span class="chip chip-key ${failed ? 'chip-fail' : ''}" title="${tip}"><kbd>${h.key}</kbd><span class="key-full">${h.text}</span><span class="key-short">${h.short || h.text}</span></span>`;
   }).join('');
   $('#status').innerHTML = `
     <span class="chip"><i class="dot ${gsiDot}"></i>${st.gsi.text}</span>
     <span class="chip"><i class="dot ${st.calibrated ? 'dot-ok' : 'dot-warn'}"></i>${st.calibrated ? '已校准' : '未校准'}</span>
-    <span class="chip">${st.last_scan ? `上次识别 ${st.last_scan}` : '未识别'}</span>
+    <span class="chip" title="${st.last_scan ? `上次识别 ${st.last_scan}` : '还没识别过'}">${st.last_scan ? `<span class="chip-text">上次识别 </span>${st.last_scan}` : '未识别'}</span>
+    <span class="status-sep"></span>
     ${keys}`;
   $('#btn-toggle').textContent = s.overlay.visible ? '隐藏叠加层' : '显示叠加层';
   if (st.message && st.message !== lastMessage) showMessage(st.message);
@@ -226,17 +349,66 @@ ac.addEventListener('mousedown', (e) => {
 // 右侧预览和叠加层一样能点：推荐英雄 → 选它怎么打，标签 → 翻页，× → 关卡片
 bindOverlayClicks($('#preview'), run);
 
+// ---------- 叠加层外观：拖的时候只改内存（游戏里的叠加层马上跟着变），松手 / 点色块才写 config.toml ----------
+
+const OV_COLORS = [
+  ['#0a0d12', '默认（深蓝黑）'], ['#000000', '纯黑'], ['#1d2025', '深灰'],
+  ['#0b1a2e', '深蓝'], ['#0d1f16', '深绿'], ['#22100e', '深红'], ['#1a1226', '深紫'],
+];
+$('#ov-swatches').innerHTML = OV_COLORS.map(([c, name]) =>
+  `<button type="button" class="swatch" data-c="${c}" style="--c:${c}" title="${name}"></button>`).join('');
+
+// 每个设置项只留最新的一次，前一次没回来就不发，免得拖滑块时把工作线程塞满
+const styleQueue = new Map();
+let styleBusy = false;
+async function setStyle(key, value, save) {
+  styleQueue.set(key, { value, save: save || styleQueue.get(key)?.save });
+  if (styleBusy) return;
+  styleBusy = true;
+  while (styleQueue.size) {
+    const [k, v] = styleQueue.entries().next().value;
+    styleQueue.delete(k);
+    const res = await act('set', { key: k, value: v.value, save: !!v.save });
+    if (!res.ok) showMessage(res.message, true);
+    else if (v.save) showMessage(res.message);
+  }
+  styleBusy = false;
+}
+
+const opacityInput = $('#ov-opacity');
+const colorInput = $('#ov-color');
+const showOpacity = (v) => { $('#ov-opacity-val').textContent = `${Math.round(v * 100)}%`; };
+opacityInput.addEventListener('input', () => { showOpacity(opacityInput.value); setStyle('overlay_opacity', Number(opacityInput.value), false); });
+opacityInput.addEventListener('change', () => setStyle('overlay_opacity', Number(opacityInput.value), true));
+colorInput.addEventListener('input', () => setStyle('overlay_color', colorInput.value, false));
+colorInput.addEventListener('change', () => setStyle('overlay_color', colorInput.value, true));
+$('#ov-swatches').addEventListener('click', (e) => {
+  const b = e.target.closest('.swatch');
+  if (b) setStyle('overlay_color', b.dataset.c, true);
+});
+
+function paintOverlayStyle(style) {
+  if (!style) return;
+  applyOverlayStyle($('#preview'), style);
+  if (document.activeElement !== opacityInput) { opacityInput.value = style.opacity; showOpacity(style.opacity); }
+  if (document.activeElement !== colorInput) colorInput.value = style.color;
+  $$('#ov-swatches .swatch').forEach((b) => b.classList.toggle('on', b.dataset.c === style.color));
+  $('.swatch-custom').classList.toggle('on', !OV_COLORS.some(([c]) => c === style.color));
+}
+
 // ---------- 启动 ----------
 
 getJSON('/api/heroes').then((h) => { heroes = h; });
 
 connect((s) => {
   state = s;
+  maybeFirstRun(s.config);
   paintSettings(s.settings);
   paintSlots(s);
   paintStatus(s);
   renderOverlay($('#preview'), s.overlay.view);
   $('#preview').classList.toggle('is-hidden', !s.overlay.visible);
+  paintOverlayStyle(s.overlay.style);
 }, (ok) => {
   if (!ok) showMessage('和助手断开了（python 那边退出了？），正在重连…', true);
   else if ($('#footer').classList.contains('is-error')) showMessage('已重新连上助手');

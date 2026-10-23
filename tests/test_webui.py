@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
-from dota_assistant import advisor as adv, grid
+from dota_assistant import advisor as adv, config, grid
 from dota_assistant import brief, coach, death, gameplan
 from dota_assistant import live as live_mod
 from dota_assistant.config import Config
@@ -49,17 +49,19 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
 
 
-def no_brief(*args):
+def no_brief(*args, **kw):
     raise RuntimeError("测试里不联网")
 
 
 def make_live(overlay_file: Path | None = None, coach_prepare=None, brief_build=no_brief, plan_build=no_brief) -> Live:
     cfg = Config(position_filter=False, top=2, top_other=2, voice=True)
-    return Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
+    live = Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
                 advisor=fake_advisor(cfg), bank=FakeBank(), calibration=Calibration(),   # 空校准，不读本机 calibration.json
                 overlay_file=overlay_file or TMP / f"overlay-{time.monotonic_ns()}.json",
                 coach_prepare=coach_prepare, brief_build=brief_build, plan_build=plan_build,
                 ban_watcher=grid.BanWatcher(TMP / f"grid-{time.monotonic_ns()}.json"))   # 不读本机 data/grid_map.json
+    live.config_file = TMP / f"config-{time.monotonic_ns()}.toml"                  # 账号设置不写本机 config.toml
+    return live
 
 
 def wait(fut):
@@ -80,6 +82,27 @@ class RenderViewTest(unittest.TestCase):
         self.assertEqual(item["vs"], [{"id": PL.id, "name": PL.name_cn, "delta": 2.5}])   # 对每个敌人的克制，百分点
         self.assertEqual(v["threat"]["delta"], 2.0)
         json.dumps(v, ensure_ascii=False)          # 能直接转 JSON
+        self.assertIsNone(v["lanes"])              # 没有分位置数据：不猜分路
+
+    def test_lanes_view(self):
+        from dota_assistant import explain, lanes
+        positions = {AXE.id: {3: (900, 0)}, CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}}
+        ln = lanes.assign([AXE.id, PL.id], [CM.id], 1, None, positions)
+        tip = explain.Why("bad", "小心斧王", "斧王·狂战士之吼：…")
+        advice = adv.Advice(1, adv.Draft(allies=[CM], enemies=[AXE, PL], my_hero=TIDE), [], [], None,
+                            lanes=ln, lane_tips=[tip])
+        v = adv.render_view(advice, "radiant")["lanes"]
+        self.assertEqual([r["label"] for r in v["rows"]], ["上路", "中路", "下路"])
+        mine = v["rows"][2]
+        self.assertTrue(mine["mine"])
+        self.assertEqual([(h["name"], h["pos"]) for h in mine["heroes"]], [("斧王", 3)])
+        self.assertEqual(mine["missing"], 1)
+        self.assertEqual(v["partner"]["name"], "水晶室女")
+        self.assertEqual(v["tips"], [tip.__dict__])
+        lines = [t for _, t in adv.render_lines(advice, "radiant")]
+        self.assertTrue(any(t.startswith("分路（猜）：上路 幻影长矛手（1号位）") for t in lines))
+        self.assertIn("　✗ 小心斧王", lines)
+        json.dumps(v, ensure_ascii=False)
 
 
 class LiveTest(unittest.TestCase):
@@ -150,8 +173,35 @@ class LiveTest(unittest.TestCase):
             self.assertTrue(again.overlay_locked)
             self.assertEqual(overlay_config(again.cfg, again.overlay_pos)["x"], 0.5)
             self.assertEqual(overlay_config(again.cfg)["x"], again.cfg.overlay_x)
+            # 拉过宽度：记下来，之后只拖位置不丢宽度
+            again.action({"type": "overlay_moved", "x": 0.5, "y": 0.1, "width": 720})
+            again.action({"type": "overlay_moved", "x": 0.4, "y": 0.1})
+            self.assertEqual(overlay_config(again.cfg, again.overlay_pos)["width"], 720)
+            with self.assertRaises(ValueError):
+                again.overlay_moved(0.4, 0.1, 50)
+            third = make_live(self.live.overlay_file)
+            try:
+                self.assertEqual(third.overlay_pos, {"x": 0.4, "y": 0.1, "width": 720})
+            finally:
+                third.close()
+            self.assertEqual(overlay_config(again.cfg)["width"], again.cfg.overlay_width)
         finally:
             again.close()
+
+    def test_overlay_style(self):
+        self.live.config_file.write_text('overlay_opacity = 0.85   # 不透明度\n', encoding="utf-8")
+        set_ = lambda **kw: wait(self.live.submit(self.live.action, {"type": "set", **kw}))
+        set_(key="overlay_opacity", value=0.6, save=False)                    # 拖滑块：叠加层马上变，先不写文件
+        self.assertEqual(self.snap()["overlay"]["style"]["opacity"], 0.6)
+        self.assertEqual(config.load(self.live.config_file).overlay_opacity, 0.85)
+        set_(key="overlay_opacity", value=0.05)                               # 松手：写进去，太透的收到 0.3
+        set_(key="overlay_color", value="#1A2B3C")
+        saved = config.load(self.live.config_file)
+        self.assertEqual((saved.overlay_opacity, saved.overlay_color), (0.3, "#1a2b3c"))
+        self.assertIn("# 不透明度", self.live.config_file.read_text(encoding="utf-8"))
+        self.assertEqual(self.snap()["overlay"]["style"], {"opacity": 0.3, "color": "#1a2b3c"})
+        with self.assertRaises(ValueError):
+            set_(key="overlay_color", value="red")
 
     def test_close_button(self):
         wait(self.live.submit(self.live.action, {"type": "toggle_lock"}))
@@ -166,6 +216,46 @@ class LiveTest(unittest.TestCase):
         wait(self.live.submit(self.live.action, {"type": "close_overlay"}))
         self.assertIsNone(self.live.coach_card)                   # 弹着提醒时只关提醒
         self.assertFalse(self.live.user_hidden)
+
+    def test_settings_saved_and_masked(self):
+        self.live.config_file.write_text('account_id = 0   # 好友代码\nstratz_token = ""\ndays = 14\n', encoding="utf-8")
+        save = lambda **kw: wait(self.live.submit(self.live.action, {"type": "save_settings", **kw}))
+        save(account_id="123456789", stratz_token="eyJabc.def-1234", ai_provider="openai", ai_model="deepseek-chat",
+             ai_api_key="sk-secret-5678", ai_base_url="https://api.deepseek.com/v1", ai_plan=False)
+        saved = config.load(self.live.config_file)
+        self.assertEqual((saved.account_id, saved.stratz_token, saved.days), (123456789, "eyJabc.def-1234", 14))
+        self.assertEqual((saved.ai_provider, saved.ai_model, saved.ai_api_key, saved.ai_plan),
+                         ("openai", "deepseek-chat", "sk-secret-5678", False))
+        self.assertIn("# 好友代码", self.live.config_file.read_text(encoding="utf-8"))   # 注释原样保留
+        self.assertEqual(self.live.cfg.ai_api_key, "sk-secret-5678")                    # 不用重启，下一局就用
+        c = self.snap()["config"]
+        self.assertEqual((c["stratz_token"], c["ai_api_key"]), ({"set": True, "tail": "1234"}, {"set": True, "tail": "5678"}))
+        for secret in ("eyJabc", "sk-secret"):
+            self.assertNotIn(secret, self.live.current_snapshot)                         # 完整密钥不发给页面
+        save(account_id="123456789")
+        self.assertEqual(config.load(self.live.config_file).stratz_token, "eyJabc.def-1234")   # 没传 = 不改
+        save(stratz_token="")
+        self.assertFalse(self.snap()["config"]["stratz_token"]["set"])
+        for bad in ({"account_id": "abc"}, {"stratz_token": "Bearer xyz"}, {"ai_provider": "gpt"},
+                    {"ai_model": " "}, {"ai_base_url": "api.deepseek.com"}):
+            with self.assertRaises(ValueError):
+                save(**bad)
+
+    def test_hotkeys_rebind(self):
+        self.live.config_file.write_text('hotkey_brief = "F6"   # 本局要点\n', encoding="utf-8")
+        save = lambda **kw: wait(self.live.submit(self.live.action, {"type": "save_settings", **kw}))
+        save(hotkeys={"hotkey_brief": "f11", "hotkey_shot": "F12"})
+        saved = config.load(self.live.config_file)
+        self.assertEqual((saved.hotkey_brief, saved.hotkey_shot), ("F11", "F12"))
+        self.assertIn("# 本局要点", self.live.config_file.read_text(encoding="utf-8"))
+        keys = {h["text"]: h["key"] for h in self.snap()["status"]["hotkeys"]}
+        self.assertEqual(keys["本局要点 / 翻页"], "F11")
+        self.assertIn({"field": "hotkey_brief", "key": "F11", "text": "本局要点 / 翻页"}, self.snap()["config"]["hotkeys"])
+        for bad in ({"hotkey_brief": "F8"},                    # 和「显隐」撞键
+                    {"hotkey_brief": "Ctrl+A"}, {"hotkey_nope": "F2"}):
+            with self.assertRaises(ValueError):
+                save(hotkeys=bad)
+        self.assertEqual(self.live.cfg.hotkey_brief, "F11")    # 报错不改
 
     def test_rescan_without_calibration_reports(self):
         msg = wait(self.live.submit(self.live.action, {"type": "rescan"}))
@@ -239,6 +329,9 @@ class CoachLiveTest(unittest.TestCase):
         self.assertEqual((self.live.position, self.live.position_auto), (4, True))
         self.assertEqual(calls, [("radiant", "醉后才知道", 3)])
         self.assertTrue(json.loads(self.live.current_snapshot)["overlay"]["view"]["position_auto"])
+        # 队友排的位置也记下来，猜同路队友用（格子顺序对应）
+        self.live.slots["radiant"][:2] = ["斧王", "水晶室女"]
+        self.assertEqual(self.live.current_draft().ally_pos, {AXE.id: 3, CM.id: 5})
         wait(self.live.submit(self.live.scan_role, object()))            # 这局认出来了，不再认
         self.assertEqual(len(calls), 1)
 
@@ -247,6 +340,7 @@ class CoachLiveTest(unittest.TestCase):
         st.update({"map": {"matchid": "3", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"}, "player": {"team_name": "radiant"}})
         wait(self.live.submit(self.live.coach_tick))
         self.assertEqual((self.live.position, self.live.position_auto), (self.live.cfg.position, False))
+        self.assertEqual(self.live.current_draft().ally_pos, {})       # 新一局：上一局的队友位置不算
 
     def test_manual_position_wins(self):
         self.live._read_roles = lambda *a: ([None, None, None, 4, None], 3)
@@ -344,7 +438,7 @@ class BriefLiveTest(unittest.TestCase):
     def setUp(self):
         self.built = []
 
-        def build(cfg, my_id, ally_ids, enemy_ids, pos):
+        def build(cfg, my_id, ally_ids, enemy_ids, pos, **lane_info):
             self.built.append((my_id, sorted(ally_ids), sorted(enemy_ids), pos))
             b = brief.Brief("本局要点 · 幻影长矛手 一号位")
             b.add("对线", [("warn", "对上斧王比平时难打")])
@@ -418,7 +512,7 @@ class PickLiveTest(unittest.TestCase):
         self.built = []
         self.plan_go = threading.Event()
 
-        def build(cfg, my_id, ally_ids, enemy_ids, pos):
+        def build(cfg, my_id, ally_ids, enemy_ids, pos, **lane_info):
             self.built.append((my_id, sorted(ally_ids), sorted(enemy_ids), pos))
             b = brief.Brief("本局要点")
             b.add("对线", [("row", "对上斧王和平时差不多")])

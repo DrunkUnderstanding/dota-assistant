@@ -2,6 +2,7 @@
 
   update [--player]            拉取 / 刷新数据（--player 只刷新个人数据，几秒）
   suggest --enemy PA,斧王 --ally 冰女 --ban 敌法师 [--pos 1]    命令行里手动推荐
+          [--me 卓尔 --side radiant]                          已选好英雄：看对面分路 + 我这路的对线提示
   start                        一键启动（「启动助手.bat」就是调这个）：自动补齐配置 / 界面组件 / GSI / 数据再开助手
   run [--browser]              实时助手：叠加层 + 语音 + 控制面板（界面用 Electron；--browser 浏览器预览）
   demo [--browser]             不开 Dota 演示叠加层和语音（按真实对局逐个选人，再弹局内提醒）
@@ -12,6 +13,7 @@
   gsi-dump                     只收 GSI 推送并存档（确认选人时 GSI 给了什么）
   say <文字>                   测试语音
   backtest [--matches N]       用统计之后的新对局检验推荐和胜负的关系
+  lanes-test [--matches N]     用同一批对局检验「对面分路」猜得准不准
   backtest-ai [--moments N]    大模型选人盲测（用 Claude Code 订阅，和统计引擎同题对比）
   coach-sim <比赛编号...>       拿已解析的录像重放，看「局内缺口提醒」当时会说什么
   kb hero <英雄> / kb item <物品> / kb find <关键词或正则> / kb update [--force]
@@ -33,7 +35,7 @@ from . import log as logs
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
-                     "coach-sim", "brief-sim"}
+                     "coach-sim", "brief-sim", "lanes-test"}
 
 
 def _split(s: str | None) -> list[str]:
@@ -51,6 +53,7 @@ def cmd_suggest(cfg: config.Config, args) -> int:
     a = adv.Advisor(cfg)
     try:
         enemies, allies, bans = (a.db.find_many(_split(x)) for x in (args.enemy, args.ally, args.ban))
+        me = a.db.find(args.me) if args.me else None
     except KeyError as e:
         print(e.args[0])
         return 1
@@ -59,7 +62,7 @@ def cmd_suggest(cfg: config.Config, args) -> int:
                if cfg.rank_min and cfg.rank_max else "全段位")
     who = f" | {a.me['name']}（{data.rank_name(a.me['rank_tier'])}）" if a.me else ""
     print(f"数据：最近 {cfg.days} 天 {a.engine.matches} 局天梯（{bracket}）{who}")
-    for kind, text in adv.render_lines(a.advise(adv.Draft(allies, enemies, bans), pos), None):
+    for kind, text in adv.render_lines(a.advise(adv.Draft(allies, enemies, bans, me), pos), args.side):
         if kind == "title":
             continue
         print(f"【{text}】" if kind == "head" else ("  " + text if kind == "row" else text))
@@ -220,6 +223,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--pos", type=int, choices=range(1, 6), help="我的位置，默认取 config.toml")
     sp.add_argument("--top", type=int)
     sp.add_argument("--all-roles", action="store_true", help="不按位置筛选")
+    sp.add_argument("--me", help="我已经选了的英雄：不再推荐，改给对面分路 + 我这路的对线提示")
+    sp.add_argument("--side", choices=("radiant", "dire"), help="我方阵营（分路显示成上 / 中 / 下路）")
     sub.add_parser("start", help="一键启动：自动准备好一切再开助手（启动助手.bat 用的就是它）")
     up = sub.add_parser("run", help="实时助手")
     up.add_argument("--browser", action="store_true", help="不开 Electron，用浏览器打开界面（叠加层只是预览）")
@@ -238,6 +243,8 @@ def main(argv: list[str] | None = None) -> int:
     bp = sub.add_parser("backtest", help="样本外回测")
     bp.add_argument("--matches", type=int, default=3000)
     bp.add_argument("--tune", action="store_true", help="网格搜对线权重 / 反制风险权重（一半调参一半验证）")
+    lt = sub.add_parser("lanes-test", help="回测：对面分路猜得准不准")
+    lt.add_argument("--matches", type=int, default=3000)
     ap2 = sub.add_parser("backtest-ai", help="大模型选人盲测")
     ap2.add_argument("--moments", type=int, default=300)
     ap2.add_argument("--model", default="claude-opus-5-5")
@@ -301,6 +308,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "backtest":
         from .backtest import run as backtest
         print(backtest(cfg, args.matches, do_tune=args.tune))
+        return 0
+    if args.cmd == "lanes-test":
+        from . import backtest, lanes
+        stats = data.load_stats(cfg)
+        if not (stats.get("hi_id") and cfg.stratz_token):
+            print("需要统计数据（update）和 STRATZ token")
+            return 1
+        matches = backtest.fetch_matches(cfg, stats["hi_id"], args.matches)
+        print(lanes.evaluate(matches, data.load_positions(cfg)))
         return 0
     if args.cmd == "backtest-ai":
         from .aibacktest import run as ai_run

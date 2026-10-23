@@ -61,8 +61,10 @@ TAGS = {
     "沉默": (r"沉默(?!术士)|阻止.{0,12}施法", r"无法成为目标"),
     "眩晕": (r"眩晕|击晕", None),
     "缴械": (r"缴械", r"(他|自身|期间|这段时间内)被缴械|面朝方向被锁定|无法成为目标"),
-    "妖术": (r"妖术|变为.{0,4}(动物|小动物)", None),
-    "缠绕 / 定身": (r"缠绕|束缚|定身|无法移动|困在原地|冻在原地", r"迷雾缠绕|逃离.{0,2}束缚|缠绕之爪|时无法施放|地之束缚会|将队友封入|友方单位"),
+    # 莱恩 / 暗影萨满的妖术原文是「变成人畜无害的动物」，没有「妖术」两个字
+    "妖术": (r"妖术|变(为|成)[^。，；]{0,6}动物", None),
+    # 暗影萨满枷锁的原文是「无法攻击和移动」
+    "缠绕 / 定身": (r"缠绕|束缚|定身|无法(攻击[和或])?移动|困在原地|冻在原地", r"迷雾缠绕|逃离.{0,2}束缚|缠绕之爪|时无法施放|地之束缚会|将队友封入|友方单位"),
     "减速": (r"减速|降低.{0,6}移动速度", r"减速抗性"),
     "减甲": (r"(降低|减少|减去|削减).{0,10}护甲|护甲.{0,4}(降低|减少)", None),
     "吸血": (r"吸血|生命窃取", None),
@@ -252,6 +254,9 @@ class Entry:
     cost: int = 0
     neutral_tier: int | None = None
     pierces_immunity: bool | None = None                 # 官方字段 immunity：是否无视技能免疫
+    ultimate: bool = False                               # 官方字段 type = 1：大招（6 级才有）
+    granted: bool = False                                # 神杖 / 魔晶才给的技能
+    channelled: bool = False                             # 官方字段 behavior 带「持续施法」位
 
     def full_text(self) -> str:
         return "\n".join([*self.stats, self.text, *self.notes, self.scepter, self.shard])
@@ -283,6 +288,7 @@ def tag_sentences(text: str, only: set[str] | None = None) -> dict[str, str]:
 
 # 官方 immunity 字段：1 = 无视技能免疫（来自 Valve 数据，比关键词更可靠）
 _PIERCES = {1: True, 2: False, 3: False, 4: False}
+BEHAVIOR_CHANNELLED = 1 << 7          # DOTA_ABILITY_BEHAVIOR_CHANNELLED
 
 
 def _entry(ab: dict, is_item: bool) -> Entry:
@@ -305,6 +311,9 @@ def _entry(ab: dict, is_item: bool) -> Entry:
         cost=ab.get("item_cost") or 0,
         neutral_tier=None if tier in (None, NOT_NEUTRAL, -1) else tier + 1,
         pierces_immunity=_PIERCES.get(ab.get("immunity")) if not is_item else None,
+        ultimate=ab.get("type") == 1 and not is_item,
+        granted=bool(ab.get("ability_is_granted_by_scepter") or ab.get("ability_is_granted_by_shard")),
+        channelled=bool(int(ab.get("behavior") or 0) & BEHAVIOR_CHANNELLED),
     )
 
 

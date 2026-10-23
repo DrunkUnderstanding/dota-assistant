@@ -1,22 +1,22 @@
 """本局要点：选完人（策略时间）弹一张卡片，告诉你这局的关键点。
 
 全部来自统计数据和知识库原文，不用大模型（大模型凭自身理解排选人不如统计引擎，见 HANDOFF 第 10 节）：
-- 对线：STRATZ laneOutcome（同分段、你这个英雄这个位置，对上对面某个英雄时的对线胜 / 平 / 负）
+- 对线：对面分路（lanes.py，按常见位置猜）+ STRATZ laneOutcome（同分段、你这个英雄这个位置，对上对面某个英雄时的对线胜 / 平 / 负）
+  + 你这路的对线提示（lanes.tips，知识库原文的硬规则）
 - 起手装：STRATZ itemStartingPurchase（同分段同英雄同位置多数局会买的）
 - 强势期：STRATZ 按比赛时长的胜率（groupByTime），双方 5 个英雄相对各自平均胜率的偏差
 - 对面要防的：coach.plan()（知识库机制标签：控制、闪避、隐身、无视技能免疫）
 - 关键装备时间：coach.fetch_bench()（同分段核心装中位购买时间）
-对面的位置是猜的（每个英雄在该分段最常打的位置，五个人不重复），对线对手据此推出来。
+对面的位置是猜的（lanes.guess：每个英雄在该分段打各位置的比例，五个人不重复），对线对手据此推出来。
 """
 from __future__ import annotations
 
-import itertools
 import json
 import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, data, kb
+from . import coach, data, kb, lanes
 from .config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 
@@ -30,8 +30,7 @@ PHASE_GAP = 1.5            # 双方强势期差距（百分点）超过这个才
 LANE_MIN_GAMES = 40        # 对线数据少于这么多局不说
 LANE_GAP = 0.08            # 对线「胜 - 负」比你这个英雄平时高 / 低这么多，才说好打 / 难打
 START_SHARE = 0.4          # 同分段 ≥40% 的局会带的才算常见起手
-# 对线对手：我打几号位 → 对面哪些位置和我同路
-LANE_VS = {1: (3, 4), 5: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5)}
+LANE_VS = lanes.LANE_VS
 
 
 # ---------- 数据（缓存在 data/brief/）----------
@@ -109,36 +108,21 @@ def team_phases(curves: dict, hero_ids: list[int]) -> list[float | None]:
 
 def guess_positions(hero_ids: list[int], positions: dict[int, dict[int, tuple[int, int]]] | None,
                     taken: set[int] = frozenset()) -> dict[int, int]:
-    """{英雄: 位置}：每人的位置占比相乘最大、互不重复（taken = 已经确定被别人占的位置）"""
-    if not hero_ids or not positions:
-        return {}
-    free = [p for p in range(1, 6) if p not in taken]
-    hero_ids = hero_ids[:len(free)]
-
-    def share(h, p):
-        games = positions.get(h, {})
-        total = sum(g for g, _ in games.values()) or 1
-        return (games.get(p, (0, 0))[0] + 1) / (total + 5)
-    best, best_score = {}, -1.0
-    for perm in itertools.permutations(free, len(hero_ids)):
-        score = 1.0
-        for h, p in zip(hero_ids, perm):
-            score *= share(h, p)
-        if score > best_score:
-            best, best_score = dict(zip(hero_ids, perm)), score
-    return best
+    """{英雄: 位置}：每人的位置占比相乘最大、互不重复（taken = 已经确定被别人占的位置）。带把握的版本见 lanes.guess"""
+    return {g.hero: g.pos for g in lanes.guess(hero_ids, positions, taken)}
 
 
 @dataclass
 class Brief:
     title: str
-    sections: list[tuple[str, list[tuple[str, str]]]] = field(default_factory=list)   # (小标题, [(kind, 文字)])
+    # (小标题, [(kind, 文字) 或 (kind, 文字, 依据原文)])，依据在界面上悬停显示
+    sections: list[tuple[str, list[tuple]]] = field(default_factory=list)
     needs: list[coach.Need] = field(default_factory=list)                              # 给局内提醒接着用
-    lane_ids: list[int] = field(default_factory=list)                                  # 猜的对线对手
+    lane_ids: list[int] = field(default_factory=list)                                  # 猜的同路英雄：对线对手 + 同路队友
     plan: object = None           # gameplan.Plan：AI 打法（第二页），没做 / 没做完是 None
     plan_note: str = ""           # 打法那页没内容时显示什么（生成中 / 出错 / 没开）
 
-    def add(self, title: str, lines: list[tuple[str, str]]) -> None:
+    def add(self, title: str, lines: list[tuple]) -> None:
         if not lines:
             return
         for t, ls in self.sections:
@@ -157,7 +141,8 @@ class Brief:
             else:
                 sections = [{"title": "打法", "lines": [{"kind": "dim", "text": self.plan_note or "AI 打法没做出来"}]}]
         else:
-            sections = [{"title": t, "lines": [{"kind": k, "text": x} for k, x in ls]} for t, ls in self.sections]
+            sections = [{"title": t, "lines": [{"kind": k, "text": x, **({"quote": q[0]} if q else {})} for k, x, *q in ls]}
+                        for t, ls in self.sections]
         return {"kind": "brief", "title": self.title, "closable": True, "page": page, "hint": hint,
                 "tabs": [{"label": "数据", "page": "data", "on": page == "data"},
                          {"label": "打法", "page": "plan", "on": page == "plan"}],
@@ -167,13 +152,14 @@ class Brief:
         L = [self.title]
         for t, ls in self.sections:
             L.append(f"【{t}】")
-            L += [f"  {'⚠ ' if k == 'warn' else ''}{x}" for k, x in ls]
+            L += [f"  {'⚠ ' if k == 'warn' else ''}{x}" for k, x, *_ in ls]
         return "\n".join(L)
 
 
 def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], pos: int,
-          base: kb.KnowledgeBase | None = None) -> Brief:
-    """要联网（有缓存），放后台线程调。拿不到的部分跳过，不编。"""
+          base: kb.KnowledgeBase | None = None, side: str | None = None, ally_pos: dict[int, int] | None = None) -> Brief:
+    """要联网（有缓存），放后台线程调。拿不到的部分跳过，不编。
+    side = 我方阵营（分路写成上 / 中 / 下路）；ally_pos = 已知的队友位置（选人界面 OCR 认出来的）"""
     base = base or kb.KnowledgeBase.load()
     if base is None:
         raise RuntimeError("还没有知识库，先运行 python -m dota_assistant kb update")
@@ -200,13 +186,18 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
     else:
         b.add("说明", [("dim", "config.toml 里没有 STRATZ token，只能给对面机制提醒")])
 
-    # 1. 对线
-    guessed = guess_positions(enemy_ids, data.load_positions(cfg))
-    opp = [h for h, p in guessed.items() if p in LANE_VS.get(pos, ())]
-    b.lane_ids = opp
+    # 1. 对线：三路分路 → 我这路的对手 / 队友 → 对线数据 → 硬规则提示
+    lane = lanes.assign(enemy_ids, ally_ids, pos, side, data.load_positions(cfg), ally_pos)
+    guessed = {g.hero: g.pos for g in lane.enemies}
+    opp = [g.hero for g in lane.opponents()]
+    partner = lane.partner()
+    b.lane_ids = opp + ([partner.hero] if partner else [])
     lines = []
+    if lane.enemies:
+        lines.append(("dim", "分路（按常见位置猜，? = 没把握）：" + lanes.lane_line(lane, name)))
     if opp:
-        lines.append(("row", f"对面同路（按常见位置猜）：{'、'.join(f'{name(h)}（{guessed[h]}号位）' for h in opp)}"))
+        lines.append(("row", f"你这路对面：{'、'.join(f'{name(h)}（{guessed[h]}号位）' for h in opp)}"
+                      + (f"；队友 {name(partner.hero)}" if partner else "")))
     if hero and hero["lane"]:
         tot = [sum(v[i] for v in hero["lane"].values()) for i in range(3)]
         base_edge = (tot[0] - tot[2]) / max(1, sum(tot))
@@ -219,6 +210,10 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
             verdict = "比平时好打" if edge - base_edge >= LANE_GAP else "比平时难打" if base_edge - edge >= LANE_GAP else "和平时差不多"
             lines.append(("warn" if verdict == "比平时难打" else "row",
                           f"对上{name(h)}对线 胜 {wdl[0] / n:.0%} / 平 {wdl[1] / n:.0%} / 负 {wdl[2] / n:.0%}，{verdict}（{n} 局）"))
+    foes = [base.heroes[h] for h in opp if h in base.heroes]
+    ally = base.heroes.get(partner.hero) if partner else None
+    lines += [("warn", w.text, w.quote) if w.kind == "bad" else ("row", f"✓ {w.text}", w.quote)
+              for w in lanes.tips(me, foes, ally)]
     b.add("对线", lines)
 
     # 2. 起手装
@@ -288,7 +283,8 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None, ai: bool
     pos = actual.get(me["hero_id"]) or cfg.position
     allies = [p["hero_id"] for p in m["players"] if p["isRadiant"] == me["isRadiant"] and p is not me]
     enemies = [p["hero_id"] for p in m["players"] if p["isRadiant"] != me["isRadiant"]]
-    b = build(cfg, me["hero_id"], allies, enemies, pos)
+    b = build(cfg, me["hero_id"], allies, enemies, pos, side="radiant" if me["isRadiant"] else "dire",
+              ally_pos={h: actual[h] for h in allies if h in actual})      # 实时版队友位置也是认出来的（选人界面 OCR）
     won = (me["player_slot"] < 128) == m["radiant_win"]
     L = [f"比赛 {match_id}", b.text(), "", f"实际：{'赢' if won else '输'}，{m['duration'] / 60:.0f} 分钟"]
     if actual:
