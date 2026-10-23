@@ -16,6 +16,8 @@
   coach-sim <比赛编号...>       拿已解析的录像重放，看「局内缺口提醒」当时会说什么
   kb hero <英雄> / kb item <物品> / kb find <关键词或正则> / kb update [--force]
                                查当前版本官方技能 / 物品说明
+  kb mistake [--wrong 错误说法 --right 正确说法 --hero X --item Y --who 开发助手 --evidence 原文 --has-tag 标签]
+                               列出 / 记录 AI 常见误判（knowledge/mistakes.toml）
 """
 from __future__ import annotations
 
@@ -132,13 +134,15 @@ def cmd_kb(cfg: config.Config, args) -> int:
     if base is None:
         print("还没有知识库，先运行：python -m dota_assistant kb update")
         return 1
-    rules = kb.load_rules()
+    rules, mistakes = kb.load_rules(), kb.load_mistakes()
     q = " ".join(args.query)
     try:
         if args.action == "hero":
-            print(kb.render_hero(base.heroes[data.load_heroes().find(q).id], rules, base.patch))
+            print(kb.render_hero(base.heroes[data.load_heroes().find(q).id], rules, base.patch, mistakes))
         elif args.action == "item":
-            print(kb.render_item(base.item(q), rules, base.patch))
+            print(kb.render_item(base.item(q), rules, base.patch, mistakes))
+        elif args.action == "mistake":
+            return _kb_mistake(base, mistakes, args)
         else:
             hits = base.search(q)
             for who, ab, sent in hits[:80]:
@@ -147,6 +151,35 @@ def cmd_kb(cfg: config.Config, args) -> int:
     except KeyError as e:
         print(e.args[0])
         return 1
+    return 0
+
+
+def _kb_mistake(base, mistakes, args) -> int:
+    """没给 --wrong 就列出全部；给了就记一条。英雄 / 物品名换成知识库里的正式名，查不到会报错"""
+    import datetime
+    from . import kb
+    if not args.wrong:
+        for m in mistakes:
+            about = "、".join(x for x in (m.hero, m.item) if x) or "通用"
+            print(f"[{about}] {m.date} {m.who}\n  ✗ {m.wrong}\n  ✓ {m.right}" + (f"\n  依据：{m.evidence}" if m.evidence else ""))
+        print(f"（共 {len(mistakes)} 条，{kb.MISTAKES_PATH}）")
+        return 0
+    if not args.right:
+        print("要同时给 --right（查原文后的正确说法）")
+        return 1
+    m = kb.Mistake(args.wrong, args.right, who=args.who, date=datetime.date.today().isoformat(),
+                   evidence=args.evidence, has_tag=args.has_tag)
+    if args.hero:
+        m.hero = base.heroes[data.load_heroes().find(args.hero).id].name
+    if args.item:
+        m.item = base.item(args.item).name
+    if m.has_tag:
+        tags = base.heroes[data.load_heroes().find(m.hero).id].tags() if m.hero else base.item(m.item).tags() if m.item else {}
+        if m.has_tag not in tags:
+            print(f"「{m.hero or m.item or '通用'}」没有「{m.has_tag}」标签，没记。现有标签：{'、'.join(tags) or '无'}")
+            return 1
+    kb.add_mistake(m)
+    print(f"已记到 {kb.MISTAKES_PATH}")
     return 0
 
 
@@ -193,9 +226,16 @@ def main(argv: list[str] | None = None) -> int:
     bs.add_argument("match_ids", type=int, nargs="+")
     bs.add_argument("--ai", action="store_true", help="同时让大模型写前 / 中 / 后期打法（走 Claude Code 订阅）")
     kp = sub.add_parser("kb", help="当前版本知识库")
-    kp.add_argument("action", choices=["hero", "item", "find", "update"])
+    kp.add_argument("action", choices=["hero", "item", "find", "update", "mistake"])
     kp.add_argument("query", nargs="*")
     kp.add_argument("--force", action="store_true", help="update 时即使版本没变也重拉")
+    kp.add_argument("--wrong", default="", help="mistake：AI 的错误说法（不给就列出全部误判）")
+    kp.add_argument("--right", default="", help="mistake：查原文后的正确说法")
+    kp.add_argument("--hero", default="", help="mistake：涉及的英雄")
+    kp.add_argument("--item", default="", help="mistake：涉及的物品")
+    kp.add_argument("--who", default="打法页 AI", help="mistake：谁说错的（打法页 AI / 开发助手）")
+    kp.add_argument("--evidence", default="", help="mistake：官方原文依据")
+    kp.add_argument("--has-tag", default="", help="mistake：英雄 / 物品确实有的机制标签，单元测试逐版本核对")
     sub.add_parser("gsi-dump", help="记录 GSI 推送内容")
     yp = sub.add_parser("say", help="测试语音")
     yp.add_argument("text", nargs="+")

@@ -1,7 +1,7 @@
 """AI 打法：出处核对、整理顺序、缓存格式。不调大模型。"""
 import unittest
 
-from dota_assistant import gameplan
+from dota_assistant import gameplan, kb
 
 SOURCE = """# 敌方 风行者（官方原文）
 【束缚击】（冷却 16/14/12/10）
@@ -27,6 +27,21 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(back.sections[0][1][0].text, "a")
         self.assertEqual(back.dropped[0].quote, "z")
         self.assertIn("依据：b", back.text())
+
+
+@unittest.skipUnless((kb.KB_DIR / "kb.json").exists(), "没有本地知识库，先 kb update")
+class FactsTest(unittest.TestCase):
+    def test_mistakes_go_with_heroes(self):
+        base = kb.KnowledgeBase.load()
+        hid = {h.name: i for i, h in base.heroes.items()}
+        ms = [kb.Mistake("司夜刺客没有破坏", "复仇施加破坏", hero="司夜刺客"),
+              kb.Mistake("帕吉能驱散", "不能", hero="帕吉"),
+              kb.Mistake("金箍棒能破隐身", "不能", item="金箍棒")]
+        text = gameplan.facts(base, [], hid["卓尔游侠"], [], [hid["司夜刺客"]], [], "数据", ms)
+        self.assertIn("✗ 司夜刺客没有破坏", text)
+        self.assertNotIn("帕吉能驱散", text)                     # 不在本局的英雄不给
+        self.assertIn("# 常见误判", text)
+        self.assertIn("金箍棒能破隐身", text)
 
 
 if __name__ == "__main__":

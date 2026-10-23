@@ -7,6 +7,8 @@
 1. 官方原文（data/kb/*.json，update 时按版本号自动刷新）：说明里的 %占位符% 换成各级数值。
 2. 机制标签（关键词从原文里抽，不是人工标注）：克敌机先、驱散、破坏、无视技能免疫……每个标签附原句，可以核对。
 3. 玩家规则（knowledge/rules.toml，进 git）：玩家确认过的经验判断，例如「小黑的金箍棒优先级低」。
+4. 常见误判（knowledge/mistakes.toml，进 git）：AI（打法页 / 开发助手）说错过、已经查原文纠正的说法，
+   例如「司夜刺客没有破坏」。查英雄 / 物品时一起显示，打法页把相关的交给大模型提前避开。
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ from .config import DATA_DIR, ROOT
 
 KB_DIR = DATA_DIR / "kb"
 RULES_PATH = ROOT / "knowledge" / "rules.toml"
+MISTAKES_PATH = ROOT / "knowledge" / "mistakes.toml"
 FEED = "https://www.dota2.com/datafeed"
 NOT_NEUTRAL = 4294967295
 
@@ -395,9 +398,44 @@ def load_rules(path: Path = RULES_PATH) -> list[Rule]:
     return [Rule(**{k: v for k, v in r.items() if k in known}) for r in raw.get("rule", [])]
 
 
+# ---------- 常见误判 ----------
+
+@dataclass
+class Mistake:
+    wrong: str                      # AI 的错误说法
+    right: str                      # 查原文后的正确说法
+    hero: str = ""                  # 涉及的英雄（空 = 不针对某个英雄）
+    item: str = ""                  # 涉及的物品
+    who: str = ""                   # 谁说错的：打法页 AI / 开发助手
+    date: str = ""
+    evidence: str = ""              # 官方原文依据
+    has_tag: str = ""               # 可选：hero / item 确实有这个机制标签，单元测试逐版本核对
+
+
+def load_mistakes(path: Path = MISTAKES_PATH) -> list[Mistake]:
+    if not path.exists():
+        return []
+    raw = tomllib.loads(path.read_text(encoding="utf-8"))
+    known = Mistake.__dataclass_fields__.keys()
+    return [Mistake(**{k: v for k, v in m.items() if k in known}) for m in raw.get("mistake", [])]
+
+
+def add_mistake(m: Mistake, path: Path = MISTAKES_PATH) -> None:
+    """追加一条。tomllib 只读，这里手写；JSON 字符串的转义在 TOML 基本字符串里同样合法"""
+    L = ["", "[[mistake]]"] + [f"{k} = {json.dumps(v, ensure_ascii=False)}" for k, v in m.__dict__.items() if v]
+    with path.open("a", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
+
+
+def _mistake_lines(ms: list[Mistake]) -> list[str]:
+    if not ms:
+        return []
+    return ["\n常见误判（AI 以前说错过，以原文为准）："] + [f"  ✗ {m.wrong}\n    ✓ {m.right}" for m in ms]
+
+
 # ---------- 展示 ----------
 
-def render_hero(h: HeroKB, rules: list[Rule], patch: str) -> str:
+def render_hero(h: HeroKB, rules: list[Rule], patch: str, mistakes: list[Mistake] = ()) -> str:
     L = [f"{h.name}（{h.key}）· {h.attack} {h.attack_range} · 版本 {patch}"]
     if h.facets:
         L.append("命石：" + "；".join(f"{n}：{d}" for n, d in h.facets if n))
@@ -423,10 +461,11 @@ def render_hero(h: HeroKB, rules: list[Rule], patch: str) -> str:
     if mine:
         L.append("\n玩家规则：")
         L += [f"  · {r.text}（{r.source} {r.date}）" for r in mine]
+    L += _mistake_lines([m for m in mistakes if m.hero == h.name])
     return "\n".join(L)
 
 
-def render_item(e: Entry, rules: list[Rule], patch: str) -> str:
+def render_item(e: Entry, rules: list[Rule], patch: str, mistakes: list[Mistake] = ()) -> str:
     price = f"中立物品 {e.neutral_tier} 级" if e.neutral_tier else f"{e.cost} 金"
     L = [f"{e.name}（{e.key}）· {price} · 版本 {patch}"]
     if e.stats:
@@ -442,14 +481,16 @@ def render_item(e: Entry, rules: list[Rule], patch: str) -> str:
     if mine:
         L.append("\n玩家规则：")
         L += [f"  · {r.hero + '：' if r.hero else ''}{r.text}（{r.source} {r.date}）" for r in mine]
+    L += _mistake_lines([m for m in mistakes if m.item == e.name])
     return "\n".join(L)
 
 
-def hero_brief(h: HeroKB, rules: list[Rule]) -> str:
-    """给出装推荐 / 大模型用的一段紧凑事实：技能名 + 机制标签 + 玩家规则"""
+def hero_brief(h: HeroKB, rules: list[Rule], mistakes: list[Mistake] = ()) -> str:
+    """给出装推荐 / 大模型用的一段紧凑事实：技能名 + 机制标签 + 玩家规则 + 常见误判"""
     tags = h.tags()
     parts = [f"{h.name}：{h.attack}{h.attack_range}；技能 " + "、".join(a.name for a in h.abilities)]
     if tags:
         parts.append("机制 " + "、".join(f"{t}({ab})" for t, (ab, _) in tags.items()))
     parts += [f"规则：{r.text}" for r in rules if r.hero == h.name]
+    parts += [f"误判：「{m.wrong}」不对，{m.right}" for m in mistakes if m.hero == h.name]
     return "；".join(parts)

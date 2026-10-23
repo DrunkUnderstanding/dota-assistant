@@ -62,6 +62,23 @@ class RulesTest(unittest.TestCase):
             self.assertTrue(r.text and r.source in ("玩家原话", "实现假设"), r)
 
 
+class MistakesTest(unittest.TestCase):
+    def test_add_then_load(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "mistakes.toml"
+            p.write_text("# 注释\n", encoding="utf-8")
+            kb.add_mistake(kb.Mistake('说"没有"破坏\n第二行', "有", hero="司夜刺客", who="开发助手"), p)
+            kb.add_mistake(kb.Mistake("错", "对", item="金箍棒"), p)
+            ms = kb.load_mistakes(p)
+            self.assertEqual(ms[0].wrong, '说"没有"破坏\n第二行')          # 引号、换行转义后能读回
+            self.assertEqual((ms[0].hero, ms[0].who, ms[0].item), ("司夜刺客", "开发助手", ""))
+            self.assertEqual(ms[1].item, "金箍棒")
+
+    def test_repo_mistakes_parse(self):
+        for m in kb.load_mistakes():
+            self.assertTrue(m.wrong and m.right and m.who in ("打法页 AI", "开发助手"), m)
+
+
 @unittest.skipUnless((kb.KB_DIR / "kb.json").exists(), "没有本地知识库，先 kb update")
 class RealDataTest(unittest.TestCase):
     """抽查几条官方数据，版本更新后如果挂了，先看是机制真改了还是抽取规则坏了"""
@@ -88,6 +105,20 @@ class RealDataTest(unittest.TestCase):
         self.assertIn("无视闪避", self.base.item("MKB").tags())
         self.assertIn("施加破坏", self.base.item("白银之锋").tags())
         self.assertIn("抵挡 / 反馈指向技能", self.base.item("林肯").tags())
+
+    def test_mistakes_still_hold(self):
+        """误判里写了 has_tag 的，正确说法依赖的标签还在；挂了说明版本改了机制，那条误判要重新核对"""
+        for m in kb.load_mistakes():
+            if m.has_tag:
+                tags = self.hero(m.hero).tags() if m.hero else self.base.item(m.item).tags()
+                self.assertIn(m.has_tag, tags, m)
+
+    def test_mistakes_rendered(self):
+        m = kb.Mistake("司夜刺客没有破坏", "复仇施加破坏", hero="司夜刺客")
+        text = kb.render_hero(self.hero("司夜刺客"), [], self.base.patch, [m])
+        self.assertIn("✗ 司夜刺客没有破坏", text)
+        self.assertNotIn("常见误判", kb.render_hero(self.hero("卓尔游侠"), [], self.base.patch, [m]))
+        self.assertIn("误判：", kb.hero_brief(self.hero("司夜刺客"), [], [m]))
 
     def test_talents_have_values(self):
         missing = [(h.name, t) for h in self.base.heroes.values() for _, a, b in h.talents for t in (a, b) if "?" in t]

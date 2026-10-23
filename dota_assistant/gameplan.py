@@ -3,8 +3,9 @@
 大模型凭自身理解排选人不如统计引擎（HANDOFF 第 10 节），所以这里：
 - 只给资料，要求只依据资料说话；
 - 每条建议必须附一段从资料里原样复制的话（quote），程序核对它确实在资料里，对不上的整条丢掉；
-- 卡片上标明「AI 生成，未验证」。
-走玩家的 Claude Code 订阅（llm.py），结果按阵容缓存在 data/plans/，同一阵容不重复问。
+- 卡片上标明「AI 生成，未验证」；
+- 相关英雄的常见误判（knowledge/mistakes.toml）一起放进资料，让它别再犯。
+走玩家的 Claude Code 订阅（llm.py），结果按阵容缓存在 data/plans/，同一阵容不重复问；新记一条误判会让相关阵容的缓存失效。
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ MIN_QUOTE = 4
 SYSTEM = """你是 Dota 2 教练，给一名超凡入圣分段的天梯玩家写「这局怎么打」。版本以资料为准。
 只能依据用户给的资料：本局统计数据、Valve 官方技能 / 天赋原文、玩家规则。
 资料里没有的数值、时间点、技能效果一律不要说；拿不准就不写这一条。
+资料里的「常见误判」是 AI 以前说错过、已经按原文纠正的说法，不要再这样写。
 
 要求：
 - 四段：对线期（0~10 分钟）、中期（10~30 分钟）、后期（30 分钟后）、对线劣势时。前三段各 2 条，「对线劣势时」3 条。
@@ -84,20 +86,25 @@ class Plan:
 
 
 def facts(base: kb.KnowledgeBase, rules: list[kb.Rule], my_id: int, ally_ids: list[int], enemy_ids: list[int],
-          lane_ids: list[int], brief_text: str) -> str:
-    """给大模型的全部资料。自己和对面五个人给技能全文，队友给机制摘要"""
+          lane_ids: list[int], brief_text: str, mistakes: list[kb.Mistake] = ()) -> str:
+    """给大模型的全部资料。自己和对面五个人给技能全文，队友给机制摘要；常见误判跟着各英雄走"""
     hero = lambda i: base.heroes[i]
-    L = ["# 本局数据（统计）", brief_text, "", "# 你的英雄（官方原文）", kb.render_hero(hero(my_id), rules, base.patch)]
+    L = ["# 本局数据（统计）", brief_text, "", "# 你的英雄（官方原文）",
+         kb.render_hero(hero(my_id), rules, base.patch, mistakes)]
     for i in enemy_ids:
         if i in base.heroes:
             mark = "（你的对线对手）" if i in lane_ids else ""
-            L += ["", f"# 敌方 {hero(i).name}{mark}（官方原文）", kb.render_hero(hero(i), rules, base.patch)]
-    allies = [kb.hero_brief(hero(i), rules) for i in ally_ids if i in base.heroes]
+            L += ["", f"# 敌方 {hero(i).name}{mark}（官方原文）", kb.render_hero(hero(i), rules, base.patch, mistakes)]
+    allies = [kb.hero_brief(hero(i), rules, mistakes) for i in ally_ids if i in base.heroes]
     if allies:
         L += ["", "# 队友（机制摘要）", *allies]
     general = [r.text for r in rules if not r.hero]
     if general:
         L += ["", "# 玩家规则", *general]
+    other = [m for m in mistakes if not m.hero]          # 不针对英雄的（物品、通用机制），条数少，全给
+    if other:
+        L += ["", "# 常见误判（AI 以前说错过，以原文为准）",
+              *[f"✗ {m.wrong}\n  ✓ {m.right}" for m in other]]
     return "\n".join(L)
 
 
@@ -127,7 +134,7 @@ def generate(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int],
     base = base or kb.KnowledgeBase.load()
     if base is None:
         raise RuntimeError("还没有知识库，先运行 python -m dota_assistant kb update")
-    source = facts(base, kb.load_rules(), my_id, ally_ids, enemy_ids, lane_ids, brief_text)
+    source = facts(base, kb.load_rules(), my_id, ally_ids, enemy_ids, lane_ids, brief_text, kb.load_mistakes())
     key = hashlib.sha1(f"{cfg.ai_model}\n{SYSTEM}\n{source}".encode("utf-8")).hexdigest()[:16]
     path = PLAN_DIR / f"{key}.json"
     if path.exists():
