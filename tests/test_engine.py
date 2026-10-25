@@ -64,6 +64,16 @@ class EngineTest(unittest.TestCase):
         self.assertTrue(next(s for s in res if s.hero == WK).in_pool)   # 「你近期 N 局」仍显示在理由里
         self.assertFalse(next(s for s in res if s.hero == CM).in_pool)  # 1 局不算你的英雄
 
+    def test_rare_hero_strength_is_shrunk(self):
+        # 斧王：场次很少、胜率 60%（绝活玩家）；潮汐：场次多、胜率 53%
+        over = {(AXE.id, h.id): (500, 0.6) for h in HEROES if h != AXE}
+        over.update({(TIDE.id, h.id): (20000, 0.53) for h in (PL, CM, WK)})
+        eng = Engine(HeroDB(HEROES), make_stats(over))
+        self.assertGreater(eng.base[AXE.id], eng.base[TIDE.id])                # 原始胜率斧王高
+        self.assertLess(eng.base_at(AXE.id, 3), eng.base_at(TIDE.id, 3))       # 按场次收缩后潮汐强
+        res = eng.suggest(position=3, position_filter=False)
+        self.assertEqual(res[0].hero, TIDE)
+
     def test_position_data_overrides_roles(self):
         # 冥魂大帝在数据里主要打三号位，标签却是 Carry 打头
         positions = {WK.id: {1: (3000, 1500), 3: (5000, 2750), 5: (30, 15)},

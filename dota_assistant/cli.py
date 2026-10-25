@@ -16,6 +16,7 @@
   lanes-test [--matches N]     用同一批对局检验「对面分路」猜得准不准
   backtest-ai [--moments N]    大模型选人盲测（用 Claude Code 订阅，和统计引擎同题对比）
   coach-sim <比赛编号...>       拿已解析的录像重放，看「局内缺口提醒」当时会说什么
+  death-sim [文件...]           拿 shots/deaths/ 里存下的真实死亡重放，看「按死法补装」会说什么（默认全部）
   kb hero <英雄> / kb item <物品> / kb find <关键词或正则> / kb update [--force]
                                查当前版本官方技能 / 物品说明
   kb mistake [--wrong 错误说法 --right 正确说法 --hero X --item Y --who 开发助手 --evidence 原文 --has-tag 标签]
@@ -251,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
     ap2.add_argument("--workers", type=int, default=3)
     cs = sub.add_parser("coach-sim", help="局内缺口提醒：录像重放")
     cs.add_argument("match_ids", type=int, nargs="+")
+    dp = sub.add_parser("death-sim", help="死亡复盘 + 按死法补装：拿存下的真实死亡推送重放")
+    dp.add_argument("files", type=Path, nargs="*")
     bs = sub.add_parser("brief-sim", help="本局要点：拿录像看选完人时会给什么")
     bs.add_argument("match_ids", type=int, nargs="+")
     bs.add_argument("--ai", action="store_true", help="同时让大模型写前 / 中 / 后期打法（走 Claude Code 订阅）")
@@ -326,6 +329,10 @@ def main(argv: list[str] | None = None) -> int:
         from .coach import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid), end=chr(10) * 2)
+        return 0
+    if args.cmd == "death-sim":
+        from .itembuild import death_sim
+        print(death_sim(cfg, args.files or sorted((config.ROOT / "shots" / "deaths").glob("*.json"))))
         return 0
     if args.cmd == "brief-sim":
         from .brief import simulate

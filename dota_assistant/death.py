@@ -52,6 +52,13 @@ class Recap:
     clock: float                                   # 死亡时的游戏时间（秒）
     deaths: int                                    # 本局第几次
     lines: list[tuple[str, str]] = field(default_factory=list)   # (warn / row / dim, 文字)
+    # 下面是结构化结果，给「这种死法该出什么」（itembuild.death_pick）用
+    cause: str = ""               # control 被控死 / burst 瞬间打爆 / low 残血拖太久 / chased 一直没脱离 / "" 其他
+    secs: dict[str, float] = field(default_factory=dict)   # FLAGS 里每种状态持续了几秒
+    start: float = 100            # 这波开始时的血量百分比
+    immune: float = 0             # 开着技能免疫的秒数
+    saves: dict[str, list[str]] = field(default_factory=dict)   # used / unused / blocked / nocast / hit_lock / cooling → 内部名
+    owned: set[str] = field(default_factory=set)            # 死的时候身上的装备（去掉 item_）
 
     @property
     def title(self) -> str:
@@ -132,6 +139,7 @@ def analyze(history: list[tuple[float, dict]], team: str | None = None, names: d
         return None
     w_d, dead = history[d]
     rec = Recap(float((dead.get("map") or {}).get("clock_time") or 0), final)
+    rec.owned = set(_slots(history[d - 1][1], "items"))
     before = [(w, r) for w, r in history[:d] if w >= w_d - WINDOW and _hero(r).get("alive", True)
               and _hp(r) is not None]
     if before:
@@ -163,6 +171,9 @@ def _fight(rec: Recap, before, w_d: float, team, names, save_abilities) -> None:
     # 一句话结论
     span = f"{dur:.1f}" if dur < 10 else f"{dur:.0f}"
     controlled = hard >= 1 and hard >= CONTROL_SHARE * dur
+    rec.secs, rec.start = secs, start
+    rec.cause = ("control" if controlled else "burst" if dur <= BURST and start >= 50
+                 else "low" if low is not None and w_d - low >= LOW_HP_LONG else "chased" if whole else "")
     if controlled:
         how = _join(FLAGS[f] for f in by_time if f in HARD) or "控"
         head = f"被控死：{span} 秒内从 {start:.0f}% 血到死，其中 {hard:.1f} 秒被{how}"
@@ -180,7 +191,7 @@ def _fight(rec: Recap, before, w_d: float, team, names, save_abilities) -> None:
     ctrl = [f"{FLAGS[f]} {secs[f]:.1f} 秒" for f in by_time if not (controlled and f in HARD)]
     if ctrl:
         rec.lines.append(("row", ("另外被" if controlled else "被") + "、".join(ctrl)))
-    immune = sum(t for r, t in spans if _hero(r).get("magicimmune"))
+    immune = rec.immune = sum(t for r, t in spans if _hero(r).get("magicimmune"))
     if immune >= 0.5:
         rec.lines.append(("row", f"开着技能免疫（{immune:.1f} 秒）也没顶住"))
     if _hero(fight[0][1]).get("smoked"):
@@ -200,6 +211,11 @@ def _saves(rec: Recap, fight, names, save_abilities) -> None:
     """保命装备 / 技能：用了的、好的没用的、被控着用不了的、在冷却的"""
     first, last = fight[0][1], fight[-1][1]
     used, unused, blocked, nocast, hit_lock, cooling = [], [], [], [], [], []
+    keys: dict[int, list[str]] = {}        # 上面每个列表 → 对应的内部名（同顺序）
+
+    def put(lst: list, label: str, name: str) -> None:
+        lst.append(label)
+        keys.setdefault(id(lst), []).append(name)
 
     def judge(name: str, kind: str, slots_of) -> None:
         a, z = slots_of(first).get(name), slots_of(last).get(name)
@@ -211,9 +227,9 @@ def _saves(rec: Recap, fight, names, save_abilities) -> None:
         went = [slots_of(r).get(name) or {} for _, r in fight]
         if any(_num(x.get("cooldown")) > max(cd0, lock) for x in went) or \
                 (name in WANDS and _charges(z) < _charges(a)):
-            used.append(label)
+            put(used, label, name)
         elif cd0 > lock:
-            cooling.append(label)
+            put(cooling, label, name)
         elif name in WANDS and _charges(z) < WAND_CHARGES:
             return
         else:
@@ -223,19 +239,21 @@ def _saves(rec: Recap, fight, names, save_abilities) -> None:
             # 跳刀：这波第一条推送是挨打之前，那一下没跳不算失误，从挨打以后看
             ready = free[1:] if name in BLINKS and free and free[0] is went[0] else free
             if not free:
-                blocked.append(label)
+                put(blocked, label, name)
             elif any(x.get("can_cast", True) and _num(x.get("cooldown")) <= 0 for x in ready):
-                unused.append(label)
+                put(unused, label, name)
             elif name in BLINKS:
-                hit_lock.append(label)
+                put(hit_lock, label, name)
             else:
-                nocast.append(label)              # 没被控也按不了：多半是蓝不够
+                put(nocast, label, name)          # 没被控也按不了：多半是蓝不够
 
     for name in SAVE_ITEMS:
         judge(name, "item", lambda r: _slots(r, "items", USABLE_SLOTS))
     for name, ab in _slots(last, "abilities").items():
         if _num(ab.get("level")) >= 1 and not ab.get("passive") and (ab.get("ultimate") or name in save_abilities):
             judge(name, "ability", lambda r: _slots(r, "abilities"))
+    rec.saves = {k: keys.get(id(v), []) for k, v in (("used", used), ("unused", unused), ("blocked", blocked),
+                                                       ("nocast", nocast), ("hit_lock", hit_lock), ("cooling", cooling))}
     if unused:
         rec.lines.append(("warn", f"{_join(unused)} 当时是好的，没用上"))
     if blocked:

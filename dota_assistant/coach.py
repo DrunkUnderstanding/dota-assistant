@@ -356,6 +356,27 @@ class Coach:
         self.needs, self.bench, self.tree, self.base = needs, bench, tree, base
         self.build, self.const = build, const or {}      # itembuild.Build：出装顺序，「下一件」用
         self.said: dict[str, list[float]] = {}
+        self.deaths: dict[str, int] = {}                 # 死法（itembuild.DeathRule.key）→ 本局几次
+
+    def on_death(self, rec, st: State) -> list[tuple[str, str]]:
+        """死亡复盘（death.Recap）→ 数这种死法本局第几次；超过两次（第 DEATH_MIN 次起）才推对应装备，
+        并把它提到「下一件」最前面。保命手段没用上的那次照样算次数，只是那次不推"""
+        from . import itembuild
+        cause = itembuild.death_cause(rec)
+        if cause is None or self.base is None:
+            return []
+        n = self.deaths[cause.key] = self.deaths.get(cause.key, 0) + 1
+        if n < itembuild.DEATH_MIN or self.build is None:
+            return []
+        timings = item_timings(self.bench) if self.bench else {}
+        pick = itembuild.death_pick(rec, st.owned, timings, self.base, self.tree)
+        if pick is None:
+            return []
+        label = cause.label
+        steps = [x for x in self.build.steps if x.key != pick.key]
+        self.build.steps = [itembuild.Step(pick.key, pick.name, st.minute, "death", f"{n} 次{label}",
+                                           pick.quote, urgent=True)] + steps
+        return [("warn", f"本局第 {n} 次{label}，{pick.name}提到下一件：{pick.why}")]
 
     def next_line(self, st: State) -> str | None:
         """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用"""

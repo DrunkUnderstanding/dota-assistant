@@ -97,6 +97,66 @@ class RealKBTest(unittest.TestCase):
         self.assertTrue(b.steps[1].urgent)
 
 
+@unittest.skipUnless((kb.KB_DIR / "kb.json").exists(), "没有本地知识库，先 kb update")
+class DeathPickTest(unittest.TestCase):
+    """死亡复盘的结构化结果 → 该补什么装备"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = kb.KnowledgeBase.load()
+        cls.tree = coach.item_tree(coach.items_const())
+
+    def rec(self, cause="", **kw):
+        from dota_assistant import death
+        return death.Recap(600, 1, cause=cause, **kw)
+
+    def timings(self, **shares):
+        return {self.base.item_ids[f"item_{k}"]: (v, 20) for k, v in shares.items()}
+
+    def pick(self, rec, owned=(), **shares):
+        return itembuild.death_pick(rec, set(owned), self.timings(**shares), self.base, self.tree)
+
+    def test_control_prefers_bkb_then_linken(self):
+        rec = self.rec("control", secs={"stunned": 3})
+        self.assertEqual(self.pick(rec, black_king_bar=0.8, sphere=0.1).key, "black_king_bar")
+        p = self.pick(rec, ["black_king_bar"], black_king_bar=0.8, sphere=0.1)      # 已经有黑皇杖
+        self.assertEqual(p.key, "sphere")
+        self.assertIn("指向性技能", p.quote)
+        self.assertIsNone(self.pick(rec, black_king_bar=0.01))                         # 这个英雄不出的不推
+        self.assertIsNone(self.pick(self.rec("control", secs={"stunned": 3}, immune=2), black_king_bar=0.8))
+
+    def test_bkb_blocked_suggests_linken_not_bkb(self):
+        rec = self.rec("control", secs={"hexed": 3}, saves={"blocked": ["black_king_bar"]})
+        self.assertEqual(self.pick(rec, ["black_king_bar"], sphere=0.1, aeon_disk=0.05).key, "sphere")
+        self.assertEqual(itembuild.death_cause(rec).key, "control")          # 和普通被控死算同一种
+
+    def test_unused_save_means_no_item(self):
+        rec = self.rec("control", secs={"stunned": 3}, saves={"unused": ["black_king_bar"]})
+        self.assertIsNone(self.pick(rec, ["black_king_bar"], sphere=0.5))
+        rec = self.rec("control", secs={"stunned": 3}, saves={"unused": ["magic_wand"]})   # 魔杖没按不算
+        self.assertEqual(self.pick(rec, black_king_bar=0.8).key, "black_king_bar")
+
+    def test_escape_by_share_and_silence(self):
+        rec = self.rec("low")
+        self.assertEqual(self.pick(rec, force_staff=0.2, glimmer_cape=0.5).key, "glimmer_cape")
+        self.assertEqual(self.pick(rec, ["hurricane_pike"], force_staff=0.6, glimmer_cape=0.1).key, "glimmer_cape")
+        self.assertEqual(self.pick(self.rec(secs={"silenced": 4}), manta=0.5).key, "manta")
+        self.assertIsNone(self.pick(self.rec(secs={"silenced": 4, "muted": 4}), manta=0.5))   # 锁闭时物品也用不了
+
+    def test_repeat_moves_item_to_next(self):
+        b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
+        c = coach.Coach([], None, self.tree, self.base, b, coach.items_const())
+        st = coach.State(20, set(), gold=0)
+        rec = self.rec("control", secs={"stunned": 3})
+        unused = self.rec("control", secs={"stunned": 3}, saves={"unused": ["blink"]})
+        self.assertEqual(c.on_death(rec, st), [])                    # 第 1 次：不推
+        self.assertEqual(c.on_death(self.rec("low"), st), [])         # 别的死法另算
+        self.assertEqual(c.on_death(unused, st), [])                  # 第 2 次（跳刀没用上，照样算次数）：不推
+        self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
+        self.assertEqual(c.on_death(rec, st), [("warn", "本局第 3 次被控死，黑皇杖提到下一件：黑皇杖开了以后控不住你")])
+        self.assertTrue(c.next_line(st).startswith("下一件：黑皇杖（3 次被控死），还差 4050 金；之后 魔龙枪"))
+
+
 class ShopCardTest(unittest.TestCase):
     """死亡时卡片上带「回家买」：下一件 + 还差多少钱（钱来自 GSI player.gold）"""
 

@@ -40,6 +40,7 @@ class AnalyzeTest(unittest.TestCase):
             r["hero"]["stunned"] = True
         rec = death.analyze(hist, "radiant", NAMES)
         self.assertTrue(rec.lines[0][1].startswith("被控死：5.0 秒内从 100% 血到死，其中 4.0 秒被眩晕"), rec.lines)
+        self.assertEqual((rec.cause, rec.secs["stunned"]), ("control", 4.0))     # 结构化结果，按死法补装用
 
     def test_regen_resets_fight_start_and_low_hp(self):
         # 先掉到 40 回到 80（回城回血），再从 80 慢慢掉：这波从 80 开始；残血拖了很久

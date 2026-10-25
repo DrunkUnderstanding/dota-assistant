@@ -34,6 +34,12 @@ W_ME = 0.0              # 2026-10-24 玩家要求不看个人胜率（原 0.5）
 MIN_GAMES = 300         # 统计期内总场次低于此的英雄（刚出的新英雄等）不推荐
 POS_SHARE_MIN = 0.10    # 有分位置数据时：英雄至少 10% 的局打这个位置才推荐
 K_POS = 300             # 分位置胜率的收缩强度
+# 英雄打某位置的强度按「这个英雄打这个位置的局数」向 50% 收缩（2026-10-25 玩家要求）：冷门英雄 / 冷门位置
+# （米波中单、维萨吉、一号位拉席克）场次少、多是绝活玩家在打，胜率虚高，换个人不一定赢。局数 ≈ K_PICKS 时只算一半。
+# 回测（3001 场样本外）：区分度 0.0554 → 0.0501（2000 / 5000 / 20000 分别 0.0535 / 0.0516 / 0.0486），在噪声内略降；
+# 回测样本里选米波的多半就是米波玩家，本来就偏向绝活英雄，所以这点下降是预期的代价。
+# 只影响「自身强度」这一项，克制 / 配合的期望值仍用原始胜率（否则冷门英雄对谁都会显得「克」）。
+K_PICKS = 10000
 # 下面两项 2026-10-21 回测调参：0.5 / 1.0 的对线加权、0.03~0.3 的反制扣分都没有带来可测的提升
 # （区分度变化 ±0.003，噪声约 ±0.01），所以默认关闭，只保留「易被反制」的文字提示。
 W_LANE = 0.0            # 对线对手的额外克制权重
@@ -143,16 +149,19 @@ class Engine:
         return logit(wr) - expect
 
     def base_at(self, h: int, position: int) -> float:
-        """英雄打这个位置的强度：整体强度 + 该位置相对整体的胜率差（来自 STRATZ，收缩过）"""
+        """英雄打这个位置的强度：整体强度 + 该位置相对整体的胜率差（来自 STRATZ，收缩过），
+        再按这个英雄打这个位置的局数（总局数 × 位置占比）向 50% 收缩，见 K_PICKS"""
         base = self.base.get(h, 0)
+        share = self.position_share(h, position)
+        n = self.games.get(h, 0) * (1 if share is None else share)    # 没有分位置数据时按总局数
         per = (self.positions or {}).get(h)
-        if not per:
-            return base
-        g_all = sum(g for g, _ in per.values())
-        w_all = sum(w for _, w in per.values())
-        overall = (w_all + 50) / (g_all + 100)
-        g, w = per.get(position, (0, 0))
-        return base + logit((w + K_POS * overall) / (g + K_POS)) - logit(overall)
+        if per:
+            g_all = sum(g for g, _ in per.values())
+            w_all = sum(w for _, w in per.values())
+            overall = (w_all + 50) / (g_all + 100)
+            g, w = per.get(position, (0, 0))
+            base += logit((w + K_POS * overall) / (g + K_POS)) - logit(overall)
+        return base * n / (n + K_PICKS)
 
     def position_share(self, h: int, position: int) -> float | None:
         per = (self.positions or {}).get(h)
