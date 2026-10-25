@@ -50,20 +50,19 @@ class EngineTest(unittest.TestCase):
         self.assertTrue(Engine.fits_by_roles(AXE, 3))
         self.assertFalse(Engine.fits_by_roles(PL, 3))     # Carry 打头又不带 Initiator 的不算三号位
 
-    def test_familiar_hero_and_personal_winrate(self):
-        eng = Engine(HeroDB(HEROES), make_stats({}))
+    def test_personal_history_does_not_change_score(self):
+        eng = Engine(HeroDB(HEROES), make_stats({(TIDE.id, PL.id): (20000, 0.56)}))
 
-        def order(history):
-            res = eng.suggest(position=1, position_filter=False, top=None, history=history)
-            return [s.hero for s in res], res
+        def scores(**kw):
+            res = eng.suggest(position=1, enemies=[PL], position_filter=False, top=None, **kw)
+            return {s.hero: s.score for s in res}, res
 
-        heroes, res = order({TIDE.id: (20, 14), WK.id: (20, 9), CM.id: (1, 1)})
-        self.assertLess(heroes.index(TIDE), heroes.index(WK))   # 同样熟练，赢得多的排前
-        self.assertLess(heroes.index(WK), heroes.index(AXE))    # 略低于平均但熟练，仍排在没用过的前面
+        plain, _ = scores()
+        mine, res = scores(history={TIDE.id: (20, 4), WK.id: (20, 18), CM.id: (1, 1)}, pool=[AXE])
+        self.assertEqual(plain, mine)                           # 打了几局、赢多少、英雄池都不加减分
+        self.assertEqual(res[0].hero, TIDE)                     # 只看克制：潮汐克幻影长矛手排第一
+        self.assertTrue(next(s for s in res if s.hero == WK).in_pool)   # 「你近期 N 局」仍显示在理由里
         self.assertFalse(next(s for s in res if s.hero == CM).in_pool)  # 1 局不算你的英雄
-
-        heroes, _ = order({WK.id: (20, 4)})
-        self.assertGreater(heroes.index(WK), heroes.index(AXE))  # 20 局只赢 4 局，熟练度救不回来
 
     def test_position_data_overrides_roles(self):
         # 冥魂大帝在数据里主要打三号位，标签却是 Carry 打头

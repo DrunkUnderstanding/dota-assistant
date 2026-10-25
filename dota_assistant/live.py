@@ -491,6 +491,13 @@ class Live:
                 self.speaker.say(text)
         self.prev_draft = draft
 
+    def draft_view(self) -> dict:
+        """选人卡片；进了游戏（GSI：出门到比赛结束）就不再显示剩余位置"""
+        st = self.gsi.state if self.gsi else None
+        if self.view.get("team") and st and st.alive and st.in_match:
+            return {**self.view, "team": None}
+        return self.view
+
     def clear(self) -> None:
         self.slots = {s: [""] * 5 for s in SIDES}
         self.hints = {s: [{} for _ in range(5)] for s in SIDES}
@@ -1067,7 +1074,7 @@ class Live:
             "bans_text": self.bans_text,
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
-                        "view": self.coach_card or self.pick_view() or self.notice or self.view},
+                        "view": self.coach_card or self.pick_view() or self.notice or self.draft_view()},
             "status": self.status(),
         }
 

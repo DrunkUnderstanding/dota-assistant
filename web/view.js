@@ -51,6 +51,42 @@ function lanesHTML(l) {
   };
 }
 
+// 我方五个位置：队友占了的显示队友（猜的标 ?），空着的给两个推荐。
+// 我还没选：推荐是给我挑位置的，点空位置切过去；我选好以后：我那格是我的英雄，空位置的推荐是给队友的（不能点），一直留到进游戏
+function teamHTML(team, picked) {
+  if (!team) return '';
+  const rows = team.map((t) => {
+    if (t.me) {
+      return `<div class="team-row is-me" title="你选的${esc(t.ally.name)}"><span class="team-label">${esc(t.name)}</span>`
+        + `<span class="lane-hero">${face(t.ally, 'face-sm')}</span><em class="team-cur">你</em></div>`;
+    }
+    const cur = t.current && !picked;
+    const flags = (cur ? '<em class="team-cur">当前</em>' : '') + (t.best && !cur ? '<em class="team-best">推荐</em>' : '');
+    if (t.ally) {
+      const tip = `队友${t.ally.name}${t.ally.sure ? '' : `（猜的，${Math.round(t.ally.conf * 100)}% 把握）`}占了${t.name}`;
+      const warn = cur ? '<span class="team-warn">队友占了你的位置</span>' : '';
+      return `<div class="team-row is-taken ${cur ? 'is-cur' : ''}" title="${esc(tip)}"><span class="team-label">${esc(t.name)}</span>`
+        + `<span class="lane-hero ${t.ally.sure ? '' : 'is-unsure'}">${face(t.ally, 'face-sm')}${t.ally.sure ? '' : '<b>?</b>'}</span>${warn}${flags}</div>`;
+    }
+    const picks = t.picks.map((p) => `<span class="team-pick">${face(p, 'face-sm')}<b>${p.winrate.toFixed(1)}</b></span>`).join('')
+      || '<span class="team-none">无候选</span>';
+    if (picked) {
+      return `<div class="team-row is-ally-pick" title="${esc(`队友打${t.name}可以选这些`)}">`
+        + `<span class="team-label">${esc(t.name)}</span><div class="team-picks">${picks}</div></div>`;
+    }
+    const tip = cur ? `你现在按${t.name}推荐` : `点一下：改按${t.name}推荐`;
+    return `<div class="team-row is-open ${cur ? 'is-cur' : ''} ${t.best ? 'is-best' : ''}" data-pos="${t.position}" title="${esc(tip)}">`
+      + `<span class="team-label">${esc(t.name)}</span><div class="team-picks">${picks}</div>${flags}</div>`;
+  }).join('');
+  const [hint, small] = picked
+    ? ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是给队友的推荐（算上和你的配合）', '给队友的推荐']
+    : ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是你打这个位置的前两个推荐', '点空位置切换'];
+  return `
+    <section class="ov-team" title="${hint}">
+      <h3>剩余位置<small>${small}</small></h3>${rows}
+    </section>`;
+}
+
 function card(item, rank) {
   const tags = item.tags.map((t) => `<span class="tag tag-${t.kind}">${esc(t.text)}</span>`).join('');
   // 机制上为什么克 / 怕（知识库原句放在悬停提示里）
@@ -85,6 +121,7 @@ function draftHTML(v) {
   let html = '';
   const lines = lineup('敌', v.enemies, 'lineup-enemy') + lineup('友', v.allies, 'lineup-ally') + lineup('禁', v.bans || [], 'lineup-ban');
   if (lines) a += `<section class="ov-lineups">${lines}</section>`;
+  a += teamHTML(v.team, !!v.my_hero);
   const lanes = lanesHTML(v.lanes);
   a += lanes.rows;
   html += lanes.tips;
@@ -148,10 +185,12 @@ export function renderOverlay(root, view) {
   return true;
 }
 
-// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，要点卡片的标签 → 翻页，× → 关卡片
+// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，剩余位置 → 切位置，要点卡片的标签 → 翻页，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
     const tab = e.target.closest('.brief-tab[data-page]');
+    const pos = e.target.closest('.team-row[data-pos]');
+    if (pos) return act('set', { key: 'position', value: Number(pos.dataset.pos) });
     if (tab) return act('brief_page', { page: tab.dataset.page });
     const pick = e.target.closest('.pick[data-id]');
     if (pick) return act('explain_pick', { hero_id: Number(pick.dataset.id) });

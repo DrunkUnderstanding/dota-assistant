@@ -131,6 +131,31 @@ img { display: block; }
 .lane-tips { margin-bottom: 10px; display: flex; flex-direction: column; gap: 1px; }
 .lane-tips h4 { margin: 0 0 1px; font-size: 11px; font-weight: 600; color: var(--text-faint); }
 
+/* 剩余位置：队友占了的灰一点，空位置可点（切到这个位置），推荐的位置描金边 */
+.ov-team { margin-bottom: 10px; display: grid; gap: 3px; }
+.ov-team h3 { margin: 0 0 1px; font-size: 11px; font-weight: 600; letter-spacing: 1px; color: var(--text-faint); }
+.ov-team h3 small { margin-left: 6px; font-weight: 400; letter-spacing: 0; }
+.team-row { display: flex; align-items: center; gap: 8px; padding: 2px 6px; border-radius: 6px; border: 1px solid transparent; }
+.team-row.is-open { cursor: pointer; }
+.team-row.is-open:hover { border-color: var(--line-strong); }
+.team-row.is-taken { opacity: 0.6; }
+.team-row.is-taken.is-cur { opacity: 1; }
+.team-row.is-me .team-label, .team-row.is-me em { color: var(--gold); font-weight: 700; }
+.team-row.is-me .lane-hero .face-sm { box-shadow: inset 0 -2px 0 var(--gold); }
+.team-row.is-best { border-color: rgba(216, 167, 78, 0.45); background: var(--gold-soft); }
+.team-label { width: 40px; flex: none; font-size: 11px; color: var(--text-dim); }
+.team-row.is-cur .team-label { color: var(--gold); font-weight: 700; }
+.team-picks { display: flex; gap: 6px; }
+.team-pick { display: flex; align-items: center; gap: 3px; }
+.team-pick b { font: 600 11px/1 var(--num); color: var(--text-dim); }
+.team-none { font-size: 11px; color: var(--text-faint); }
+.team-warn { font-size: 11px; color: var(--bad); }
+.ov-team .lane-hero .face-sm { box-shadow: inset 0 -2px 0 var(--radiant); }
+.team-row em { margin-left: auto; font-style: normal; font-size: 11px; white-space: nowrap; }
+.team-row em + em { margin-left: 4px; }
+.team-cur { color: var(--text-dim); }
+.team-best { color: var(--gold); }
+
 /* 推荐 */
 .ov-group h3 {
   margin: 2px 2px 6px; font-size: 11px; font-weight: 600; letter-spacing: 1.5px;

@@ -105,6 +105,67 @@ class RenderViewTest(unittest.TestCase):
         json.dumps(v, ensure_ascii=False)
 
 
+class TeamSlotsTest(unittest.TestCase):
+    def advisor(self, positions=None):
+        a = fake_advisor(Config(position_filter=False, top=2, top_other=2))
+        a.engine.positions = positions
+        return a
+
+    def test_open_positions_and_best(self):
+        # 潮汐猎人克幻影长矛手；队友水晶室女猜五号位 → 剩 1~4 号位，每个位置给前两个推荐
+        a = self.advisor({CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}})
+        advice = a.advise(adv.Draft(allies=[CM], enemies=[PL]), 1)
+        self.assertEqual([t.position for t in advice.team if t.open], [1, 2, 3, 4])
+        taken = advice.team[4]
+        self.assertEqual((taken.ally.hero, taken.ally.pos), (CM.id, 5))
+        self.assertTrue(all(len(t.picks) == 2 for t in advice.team if t.open))
+        self.assertEqual(advice.team[0].picks[0].hero, TIDE)
+        v = adv.render_view(advice, "radiant")["team"]
+        self.assertEqual([r["current"] for r in v], [True, False, False, False, False])
+        self.assertEqual(sum(r["best"] for r in v), 1)
+        self.assertEqual(v[4]["ally"]["name"], "水晶室女")
+        self.assertEqual(v[0]["picks"][0]["id"], TIDE.id)
+        json.dumps(v, ensure_ascii=False)
+        self.assertTrue(any(t.startswith("剩余位置：一号位（当前） 潮汐猎人") for _, t in adv.render_lines(advice, None)))
+
+    def test_ally_takes_my_position(self):
+        # 选人界面认出水晶室女打一号位（优先于按比例猜）：我当前的一号位被占，推荐改打别的
+        a = self.advisor({CM.id: {5: (900, 0)}})
+        advice = a.advise(adv.Draft(allies=[CM], enemies=[PL], ally_pos={CM.id: 1}), 1)
+        self.assertFalse(advice.team[0].open)
+        self.assertIsNotNone(advice.best_open())
+        self.assertNotEqual(advice.best_open().position, 1)
+        line = next(t for _, t in adv.render_lines(advice, None) if t.startswith("剩余位置"))
+        self.assertIn("队友占了：一号位（当前） 水晶室女", line)
+        self.assertIn("→ 推荐打", line)
+
+    def test_no_allies(self):
+        a = self.advisor()
+        self.assertEqual(a.advise(adv.Draft(enemies=[PL]), 1).team, [])
+        self.assertIsNone(adv.render_view(a.advise(adv.Draft(enemies=[PL]), 1), None)["team"])
+
+    def test_after_my_pick_recommends_for_allies(self):
+        # 我选好潮汐猎人打三号位：我占三号位（队友不会被猜到这里），空位置推荐给队友（不含已选的），不再推荐我打哪个位置
+        a = self.advisor({CM.id: {3: (900, 0), 5: (100, 0)}})
+        advice = a.advise(adv.Draft(allies=[CM], enemies=[PL], my_hero=TIDE), 3)
+        me = advice.team[2]
+        self.assertTrue(me.me)
+        self.assertEqual(me.ally.hero, TIDE.id)
+        self.assertEqual(advice.team[4].ally.hero, CM.id)
+        self.assertEqual([t.position for t in advice.team if t.open], [1, 2, 4])
+        picked = {s.hero for t in advice.team for s in t.picks}
+        self.assertTrue(picked and not picked & {TIDE, CM, PL})
+        self.assertIsNone(advice.best_open())
+        v = adv.render_view(advice, None)["team"]
+        self.assertEqual([r["me"] for r in v], [False, False, True, False, False])
+        self.assertFalse(any(r["best"] for r in v))
+        line = next(t for _, t in adv.render_lines(advice, None) if t.startswith("剩余位置"))
+        self.assertTrue(line.startswith("剩余位置：（给队友）"))
+        self.assertIn("三号位 你 潮汐猎人", line)
+        # 只有我选了、队友一个没选：也显示
+        self.assertEqual(len(a.advise(adv.Draft(enemies=[PL], my_hero=TIDE), 3).team), 5)
+
+
 class LiveTest(unittest.TestCase):
     def setUp(self):
         self.live = make_live().start()
@@ -300,6 +361,20 @@ class CoachLiveTest(unittest.TestCase):
             if self.live.coach:
                 return
             time.sleep(0.05)
+
+    def test_team_kept_after_pick_until_game(self):
+        # 选人阶段选好了英雄：剩余位置还在（给队友的推荐）；出门进游戏就不显示了
+        self.live.slots["radiant"][:2] = ["幻影长矛手", "水晶室女"]
+        self.live.coach_card = None
+        self.push(-1, state="DOTA_GAMERULES_STATE_HERO_SELECTION")
+        wait(self.live.submit(self.live.refresh))               # 实际是顶栏识别到我的英雄时刷新
+        ov = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertEqual(ov["view"]["my_hero"]["name"], "幻影长矛手")
+        self.assertTrue(any(r["me"] for r in ov["view"]["team"]))
+        self.push(-1, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.live.coach_card = None
+        wait(self.live.submit(self.live.publish))
+        self.assertIsNone(json.loads(self.live.current_snapshot)["overlay"]["view"]["team"])
 
     def test_new_draft_restores_closed_overlay(self):
         # 上一局点 × 收起了叠加层：进下一局选人自动显示，不用按 F8

@@ -12,8 +12,8 @@ stratz_token = ""     # STRATZ API token（stratz.com/api，Steam 登录后免�
 pool = []             # 手写英雄池，例：["幻刺", "斧王", "Tidehunter"]；少量加分、不受位置筛选限制
 only_pool = false     # true = 只在英雄池里推荐
 position_filter = true
-top = 3               # 「你的英雄」里推荐几个
-top_other = 2         # 另外给几个池外的选择
+top = 3               # 推荐总数 = top + top_other（不再分「你的英雄 / 其他」）
+top_other = 2         # 见上一行
 
 # ---- 实时助手（python -m dota_assistant run）----
 monitor = 1           # 截哪块屏幕：1 = 主屏，多屏时 2、3…
