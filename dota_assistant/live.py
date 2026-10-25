@@ -718,15 +718,20 @@ class Live:
         passed = [c for c in coach.CHECKPOINTS if self._coach_checkpoint < c <= minute] if self.coach else []
         if passed:
             self._coach_checkpoint = passed[-1]
-        needs = []
+        needs, nxt = [], None
         if self.coach and (died or passed):     # coach 是 None：还在准备（后台线程）或者准备失败
-            needs = self.coach.tick(coach.State(minute, st.items, st.last_hits, st.net_worth),
-                                    checkpoint=bool(passed))
+            cst = coach.State(minute, st.items, st.last_hits, st.net_worth, st.gold)
+            needs = self.coach.tick(cst, checkpoint=bool(passed))
+            nxt = self.coach.next_line(cst)
         lines = [("warn" if n.priority == 0 else "row", n.text) for n in needs]
+        # 死了正好回家买东西：每次死亡都说下一件买什么；时间点的提醒只在本来就要弹的时候顺带一句
+        shop = ([("head", "回家买")] if died else []) + [("row" if died else "dim", nxt)] if nxt and (died or lines) else []
         if recap and recap.lines:
-            self._show_coach(recap.title, recap.lines + ([("head", "还缺")] + lines if lines else []), on_death=True)
-        elif lines:
-            self._show_coach(f"局内提醒 · {coach._mmss(minute)} {'死亡' if died else '时间点'}", lines, on_death=died)
+            self._show_coach(recap.title, recap.lines + ([("head", "还缺")] + lines if lines else []) + shop,
+                             on_death=True)
+        elif lines or shop:
+            self._show_coach(f"局内提醒 · {coach._mmss(minute)} {'死亡' if died else '时间点'}", lines + shop,
+                             on_death=died)
 
     def _death_recap(self, st) -> death.Recap | None:
         """刚死：把死前那段推送整理成「怎么死的」，顺手原样存一份（核对字段 / 调阈值用）"""

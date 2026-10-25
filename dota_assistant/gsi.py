@@ -145,6 +145,12 @@ class GameState:
         return int(v) if v is not None else None
 
     @property
+    def gold(self) -> int | None:
+        """身上的钱（2026-10-24 真实推送里有 player.gold）"""
+        v = (self.raw.get("player") or {}).get("gold")
+        return int(v) if v is not None else None
+
+    @property
     def items(self) -> set[str]:
         """身上 + 背包 + 储藏处的装备，OpenDota 的 key（去掉 item_ 前缀）"""
         out = set()

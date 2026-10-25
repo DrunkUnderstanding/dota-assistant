@@ -257,6 +257,7 @@ class Entry:
     ultimate: bool = False                               # 官方字段 type = 1：大招（6 级才有）
     granted: bool = False                                # 神杖 / 魔晶才给的技能
     channelled: bool = False                             # 官方字段 behavior 带「持续施法」位
+    targets_enemy: bool = False                          # 官方字段：能指向敌方单位施放（behavior 带「单位目标」位、target_team 含敌方）
 
     def full_text(self) -> str:
         return "\n".join([*self.stats, self.text, *self.notes, self.scepter, self.shard])
@@ -289,6 +290,8 @@ def tag_sentences(text: str, only: set[str] | None = None) -> dict[str, str]:
 # 官方 immunity 字段：1 = 无视技能免疫（来自 Valve 数据，比关键词更可靠）
 _PIERCES = {1: True, 2: False, 3: False, 4: False}
 BEHAVIOR_CHANNELLED = 1 << 7          # DOTA_ABILITY_BEHAVIOR_CHANNELLED
+BEHAVIOR_UNIT_TARGET = 1 << 3         # DOTA_ABILITY_BEHAVIOR_UNIT_TARGET
+TARGET_TEAM_ENEMY = (2, 3)            # DOTA_UNIT_TARGET_TEAM_ENEMY / BOTH
 
 
 def _entry(ab: dict, is_item: bool) -> Entry:
@@ -314,6 +317,7 @@ def _entry(ab: dict, is_item: bool) -> Entry:
         ultimate=ab.get("type") == 1 and not is_item,
         granted=bool(ab.get("ability_is_granted_by_scepter") or ab.get("ability_is_granted_by_shard")),
         channelled=bool(int(ab.get("behavior") or 0) & BEHAVIOR_CHANNELLED),
+        targets_enemy=bool(int(ab.get("behavior") or 0) & BEHAVIOR_UNIT_TARGET) and ab.get("target_team") in TARGET_TEAM_ENEMY,
     )
 
 

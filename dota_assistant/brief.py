@@ -5,8 +5,8 @@
   + 你这路的对线提示（lanes.tips，知识库原文的硬规则）
 - 起手装：STRATZ itemStartingPurchase（同分段同英雄同位置多数局会买的）
 - 强势期：STRATZ 按比赛时长的胜率（groupByTime），双方 5 个英雄相对各自平均胜率的偏差
-- 对面要防的：coach.plan()（知识库机制标签：控制、闪避、隐身、无视技能免疫）
-- 关键装备时间：coach.fetch_bench()（同分段核心装中位购买时间）
+- 出装：itembuild.make()（同分段核心装的中位购买时间 + coach.plan() 的针对装，知识库原文对原文）
+- 对面要防的：coach.plan() 的提示（隐身要带粉、不用专门出金箍棒、提醒核心出黑皇杖……）
 对面的位置是猜的（lanes.guess：每个英雄在该分段打各位置的比例，五个人不重复），对线对手据此推出来。
 """
 from __future__ import annotations
@@ -16,7 +16,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, data, kb, lanes
+from . import coach, data, itembuild, kb, lanes
 from .config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 
@@ -246,20 +246,12 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
                 lines.insert(0, ("row", "双方强势期差不多，按装备节奏打"))
         b.add("强势期", lines)
 
-    # 4. 对面要防的（局内缺口提醒用的同一套判断）
+    # 4. 出装：同分段核心装 + 针对这局阵容的装备（局内提醒用的同一套判断），针对装悬停看原文
     enemies = [base.heroes[h] for h in enemy_ids if h in base.heroes]
     needs, notes = coach.plan(me, enemies, base, kb.load_rules(), bench, pos)
     b.needs = needs
-    b.add("对面要防", [("warn" if n.priority == 0 else "row", n.brief or n.text) for n in needs] + [("row", n) for n in notes])
-
-    # 5. 你的关键装备时间
-    if bench:
-        timings = coach.item_timings(bench)
-        core = sorted((t[1], e.name) for e in base.items.values()
-                      if (t := timings.get(base.item_ids.get(e.key))) and t[0] >= coach.CORE_SHARE
-                      and e.cost >= coach.CORE_MIN_COST)
-        if core:
-            b.add("关键装备", [("row", "　".join(f"{n} {m:.0f}′" for m, n in core[:5]) + "（同分段中位购买时间）")])
+    b.add("出装", itembuild.brief_lines(itembuild.make(needs, bench, base)))
+    b.add("对面要防", [("row", n) for n in notes])
     return b
 
 
