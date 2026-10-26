@@ -4,6 +4,8 @@
     └ 本机 HTTP 服务（只监听 127.0.0.1）
         ├ /overlay.html /panel.html /topbar.html …   web/ 下的静态页面
         ├ /portraits/<id>.png           英雄头像（data/portraits）
+        ├ /items/<key>.png              装备图标（data/items）
+        ├ /icons/abilities/<key>.png    技能图标 / 金币图标（icons/gold.png）：第一次从 Valve CDN 下，存 data/icons
         ├ /api/events                   SSE：状态一变就推一份完整快照
         └ /api/action                   POST：控制面板的操作
     └ Electron（electron/main.js）：开三个窗口加载上面的页面
@@ -37,6 +39,7 @@ WEB_DIR = ROOT / "web"
 ELECTRON_DIR = ROOT / "electron"
 UI_DIR = ROOT / "ui"            # 打包版（packaging/build.py）：Electron 本体 + resources/app 里的 main.js，双击就能跑
 PORTRAIT_DIR = DATA_DIR / "portraits"
+ITEM_ICON_DIR = DATA_DIR / "items"
 JSON_TYPE = "application/json; charset=utf-8"
 
 
@@ -71,6 +74,15 @@ class WebServer:
                     self._json(200, overlay_config(server.live.cfg, server.live.overlay_pos))
                 elif path.startswith("/portraits/"):
                     self._file(PORTRAIT_DIR, path.removeprefix("/portraits/"))
+                elif path.startswith("/items/"):
+                    self._file(ITEM_ICON_DIR, path.removeprefix("/items/"))
+                elif path.startswith("/icons/"):
+                    from .data import ICON_DIR, fetch_icon
+                    rel = path.removeprefix("/icons/")
+                    if fetch_icon(rel):
+                        self._file(ICON_DIR, rel)
+                    else:
+                        self._json(404, {"ok": False, "message": "没有这个图标"})
                 else:
                     self._file(WEB_DIR, path.lstrip("/"))
 

@@ -3,6 +3,23 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 
 export const portrait = (id) => `/portraits/${id}.png`;
 
+// 一行字里的装备显示成图标（itembuild.line_view 的 parts：str 原样，{item} 一件装备，{group} 并列几件），名字在悬停提示里；
+// 图标没下载到时显示名字。★ = 针对这局、· = 之后常见、✚ = 按死法补的，和文字版同一套记号
+const MARK = { counter: '★', common: '·', death: '✚' };
+function itemChip(c) {
+  const mark = c.mark ? `<i class="ic-mark">${MARK[c.mark] || ''}</i>` : '';
+  return `<span class="ic ${c.mark ? `ic-${esc(c.mark)}` : ''}" title="${esc(c.name)}">${mark}`
+    + `<img src="/items/${encodeURIComponent(c.item)}.png" alt="" onerror="this.remove()"><span class="ic-name">${esc(c.name)}</span>`
+    + `${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</span>`;
+}
+function partsHTML(parts) {
+  const one = (p) => typeof p === 'string' ? esc(p)
+    : p.group ? `<span class="ic-group">${p.group.map(itemChip).join('')}</span>` : itemChip(p);
+  // 出装顺序的「→」和后面那件粘在一起，折行时箭头跟着那件到下一行，不会孤零零挂在上一行行尾
+  return parts.map((p, i) => (p === ' → ' ? '' : parts[i - 1] === ' → ' ? `<span class="ic-step"><i>→</i>${one(p)}</span>` : one(p))).join('');
+}
+const lineBody = (l) => (l.parts ? partsHTML(l.parts) : esc(l.text));
+
 // 胜率条：45% 以下空、60% 满（推荐里的胜率基本落在这个区间）
 const barPct = (wr) => Math.max(4, Math.min(100, ((wr - 45) / 15) * 100));
 
@@ -152,14 +169,14 @@ function noticeHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭这条提醒">×</button>' : '';
   return `
     <header class="ov-head"><span class="ov-pos">${esc(v.title)}</span><span class="ov-brand">选人助手</span>${close}</header>
-    <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${esc(l.text)}</p>`).join('')}</section>`;
+    <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${lineBody(l)}</p>`).join('')}</section>`;
 }
 
 // 本局要点：按阶段分页（对线期：分路 + 对线 / 起手 / 对面要防；中期：出装 / 强势期；各页再接 AI 写的这一阶段打法），热键翻页
 // 每个小节只显示前几条，其余（more）折叠，点「展开」看；展开了哪些记在这里，重画（例如 AI 写完补进来）后保持
 const unfolded = new Set();
 const foldKey = (v, s) => `${v.title}|${v.page}|${s.title}`;
-const briefLine = (l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`;
+const briefLine = (l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${lineBody(l)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`;
 function briefHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭">×</button>' : '';
   const tabs = (v.tabs || []).map((t) => `<span class="brief-tab ${t.on ? 'is-on' : ''}" data-page="${esc(t.page)}">${esc(t.label)}</span>`).join('');

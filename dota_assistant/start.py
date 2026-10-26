@@ -128,6 +128,8 @@ def ensure_data(cfg: config.Config) -> None:
             data.update(cfg)
         elif cfg.account_id and _age_hours(DATA_DIR / "player.json") > PLAYER_UPDATE_HOURS:
             data.update_player(cfg)
+        if not data.ITEM_ICON_DIR.exists():      # 装备图标是 2026-10-26 加的：老数据不用等全量更新
+            data.fetch_item_icons()
     except Exception as e:                       # 没网时用旧数据照样能开
         if not stats.exists():
             raise

@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, config, death, gameplan, grid, jungle, lanestate, llm, roles, ultcd
+from . import brief, buyback, buybackscan, coach, config, death, gameplan, grid, itembuild, jungle, lanestate, llm, roles, ultcd
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
@@ -769,7 +769,7 @@ class Live:
             cst = coach.State(minute, st.items, st.last_hits, st.net_worth, st.gold, st.inventory, st.buyback)
             needs = self.coach.tick(cst, checkpoint=bool(passed))
             by_death = self.coach.on_death(recap, cst) if recap else []   # 先按死法调顺序，再说下一件
-            nxt = self.coach.next_line(cst)
+            nxt = self.coach.next_parts(cst)
         lines = [("row", f"提示：{n.text}（{n.tip}）") if n.tip else ("warn" if n.priority == 0 else "row", n.text)
                  for n in needs]
         # 死了正好回家买东西：每次死亡都说下一件买什么；时间点的提醒只在本来就要弹的时候顺带一句
@@ -1038,7 +1038,7 @@ class Live:
             return None
         hk, ab, mods = u
         lv, fixed, on, cd = self._ult_cd(side, index, ab, mods)
-        return {"hero": hk.name, "name": ab.name, "end": self.ults.end(side, index, clock), "level": lv, "fixed": fixed,
+        return {"hero": hk.name, "name": ab.name, "key": ab.key, "end": self.ults.end(side, index, clock), "level": lv, "fixed": fixed,
                 "cd": cd, "cds": "/".join(f"{c:g}" for c in ultcd.cooldowns(ab)),
                 "mods": [{"key": m.key, "label": m.label, "on": m in on} for m in mods]}
 
@@ -1299,14 +1299,15 @@ class Live:
             v["title"] += "（阵容变了，再点一次英雄更新）"
         return v
 
-    def _show_coach(self, title: str, lines: list[tuple[str, str]], on_death: bool = False) -> None:
+    def _show_coach(self, title: str, lines: list[tuple], on_death: bool = False) -> None:
+        """lines：(kind, 文字或片段列表)，片段里的装备在界面上显示图标（itembuild.line_view）"""
         self.coach_card = {"kind": "notice", "title": title, "closable": True, "death": on_death,
-                           "lines": [{"kind": k, "text": t} for k, t in lines]}
+                           "lines": [{"kind": k, **itembuild.line_view(t)} for k, t in lines]}
         self._death_shown = time.monotonic() if on_death else 0.0
-        log.info("弹卡片「%s」：%s", title, " / ".join(t for _, t in lines))
+        log.info("弹卡片「%s」：%s", title, " / ".join(itembuild.text(t) for _, t in lines))
         self.user_hidden = False                 # 新提醒总要让人看见；不想看就关掉这张卡片
         if self.coach_voice:
-            self.speaker.say("；".join(t for _, t in lines))
+            self.speaker.say("；".join(itembuild.text(t) for _, t in lines))
 
     def save_shot(self) -> None:
         path = SHOTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.png"

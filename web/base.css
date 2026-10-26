@@ -285,6 +285,22 @@ img { display: block; }
   background: none; color: var(--text-dim); font: 11px/1.6 var(--font); text-align: left; cursor: pointer;
 }
 .brief-fold:hover { color: var(--gold); border-color: var(--gold); }
+/* 装备图标（view.js itemChip）：88×64 的官方图缩到一行字高一点，跟着文字走；没图时显示名字 */
+.ic { display: inline-flex; align-items: center; gap: 2px; vertical-align: middle; margin: 1px 0; white-space: nowrap; }
+.ic img { width: 33px; height: 24px; border-radius: 3px; object-fit: cover; box-shadow: 0 0 0 1px var(--line-strong); }
+.ic-name { display: none; }
+.ic:not(:has(img)) .ic-name { display: inline; color: var(--text); }
+.ic small { margin-left: 1px; font: 600 11px/1 var(--num); color: var(--text-dim); }
+.ic-mark { font-style: normal; font-size: 11px; line-height: 1; }
+.ic-counter img { box-shadow: 0 0 0 1.5px var(--gold); }
+.ic-counter .ic-mark { color: var(--gold); }
+.ic-common { opacity: 0.75; }
+.ic-common .ic-mark { color: var(--text-faint); }
+.ic-death img { box-shadow: 0 0 0 1.5px var(--good); }
+.ic-death .ic-mark { color: var(--good); }
+.ic-step { display: inline-flex; align-items: center; white-space: nowrap; }
+.ic-step > i { margin: 0 4px; font-style: normal; color: var(--text-faint); }
+.ic-group { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
 .ov-empty { padding: 14px 4px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 @keyframes pick-in {

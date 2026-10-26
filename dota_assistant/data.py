@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import threading
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -121,6 +123,62 @@ def fetch_portraits(log=_say) -> None:
         out.write_bytes(r.content)
         n += 1
     log(f"  头像：新下载 {n} 张，共 {len(list(PORTRAIT_DIR.glob('*.png')))} 张")
+
+
+ICON_DIR = DATA_DIR / "icons"
+ICON_PATH = re.compile(r"(abilities|icons)/[a-z0-9_]+\.png")   # 技能图标 abilities/<技能 key>.png、金币 icons/gold.png
+_icon_locks: dict[str, threading.Lock] = {}   # 每张图一把锁：页面一打开 10 个买活小条同时要金币图标，只下一次；别的图不用等
+_icon_failed: set[str] = set()                 # 这次运行下不到的不再试（断网时每张都要等超时）
+
+
+def fetch_icon(rel: str) -> Path | None:
+    """顶栏小条用的图标：第一次从 Valve 官方 CDN 下（dota2.com 网页用的同一套），存 data/icons，之后读本地。
+    下不到（断网 / 没这张）返回 None，页面退回显示文字。不走 _session：它断连要重试好几轮，页面等不起"""
+    if not ICON_PATH.fullmatch(rel):
+        return None
+    out = ICON_DIR / rel
+    if not out.is_file() and rel not in _icon_failed:
+        with _icon_locks.setdefault(rel, threading.Lock()):
+            if not out.is_file() and rel not in _icon_failed:
+                _download_icon(rel, out)
+                if not out.is_file():
+                    _icon_failed.add(rel)
+    return out if out.is_file() else None
+
+
+def _download_icon(rel: str, out: Path) -> None:
+    try:
+        r = requests.get(f"{CDN}/apps/dota2/images/dota_react/{rel}", timeout=10)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning("图标下载失败 %s：%s", rel, e)
+        return
+    if not r.headers.get("Content-Type", "").startswith("image/"):
+        return
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(".part")        # 写完再改名：别的请求不会读到半张
+    tmp.write_bytes(r.content)
+    tmp.replace(out)
+
+
+ITEM_ICON_DIR = DATA_DIR / "items"
+
+
+def fetch_item_icons(log=_say) -> None:
+    """下载装备图标（88×64，出装推荐显示成图标）：OpenDota 装备常量里的图片地址，配方共用一张不下。已有的跳过"""
+    from concurrent.futures import ThreadPoolExecutor
+    from .coach import items_const
+    ITEM_ICON_DIR.mkdir(parents=True, exist_ok=True)
+    todo = [(ITEM_ICON_DIR / f"{k}.png", v["img"].split("?")[0]) for k, v in items_const().items()
+            if v.get("img") and not k.startswith("recipe_") and not (ITEM_ICON_DIR / f"{k}.png").exists()]
+
+    def get(job: tuple[Path, str]) -> None:
+        r = _session.get(CDN + job[1], timeout=60)
+        r.raise_for_status()
+        job[0].write_bytes(r.content)
+    with ThreadPoolExecutor(8) as pool:
+        list(pool.map(get, todo))
+    log(f"  装备图标：新下载 {len(todo)} 张，共 {len(list(ITEM_ICON_DIR.glob('*.png')))} 张")
 
 
 def load_heroes() -> HeroDB:
@@ -380,6 +438,7 @@ def update(cfg: Config, log=_say) -> None:
     (DATA_DIR / "heroes.json").write_text(json.dumps(heroes, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"  {len(heroes)} 个英雄")
     fetch_portraits(log)
+    fetch_item_icons(log)
     log("知识库（Valve 官方技能 / 物品说明）…")
     from . import kb
     kb.update([h["id"] for h in heroes], log)

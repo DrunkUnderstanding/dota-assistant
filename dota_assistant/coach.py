@@ -397,8 +397,8 @@ class Coach:
         self.said: dict[str, list[float]] = {}
         self.deaths: dict[str, int] = {}                 # 死法（itembuild.DeathRule.key）→ 本局几次
 
-    def on_death(self, rec, st: State) -> list[tuple[str, str]]:
-        """死亡复盘（death.Recap）→ 数这种死法本局第几次；超过两次（第 DEATH_MIN 次起）才说对应装备。
+    def on_death(self, rec, st: State) -> list[tuple[str, list]]:
+        """死亡复盘（death.Recap）→ 数这种死法本局第几次；超过两次（第 DEATH_MIN 次起）才说对应装备（片段列表，见 itembuild.text）。
         只有本局依据、没有大数据依据，所以只算提示，不动「下一件」。保命手段没用上的那次照样算次数，只是那次不说"""
         from . import itembuild
         cause = itembuild.death_cause(rec)
@@ -411,16 +411,24 @@ class Coach:
         pick = itembuild.death_pick(rec, st.owned, timings, self.base, self.tree)
         if pick is None:
             return []
-        return [("row", f"提示：本局第 {n} 次{cause.label}，可以考虑{pick.name}：{pick.why}（{NO_DATA}）")]
+        return [("row", [f"提示：本局第 {n} 次{cause.label}，可以考虑", itembuild.chip(pick.key, pick.name),
+                         f"：{pick.why}（{NO_DATA}）"])]
 
     def next_line(self, st: State) -> str | None:
-        """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用；格子满了说卖哪件，后期说买了够不够买活"""
+        """next_parts 的文字版（命令行回放用）"""
+        from . import itembuild
+        parts = self.next_parts(st)
+        return itembuild.text(parts) if parts else None
+
+    def next_parts(self, st: State) -> list | None:
+        """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用；格子满了说卖哪件，后期说买了够不够买活。
+        片段列表（装备在界面上是图标），文字版用 next_line"""
         if self.build is None:
             return None
         from . import itembuild
         names = {k: e.name for k, e in self.base.items.items()} if self.base else {}
-        return itembuild.next_line(self.build, st.owned, st.gold, self.tree, self.const,
-                                   slots=st.slots, buyback=st.buyback, minute=st.minute, names=names)
+        return itembuild.next_parts(self.build, st.owned, st.gold, self.tree, self.const,
+                                    slots=st.slots, buyback=st.buyback, minute=st.minute, names=names)
 
     def tick(self, st: State, checkpoint: bool) -> list[Need]:
         out = []

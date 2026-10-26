@@ -48,6 +48,19 @@ class MoneyTest(unittest.TestCase):
         line = itembuild.next_line(b, set(no_branch), 0, tree, const, slots=no_branch, names={"magic_wand": "魔杖"})
         self.assertEqual(line, "下一件：魔龙枪，还差 2000 金；格子满了，先卖魔杖（450 金，身上最便宜）")
 
+    def test_next_parts_icons(self):
+        """「下一件」的装备在界面上是图标：下一件、先卖的、之后几件（并列一组）"""
+        const = {**CONST, "branches": {"cost": 50, "qual": "consumable"}}
+        full = ["branches", "force_staff", "mithril_hammer", "ogre_axe", "force_staff", "force_staff"]
+        b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core"),
+                             itembuild.Step("black_king_bar", "黑皇杖", 25, "counter"),
+                             itembuild.Step("hurricane_pike", "飓风长戟", 30, "core")])
+        parts = itembuild.next_parts(b, set(full), 0, coach.item_tree(const), const, slots=full, names={"branches": "树枝"})
+        self.assertEqual([p for p in parts if not isinstance(p, str)], [
+            {"item": "dragon_lance", "name": "魔龙枪"}, {"item": "branches", "name": "树枝"},
+            {"group": [{"item": "black_king_bar", "name": "黑皇杖"}, {"item": "hurricane_pike", "name": "飓风长戟"}]}])
+        self.assertEqual(itembuild.line_view("纯文字"), {"text": "纯文字"})
+
     def test_buyback_after_late(self):
         b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
         line = lambda minute, bb: itembuild.next_line(b, set(), 3000, TREE, CONST, buyback=bb, minute=minute)
@@ -61,10 +74,11 @@ class MoneyTest(unittest.TestCase):
                              itembuild.Step("black_king_bar", "黑皇杖", 25, "counter", "对面控制多"),
                              itembuild.Step("hurricane_pike", "飓风长戟", 34, "core")])
         mid = itembuild.brief_lines(b, hi=30)
-        self.assertEqual(mid[0], ("row", "魔龙枪 15′ → ★黑皇杖 25′"))
+        self.assertEqual(itembuild.text(mid[0][1]), "魔龙枪 15′ → ★黑皇杖 25′")
+        self.assertEqual(mid[0][1][2], {"item": "black_king_bar", "name": "黑皇杖", "sub": "25′", "mark": "counter"})   # 界面上是图标
         late = itembuild.late_lines(b, 30)
-        self.assertEqual(late[0], ("row", "飓风长戟 34′"))
-        self.assertIn(("row", "针对这局的黑皇杖前面就该有，到后期还没有先补"), late)
+        self.assertEqual(itembuild.text(late[0][1]), "飓风长戟 34′")
+        self.assertIn("针对这局的黑皇杖前面就该有，到后期还没有先补", [itembuild.text(x[1]) for x in late])
         self.assertIn("最便宜", late[-1][1])
         self.assertEqual(itembuild.late_lines(itembuild.Build(), 30), [])        # 没有出装数据就没有这一节
 
@@ -154,8 +168,8 @@ class RealKBTest(unittest.TestCase):
                          [("black_king_bar", 20), ("monkey_king_bar", 30)])
         self.assertTrue(b.tips[0].urgent)
         lines = itembuild.brief_lines(b)
-        self.assertIn("提示 · 黑皇杖", lines[1][1])
-        self.assertIn(coach.NO_DATA, lines[1][1])
+        self.assertIn("提示 · 黑皇杖", itembuild.text(lines[1][1]))
+        self.assertIn(coach.NO_DATA, itembuild.text(lines[1][1]))
         # 以后有数据支持（tip 为空）的针对装照旧排进顺序
         for n in needs:
             n.tip = ""
@@ -221,7 +235,9 @@ class DeathPickTest(unittest.TestCase):
         self.assertEqual(c.on_death(unused, st), [])                  # 第 2 次（跳刀没用上，照样算次数）：不推
         self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
         # 第 3 次：只有本局依据、没有大数据依据，只作提示，不动「下一件」
-        self.assertEqual(c.on_death(rec, st), [("row", f"提示：本局第 3 次被控死，可以考虑黑皇杖：黑皇杖开了以后控不住你（{coach.NO_DATA}）")])
+        (kind, parts), = c.on_death(rec, st)
+        self.assertEqual((kind, itembuild.text(parts)), ("row", f"提示：本局第 3 次被控死，可以考虑黑皇杖：黑皇杖开了以后控不住你（{coach.NO_DATA}）"))
+        self.assertIn({"item": "black_king_bar", "name": "黑皇杖"}, parts)
         self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
 
 
@@ -266,7 +282,8 @@ class ShopCardTest(unittest.TestCase):
         self.live.coach_card = None
         lines = self.push(12, deaths=1, gold=1000, items=["ogre_axe"])["view"]["lines"]
         self.assertEqual(lines[-2:], [{"kind": "head", "text": "回家买"},
-                                      {"kind": "row", "text": "下一件：黑皇杖（针对），还差 2050 金"}])
+                                      {"kind": "row", "text": "下一件：黑皇杖（针对），还差 2050 金",
+                                       "parts": ["下一件：", {"item": "black_king_bar", "name": "黑皇杖"}, "（针对），还差 2050 金"]}])
 
 
 if __name__ == "__main__":

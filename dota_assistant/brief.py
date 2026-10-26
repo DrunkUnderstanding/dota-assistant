@@ -136,7 +136,7 @@ def guess_positions(hero_ids: list[int], positions: dict[int, dict[int, tuple[in
 @dataclass
 class Brief:
     title: str
-    # (小标题, [(kind, 文字) 或 (kind, 文字, 依据原文)])，依据在界面上悬停显示
+    # (小标题, [(kind, 文字) 或 (kind, 文字, 依据原文)])，依据在界面上悬停显示；文字可以是片段列表（装备显示图标，itembuild.text）
     sections: list[tuple[str, list[tuple]]] = field(default_factory=list)
     needs: list[coach.Need] = field(default_factory=list)                              # 给局内提醒接着用
     lane_ids: list[int] = field(default_factory=list)                                  # 猜的同路英雄：对线对手 + 同路队友
@@ -194,14 +194,14 @@ class Brief:
         L = [self.title]
         for t, ls in self.sections:
             L.append(f"【{t}】")
-            L += [f"  {'⚠ ' if k == 'warn' else ''}{x}" for k, x, *_ in ls]
+            L += [f"  {'⚠ ' if k == 'warn' else ''}{itembuild.text(x)}" for k, x, *_ in ls]
         return "\n".join(L)
 
 
 def _line(x: tuple) -> dict:
-    """(kind, 文字[, 依据原文]) → 界面用的一行"""
+    """(kind, 文字或片段列表[, 依据原文]) → 界面用的一行；片段里的装备显示成图标（itembuild.line_view）"""
     k, text, *q = x
-    return {"kind": k, "text": text, **({"quote": q[0]} if q else {})}
+    return {"kind": k, **itembuild.line_view(text), **({"quote": q[0]} if q else {})}
 
 
 def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], pos: int,
@@ -212,8 +212,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
     if base is None:
         raise RuntimeError("还没有知识库，先运行 python -m dota_assistant kb update")
     name = lambda h: base.heroes[h].name if h in base.heroes else str(h)
-    item_name = {v: base.items[k.removeprefix("item_")].name for k, v in base.item_ids.items()
-                 if k.removeprefix("item_") in base.items}
+    item_key = {v: k.removeprefix("item_") for k, v in base.item_ids.items() if k.removeprefix("item_") in base.items}
     me = base.heroes[my_id]
     b = Brief(f"本局要点 · {me.name} {POSITION_NAMES.get(pos, '')}")
     if not enemy_ids:
@@ -277,14 +276,15 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
         picks = []
         for k, c in sorted(hero["start"].items(), key=lambda kv: -kv[1]):
             iid, inst = map(int, k.split(":"))
-            if c / hero["matches"] >= START_SHARE and iid in item_name:
+            if c / hero["matches"] >= START_SHARE and iid in item_key:
                 picks.append((iid, inst))
         counts: dict[int, int] = {}
         for iid, _ in picks:
             counts[iid] = counts.get(iid, 0) + 1
         if counts:
-            b.add("起手", [("row", "、".join(f"{item_name[i]}{f' ×{c}' if c > 1 else ''}" for i, c in counts.items())
-                            + f"（同分段 ≥{START_SHARE:.0%} 的局会带）")])
+            chips = [itembuild.chip(item_key[i], base.items[item_key[i]].name, f"×{c}" if c > 1 else "")
+                     for i, c in counts.items()]
+            b.add("起手", [("row", [itembuild.group(chips), f"（同分段 ≥{START_SHARE:.0%} 的局会带）"])])
 
     # 3. 强势期
     if curves and enemy_ids:

@@ -934,10 +934,26 @@ class WebServerTest(unittest.TestCase):
         self.assertIn("opacity", json.loads(body))
 
     def test_no_path_traversal(self):
-        for path in ("/../config.toml", "/%2e%2e/config.toml", "/portraits/../../config.toml"):
+        for path in ("/../config.toml", "/%2e%2e/config.toml", "/portraits/../../config.toml", "/items/../../config.toml"):
             with self.assertRaises(urllib.error.HTTPError) as cm:
                 self.get(path)
             self.assertEqual(cm.exception.code, 404)
+
+    def test_icons_cached_and_rejected(self):
+        """顶栏小条的图标：本地有就直接给（不联网）；路径不对一律 404，不去下"""
+        from unittest import mock
+        from dota_assistant import data
+        with (tempfile.TemporaryDirectory() as d, mock.patch.object(data, "ICON_DIR", Path(d)),
+              mock.patch.object(data, "_download_icon", side_effect=AssertionError("不该联网"))):
+            (Path(d) / "icons").mkdir()
+            (Path(d) / "icons" / "gold.png").write_bytes(b"fake png")
+            code, ctype, body = self.get("/icons/icons/gold.png")
+            self.assertEqual((code, ctype, body), (200, "image/png", b"fake png"))
+            for path in ("/icons/../config.toml", "/icons/abilities/Doom.png", "/icons/items/blink.png",
+                         "/icons/abilities/../../x.png"):
+                with self.assertRaises(urllib.error.HTTPError) as cm:
+                    self.get(path)
+                self.assertEqual(cm.exception.code, 404)
 
     def test_action_roundtrip(self):
         code, res = self.post({"type": "set_slot", "side": "dire", "index": 1, "text": "斧王"})

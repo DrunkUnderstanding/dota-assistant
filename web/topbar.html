@@ -11,22 +11,31 @@
   html, body { background: transparent; overflow: hidden; height: 100%; }
   /* ?preview=1：浏览器里预览，垫一条像顶栏的底色、塞几条假数据 */
   body.preview { background: linear-gradient(180deg, #1d2430 0, #1d2430 calc(40px * var(--s)), #2c3a2a calc(40px * var(--s))); }
+  /* 小条 = 图标（买活是金币、大招是那个技能的图标）+ 文字；平时只有图标，冷却 / 好了才带字。图标下不到就只写字 */
   .bb {
-    position: absolute; height: calc(17px * var(--s)); width: calc(54px * var(--s));
-    padding: 0; display: grid; place-items: center; cursor: pointer;
-    font: 600 calc(11px * var(--s)) / 1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+    position: absolute; height: calc(24px * var(--s)); width: calc(60px * var(--s));
+    padding: 0 calc(3px * var(--s)); display: flex; align-items: center; justify-content: center; gap: calc(3px * var(--s));
+    cursor: pointer; overflow: hidden;
+    font: 600 calc(12px * var(--s)) / 1 var(--num); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
     border: 1px solid rgba(255, 255, 255, 0.12); border-radius: calc(4px * var(--s));
     background: rgba(10, 13, 18, 0.5); color: rgba(233, 237, 242, 0.38);
     transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
-  .bb.zh { font-family: var(--font); font-weight: 400; }
+  .bb.zh { font-family: var(--font); font-weight: 400; font-size: calc(11px * var(--s)); }
   .bb:hover { color: var(--text); border-color: var(--gold); background: rgba(10, 13, 18, 0.85); }
+  .bb .ic { flex: none; width: calc(18px * var(--s)); height: calc(18px * var(--s)); object-fit: cover; }
+  .bb .ic[hidden], .bb .t:empty { display: none; }
+  .bb:not(.ult) .ic { width: calc(22px * var(--s)); height: calc(22px * var(--s)); margin: 0 calc(-2px * var(--s)); }   /* 金币图四周留白多 */
+  .bb.ult .ic { border-radius: calc(3px * var(--s)); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); }
+  .bb.idle .ic { opacity: 0.7; filter: saturate(0.6); transition: opacity 0.15s, filter 0.15s; }
+  .bb.idle:hover .ic { opacity: 1; filter: none; }
+  .bb .t { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bb.cooling { color: #ffe1dc; background: rgba(150, 44, 34, 0.88); border-color: rgba(229, 103, 92, 0.9); }
   .bb.ready { color: #062010; background: rgba(92, 199, 127, 0.92); border-color: var(--good); font-weight: 600; }
   .bb.auto { border-style: dashed; cursor: default; }
   .bb[hidden] { display: none; }
-  /* 大招小条：平时写技能名；对面大招在冷却 = 蓝（趁机打），好了 = 橙（小心） */
-  .bb.ult { font-size: calc(10px * var(--s)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 calc(2px * var(--s)); }
+  /* 大招小条：对面大招在冷却 = 蓝（趁机打），好了 = 橙（小心）；没图标时平时写技能名 */
+  .bb.ult.zh.idle { font-size: calc(10px * var(--s)); }
   .bb.ult.cooling { color: #dcebff; background: rgba(38, 86, 150, 0.88); border-color: rgba(94, 174, 234, 0.9); }
   .bb.ult.ready { color: #241300; background: rgba(235, 157, 76, 0.94); border-color: var(--risk); }
   .bb.ult.open { border-color: var(--gold); }
@@ -62,8 +71,10 @@ import { act, connect } from './api.js';
 // 位置按 1920×1080 的真实对局截图量的（2026-10-22，shots/ingame_coach.png）：顶栏头像高 40、间距 63，
 // 天辉第 1 个中心在屏幕中线左边 391、夜魇第 1 个在右边 138（天辉总在左边）。Dota 界面按屏幕高度等比缩放，所以都乘 s = 屏幕高 / 1080。
 // 假设 Dota 是「无边框窗口」占满叠加层那块屏（和叠加层一样）；没在别的分辨率 / 宽高比下量过。
+// 小条宽 W、高 24（2026-10-26 玩家嫌 54×17 不好点，加大；两个头像之间只剩 3 像素空）。
 // 大招小条在买活小条下面（ULT_TOP），只给对面；右键弹的菜单在它下面。Electron 那边窗口高 TOPBAR_HEIGHT 要盖得住
-const W = 54, TOP = 43, ULT_TOP = 62, PITCH = 63, CENTER0 = { radiant: -391, dire: 138 };
+const W = 60, TOP = 43, ULT_TOP = 70, PITCH = 63, CENTER0 = { radiant: -391, dire: 138 };
+const GOLD_ICON = '/icons/icons/gold.png';   // Python 那边第一次从 Valve CDN 下（webui.py）
 const params = new URLSearchParams(location.search);
 const preview = params.has('preview');
 const s = Number(params.get('scale')) || screen.height / 1080 || 1;   // Electron 传 scale（屏幕逻辑高 / 1080）
@@ -85,8 +96,18 @@ for (const kind of ['buyback', 'ult']) {
       if (kind === 'ult') {
         el.addEventListener('contextmenu', (e) => { e.preventDefault(); toggleMenu(side, i, el); });
       }
+      const ic = document.createElement('img');
+      ic.className = 'ic';
+      ic.alt = '';
+      ic.draggable = false;
+      const t = document.createElement('span');
+      t.className = 't';
+      el.append(ic, t);
       document.body.append(el);
-      pills.push({ el, kind, side, i, text: '', cls: '' });
+      const p = { el, ic, t, kind, side, i, text: '', cls: '', src: '', iconOk: false };
+      ic.addEventListener('load', () => { p.iconOk = true; render(); });
+      ic.addEventListener('error', () => { p.iconOk = false; render(); });
+      pills.push(p);
     }
   }
 }
@@ -110,19 +131,19 @@ connect((snap) => {
 
 function demo() {
   // 预览用：天辉第 2 个刚买活、夜魇第 3 个冷却快好了、夜魇第 5 个刚好能买活；
-  // 我在夜魇，对面（天辉）第 1 个末日刚放、第 3 个绝冥再生好了、第 5 个技能名很长
+  // 我在夜魇，对面（天辉）第 1 个末日刚放、第 3 个绝冥再生好了、第 5 个技能名很长（也没图标）
   const now = Date.now();
-  const ult = (name, end, cd) => ({ hero: '', name, end, level: 2, fixed: false, cd, cds: `${cd + 10}/${cd}/${cd - 10}`,
+  const ult = (name, key, end, cd) => ({ hero: '', name, key, end, level: 2, fixed: false, cd, cds: `${cd + 10}/${cd}/${cd - 10}`,
     mods: [{ key: 'talent:x', label: '20 级天赋：-10秒 末日冷却', on: false }, { key: 'octarine', label: '玲珑心：-25% 冷却', on: false }] });
   const slot = (end) => ({ name: '', end, me: false, auto: false, ult: null });
   const slots = { radiant: [0, 1, 2, 3, 4].map(() => slot(null)), dire: [0, 1, 2, 3, 4].map(() => slot(null)) };
   slots.radiant[1].end = 1800 + 470;
   slots.dire[2].end = 1800 + 25;
   slots.dire[4].end = 1800 - 3;
-  slots.radiant[0].ult = ult('末日', 1800 + 118, 130);
-  slots.radiant[1].ult = ult('黑洞', null, 170);
-  slots.radiant[2].ult = ult('绝冥再生', 1800 - 4, 150);
-  slots.radiant[4].ult = ult('热血竞技场', null, 95);
+  slots.radiant[0].ult = ult('末日', 'doom_bringer_doom', 1800 + 118, 130);
+  slots.radiant[1].ult = ult('黑洞', 'enigma_black_hole', null, 170);
+  slots.radiant[2].ult = ult('绝冥再生', 'skeleton_king_reincarnation', 1800 - 4, 150);
+  slots.radiant[4].ult = ult('热血竞技场', 'no_such_ability', null, 95);   // 图标下不到：退回写字
   return { show: true, anchor: now - 1800 * 1000, paused: null, ready_show: 30, ult_ready_show: 30,
            my_side: 'dire', buyback_on: true, slots };
 }
@@ -150,6 +171,18 @@ function toggleMenu(side, i, pill) {
   render();
 }
 
+// 图标没加载好（或下不到）就藏起来，只写字
+function show(p, src, text, cls) {
+  if (src !== p.src) {
+    p.src = src;
+    p.iconOk = false;
+    if (src) p.ic.src = src; else p.ic.removeAttribute('src');
+  }
+  p.ic.hidden = !p.iconOk;
+  if (text !== p.text) p.t.textContent = p.text = text;
+  if (cls !== p.cls) p.el.className = p.cls = cls;
+}
+
 const mmss = (sec) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 
 function render() {
@@ -160,12 +193,11 @@ function render() {
     p.el.hidden = !d || state.buyback_on === false;
     if (p.el.hidden) continue;
     const left = d.end == null ? null : d.end - clock;
-    let text = '买活', cls = 'bb zh';
+    let text = p.iconOk ? '' : '买活', cls = 'bb zh idle';
     if (left != null && left > 0) { text = mmss(Math.ceil(left)); cls = 'bb cooling'; }
-    else if (left != null && left > -state.ready_show) { text = '可买活'; cls = 'bb zh ready'; }
+    else if (left != null && left > -state.ready_show) { text = p.iconOk ? '可买' : '可买活'; cls = 'bb zh ready'; }
     if (d.auto) cls += ' auto';
-    if (text !== p.text) p.el.textContent = p.text = text;
-    if (cls !== p.cls) p.el.className = p.cls = cls;
+    show(p, GOLD_ICON, text, cls);
     const who = d.name || (d.me ? '自己' : '这个英雄');
     p.el.title = d.auto ? `${who}：买活冷却按 GSI 自动算`
       : left != null && left > 0 ? `${who}买活冷却还剩 ${text}（点错了再点一下取消）`
@@ -222,12 +254,13 @@ function renderUlt(p, u, clock, open) {
   p.el.hidden = !u;
   if (!u) return;
   const left = u.end == null ? null : u.end - clock;
-  let text = u.name, cls = 'bb zh ult';
+  const src = u.key ? `/icons/abilities/${u.key}.png` : '';
+  const icon = p.iconOk && src === p.src;
+  let text = icon ? '' : u.name, cls = 'bb zh ult idle';
   if (left != null && left > 0) { text = mmss(Math.ceil(left)); cls = 'bb ult cooling'; }
-  else if (left != null && left > -state.ult_ready_show) { text = '大招好了'; cls = 'bb zh ult ready'; }
+  else if (left != null && left > -state.ult_ready_show) { text = icon ? '好了' : '大招好了'; cls = 'bb zh ult ready'; }
   if (open) cls += ' open';
-  if (text !== p.text) p.el.textContent = p.text = text;
-  if (cls !== p.cls) p.el.className = p.cls = cls;
+  show(p, src, text, cls);
   const who = `${u.hero || '对面'}的${u.name}`;
   const on = (u.mods || []).filter((m) => m.on).map((m) => m.label.split('：')[0]);
   const lv = `按 ${u.level} 级${on.length ? ' + ' + on.join('、') : ''}算冷却 ${u.cd} 秒（各级 ${u.cds}${u.fixed ? '' : '，等级按你的等级猜的'}）`;
