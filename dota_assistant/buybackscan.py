@@ -6,7 +6,10 @@
 
 1. 死了的英雄顶栏头像变灰（饱和度掉到接近 0），头像下面显示复活倒计时；活着的头像是彩色的
    （1920×1080 真实截图实测：活着的 10 个头像平均饱和度 75~197，转成灰度图是 0）。
-2. 某一格连续 DEAD_FRAMES 帧灰 → 记「死了」；之后变回彩色 = 复活。
+2. 某一格连续 DEAD_FRAMES 帧灰 → 记「死了」；之后连续 REVIVE_FRAMES 帧彩色 = 复活（复活时刻记第一帧彩色的）。
+   「灰」看头像饱和度的**中位数**，不看平均：头像左下角的小图标（神杖 / 魔晶 / 橙色三角这类）是彩色的，
+   人死了平均饱和度也有 38~41，正好卡在阈值上来回跳，2026-10-26 实战里狙击手两次「复活一帧又死了」被记成买活；
+   中位数不受小图标影响（那天 200 张样本：死了全是 0，真复活 ≥ 31）。另外死了以后要到 ALIVE_SAT 才算彩色（回差），免得在阈值附近抖。
 3. 刚灰的时候拿那一格（头像 + 下面一截）给 Windows OCR 认复活倒计时 T，算出「该在 这一帧 + T 复活」；
    每帧认一次，**两次算出来的复活时刻对得上**（差 ≤ AGREE 秒）才算数，最多认 OCR_TRIES 次（OCR 偶尔认错：
    合成图上 10 认成 1、14 认成 4，两帧一核对就筛掉了）。变回彩色时比该复活的时间早 ≥ BUYBACK_MARGIN 秒 = 买活。
@@ -40,8 +43,10 @@ CENTER0 = {"radiant": -391, "dire": 138}
 PITCH = 63
 PORTRAIT = (6, 38, 24)       # 量饱和度的区域：y 从 6 到 38、中心左右各 24（避开头像上面那条玩家颜色）
 TIMER = (0, 76, 31)          # 给 OCR 的区域：头像 + 下面一截
-DEAD_SAT = 40                # 头像平均饱和度（0~255）低于这个算灰（死了）
+DEAD_SAT = 12                # 头像饱和度中位数（0~255）低于这个算灰（死了）；死了是 0，活着最低见过 28（shots/ 下的截图）
+ALIVE_SAT = 20               # 已经算死了的，中位数要到这个才算彩色（回差）
 DEAD_FRAMES = 2              # 连续几帧灰才算死（躲开一闪而过的特效）
+REVIVE_FRAMES = 2            # 连续几帧彩色才算复活（同上）
 OCR_TRIES = 5                # 刚死时倒计时最多认几次（每次一帧），要有两次对得上
 BUYBACK_MARGIN = 3           # 比该复活的时间早这么多秒以上复活 = 买活（每秒一帧 + OCR 那一帧的误差）
 OCR_TEXT_H = 40              # 给 OCR 的字放到多高（像素）
@@ -61,8 +66,9 @@ def _box(img: np.ndarray, side: str, i: int, y0: float, y1: float, half: float) 
 
 
 def saturation(img: np.ndarray, side: str, i: int) -> float:
+    """头像饱和度的中位数（不用平均：头像角上的彩色小图标会把死了的灰头像平均值抬到阈值附近）"""
     crop = _box(img, side, i, *PORTRAIT)
-    return float(cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[..., 1].mean()) if crop.size else 0.0
+    return float(np.median(cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[..., 1])) if crop.size else 0.0
 
 
 def timer_crop(img: np.ndarray, side: str, i: int) -> np.ndarray:
@@ -127,6 +133,9 @@ class _Slot:
     dead_since: float | None = None
     serial: int = 0
     tries: int = 0               # 这次死已经送去认了几次
+    color: int = 0               # 死了以后连续几帧彩色
+    color_at: float = 0.0        # 第一帧彩色的游戏时钟
+    color_crop: np.ndarray | None = None
     reads: list = field(default_factory=list)   # 每次认到的 (该复活的时刻, 秒数, 那一格)
     expected: float | None = None
     seconds: int | None = None
@@ -148,8 +157,9 @@ class Watcher:
                 if (side, i) in skip:
                     continue
                 st = self.slots.setdefault((side, i), _Slot())
-                if saturation(img, side, i) < DEAD_SAT:
+                if saturation(img, side, i) < (DEAD_SAT if st.dead_since is None else ALIVE_SAT):
                     st.gray += 1
+                    st.color = 0
                     if st.gray < DEAD_FRAMES:
                         continue
                     if st.dead_since is None:
@@ -162,8 +172,13 @@ class Watcher:
                         deaths.append(Death(side, i, st.serial, clock, crop))
                     continue
                 if st.dead_since is not None:
-                    revs.append(Revival(side, i, clock, clock - st.dead_since, st.expected, st.seconds, st.crop,
-                                        timer_crop(img, side, i)))
+                    st.color += 1
+                    if st.color == 1:
+                        st.color_at, st.color_crop = clock, timer_crop(img, side, i)
+                    if st.color < REVIVE_FRAMES:
+                        continue
+                    revs.append(Revival(side, i, st.color_at, st.color_at - st.dead_since, st.expected, st.seconds,
+                                        st.crop, st.color_crop))
                 self.slots[(side, i)] = _Slot()
         return deaths, revs
 

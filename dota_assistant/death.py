@@ -280,7 +280,8 @@ def _after(rec: Recap, alive: dict, now: dict) -> None:
         bits.append(f"掉了 {int(_num(g0) - _num(g1))} 金")
     if h.get("buyback_cost") is not None and g1 is not None:
         cost, gold = int(_num(h["buyback_cost"])), int(_num(g1))
-        if _num(h.get("buyback_cooldown")) > 0:
+        from .gsi import buyback_left
+        if buyback_left(now) > 0:
             bits.append("买活冷却中")
         else:
             bits.append(f"买活 {cost} 金（{'够' if gold >= cost else f'还差 {cost - gold}'}）")

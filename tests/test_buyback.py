@@ -12,8 +12,9 @@ from dota_assistant import buybackscan as bs
 from dota_assistant.buyback import COOLDOWN, READY_SHOW, Tracker
 
 
-def topbar(dead=(), timers=None, size=(1080, 1920)) -> np.ndarray:
-    """合成一帧：10 个彩色头像（位置同 buybackscan），dead 里的变灰、下面写倒计时 timers[(阵营, 格)]"""
+def topbar(dead=(), timers=None, size=(1080, 1920), badge=False) -> np.ndarray:
+    """合成一帧：10 个彩色头像（位置同 buybackscan），dead 里的变灰、下面写倒计时 timers[(阵营, 格)]；
+    badge：灰头像左下角画一个彩色小图标（真实顶栏上的神杖 / 魔晶 / 橙色三角，死了也是彩色的）"""
     h, w = size
     s = h / 1080
     img = np.full((h, w, 3), 40, np.uint8)
@@ -26,6 +27,8 @@ def topbar(dead=(), timers=None, size=(1080, 1920)) -> np.ndarray:
             if (side, i) in dead:
                 roi = img[y0:y1, x0:x1]
                 img[y0:y1, x0:x1] = cv2.cvtColor(cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+                if badge:                        # 约占量饱和度区域的 1/4，平均饱和度会被抬到 40 以上
+                    cv2.rectangle(img, (cx - int(24 * s), int(18 * s)), (cx - int(4 * s), int(38 * s)), (0, 110, 230), -1)
                 t = (timers or {}).get((side, i))
                 if t is not None:
                     cv2.rectangle(img, (cx - int(18 * s), int(44 * s)), (cx + int(18 * s), int(64 * s)), (20, 20, 20), -1)
@@ -67,12 +70,38 @@ class TrackerTest(unittest.TestCase):
     def test_cooldown_is_eight_minutes(self):
         self.assertEqual(buyback.COOLDOWN, 480)
 
+    def test_gsi_buyback_cooldown_is_end_game_time(self):
+        """2026-10-26 实战推送：hero.buyback_cooldown 一直是 2817（买活时 game_time 2337 + 480），不是还剩几秒"""
+        from dota_assistant.gsi import GameState, buyback_left
+        push = lambda cd, gt: {"map": {"clock_time": gt - 246, "game_time": gt}, "hero": {"buyback_cost": 1634, "buyback_cooldown": cd}}
+        self.assertEqual(buyback_left(push(2817, 2753)), 64)
+        self.assertEqual(buyback_left(push(2817, 2900)), 0)       # 冷却过了，字段还留着
+        self.assertEqual(buyback_left(push(0, 2000)), 0)          # 没买过活
+        st = GameState()
+        st.update(push(2817, 2813))
+        self.assertEqual(st.buyback, (1634, 4))
+
 
 class WatcherTest(unittest.TestCase):
     def test_saturation_alive_vs_dead(self):
         img = topbar(dead={("dire", 2)})
-        self.assertGreater(bs.saturation(img, "radiant", 0), bs.DEAD_SAT)
+        self.assertGreater(bs.saturation(img, "radiant", 0), bs.ALIVE_SAT)
         self.assertLess(bs.saturation(img, "dire", 2), bs.DEAD_SAT)
+        img = topbar(dead={("dire", 2)}, badge=True)              # 角上彩色小图标：中位数照样是灰的
+        self.assertLess(bs.saturation(img, "dire", 2), bs.DEAD_SAT)
+
+    def test_one_colored_frame_is_not_revival(self):
+        """2026-10-26 实战：狙击手死着，彩色一帧又灰回去，被记成买活。现在要连续 REVIVE_FRAMES 帧彩色"""
+        w = bs.Watcher()
+        dead = {("radiant", 0)}
+        for t in (10, 11):
+            w.update(topbar(dead, badge=True), t)
+        self.assertEqual(w.update(topbar(), 12)[1], [])            # 只彩色一帧
+        self.assertEqual(w.update(topbar(dead, badge=True), 13)[1], [])
+        self.assertIsNotNone(w.slots[("radiant", 0)].dead_since)  # 还是同一次死
+        self.assertEqual(w.update(topbar(), 20)[1], [])
+        revs = w.update(topbar(), 21)[1]
+        self.assertEqual([(r.clock, r.dead_for) for r in revs], [(20, 10)])   # 复活时刻记第一帧彩色的
 
     def run_life(self, revive_at: float, timer: int | None = 40, size=(1080, 1920)):
         """夜魇第 3 个在 100 秒死、倒计时 timer 秒，revive_at 秒变回彩色；OCR 当认到 timer"""
@@ -88,8 +117,10 @@ class WatcherTest(unittest.TestCase):
         w.set_timer(deaths[0], timer - 1)
         for t in range(103, int(revive_at)):
             self.assertEqual(w.update(topbar(dead, size=size), t), ([], []))     # 认出来了就不再送 OCR
-        _, revs = w.update(topbar(size=size), revive_at)
+        self.assertEqual(w.update(topbar(size=size), revive_at), ([], []))     # 彩色一帧还不算
+        _, revs = w.update(topbar(size=size), revive_at + 1)
         self.assertEqual(len(revs), 1)
+        self.assertEqual(revs[0].clock, revive_at)
         return revs[0]
 
     def test_buyback_vs_respawn(self):
@@ -106,7 +137,8 @@ class WatcherTest(unittest.TestCase):
         w.update(topbar(dead), 10)
         sent = [len(w.update(topbar(dead), t)[0]) for t in range(11, 18)]
         self.assertEqual(sent, [1] * bs.OCR_TRIES + [0] * (7 - bs.OCR_TRIES))   # 认不出最多送 OCR_TRIES 次
-        _, revs = w.update(topbar(), 18)
+        w.update(topbar(), 18)
+        _, revs = w.update(topbar(), 19)
         self.assertIsNone(revs[0].buyback)                         # 不知道是不是买活：不自动记
 
     def test_misread_needs_agreement(self):
@@ -125,7 +157,8 @@ class WatcherTest(unittest.TestCase):
         dead = {("radiant", 0)}
         w.update(topbar(dead), 10)
         d1 = w.update(topbar(dead), 11)[0][0]
-        w.update(topbar(), 12)                                     # 复活了，OCR 结果才回来
+        w.update(topbar(), 12)
+        w.update(topbar(), 13)                                     # 复活了，OCR 结果才回来
         w.set_timer(d1, 30)
         self.assertEqual(w.slots[("radiant", 0)].expected, None)
 

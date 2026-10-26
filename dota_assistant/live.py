@@ -183,7 +183,7 @@ class Live:
         self._lane_logged: set[int] = set()      # 这局 3 / 6 / 10 分钟哪几个已经记进 data/lane_log.jsonl（lanestate.py）
         self.buyback = buyback.Tracker()          # 双方买活冷却（顶栏头像下面的小条）
         self._bb_match: str | None = None         # 为哪一局记的；换局清空
-        self._bb_show = False                     # 比赛开始（0:00）后才显示
+        self._bb_show = False                     # 进游戏（号角前出门）就显示，比赛结束收起
         self._bb_anchor: float | None = None      # 游戏时钟 0 秒对应的本机时间（time.time()），页面据此自己走秒
         self._bb_paused: float | None = None      # 暂停时停在的游戏时钟
         self.ults = ultcd.Tracker()               # 对面大招冷却（买活小条下面那条）
@@ -843,8 +843,9 @@ class Live:
             self._bb_scan_err = False
         m = st.raw.get("map") or {}
         clock = m.get("clock_time")
+        # 进游戏（号角前出门）就显示，玩家 2026-10-26 要的「开局就可以显示」；号角前时钟是负数，倒计时照样算
         self._bb_show = bool((self.cfg.buyback_timer or self.cfg.ult_timer) and st.in_match
-                             and isinstance(clock, (int, float)) and clock >= 0)
+                             and isinstance(clock, (int, float)))
         if self._bb_show and self.cfg.ult_timer:
             self._knowledge()                    # 第一次读知识库要一会儿，放在这里读，别拖慢推快照
         if not isinstance(clock, (int, float)):
@@ -859,7 +860,7 @@ class Live:
         me = self._my_slot(st)
         if me and st.buyback:
             self.buyback.sync_self(*me, float(clock), st.buyback[1])
-        if self._bb_show and self.cfg.buyback_timer and self.cfg.buyback_auto and self._bb_paused is None:
+        if self._bb_show and self.cfg.buyback_timer and self.cfg.buyback_auto and self._bb_paused is None and clock >= 0:
             self._scan_buyback(float(clock), me)
 
     def _scan_buyback(self, clock: float, me) -> None:
@@ -928,7 +929,7 @@ class Live:
             raise ValueError("格子不存在")
         clock = self._game_clock()
         if not (self._bb_show and self.cfg.buyback_timer) or clock is None:
-            self.message = "比赛开始后才能记买活"
+            self.message = "进游戏后才能记买活"
             return
         if (side, index) in self.buyback.auto:
             self.message = "自己的买活冷却按 GSI 自动算，不用点"
@@ -989,7 +990,7 @@ class Live:
             raise ValueError("格子不存在")
         clock = self._game_clock()
         if not self._bb_show or clock is None:
-            self.message = "比赛开始后才能记大招"
+            self.message = "进游戏后才能记大招"
             return None
         u = self._ult_of(side, index)
         if not u:

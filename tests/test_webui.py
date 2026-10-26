@@ -584,19 +584,26 @@ class CoachLiveTest(unittest.TestCase):
 
 
     def test_buyback_timer(self):
-        """0:00 后顶栏 10 个小条；点对面英雄开始 8 分钟倒计时、再点取消；自己的按 GSI 自动算、点了不改；暂停时钟停；换局清空"""
+        """进游戏（号角前出门）顶栏就有 10 个小条；点对面英雄开始 8 分钟倒计时、再点取消；自己的按 GSI 自动算、点了不改；暂停时钟停；换局清空"""
         st = self.live.gsi.state
 
         def go(clock, paused=False, cd=None, matchid="123", state="DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"):
             hero = {"name": "npc_dota_hero_phantom_lancer", "alive": True}
-            if cd is not None:
-                hero |= {"buyback_cost": 1500, "buyback_cooldown": cd}
-            st.update({"map": {"matchid": matchid, "game_state": state, "clock_time": clock, "paused": paused},
+            if cd is not None:                    # 真实推送：buyback_cooldown 是冷却结束时的 game_time（比 clock_time 多出号角前那段）
+                hero |= {"buyback_cost": 1500, "buyback_cooldown": cd and clock + 90 + cd}
+            st.update({"map": {"matchid": matchid, "game_state": state, "clock_time": clock, "game_time": clock + 90,
+                               "paused": paused},
                        "player": {"team_name": "radiant", "team_slot": 1}, "hero": hero})
             wait(self.live.submit(self.live.coach_tick))
             return json.loads(self.live.current_snapshot)["buyback"]
 
-        self.assertFalse(go(-30, state="DOTA_GAMERULES_STATE_PRE_GAME")["show"])   # 号角前不显示
+        self.assertFalse(go(-75, state="DOTA_GAMERULES_STATE_STRATEGY_TIME")["show"])   # 策略时间还没进游戏
+        bb = go(-30, state="DOTA_GAMERULES_STATE_PRE_GAME")                       # 号角前出门就显示
+        self.assertTrue(bb["show"])
+        self.assertAlmostEqual(bb["anchor"] / 1000, time.time() + 30, delta=2)
+        wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 0}))
+        self.assertAlmostEqual(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["end"], 450, delta=2)
+        wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 0}))   # 取消，下面接着用这局
         bb = go(1500)
         self.assertTrue(bb["show"])
         self.assertAlmostEqual(bb["anchor"] / 1000, time.time() - 1500, delta=2)   # 页面按这个自己走秒
@@ -655,7 +662,8 @@ class CoachLiveTest(unittest.TestCase):
             go(clock)
         self.assertEqual(self.live._bb_watch.slots[("dire", 0)].expected, 1541)
         frame["img"] = topbar()
-        slot = go(1510)                                           # 1541 才该复活，1510 就活了
+        self.assertIsNone(go(1510)["end"])                        # 彩色一帧还不算复活
+        slot = go(1511)                                           # 1541 才该复活，1510 就活了
         self.assertAlmostEqual(slot["end"], 1510 + 480, delta=1)
         self.assertIn("斧王买活了（截图认的）", self.live.message)
         self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-dire1-buyback-*.png"))), 1)
@@ -666,6 +674,7 @@ class CoachLiveTest(unittest.TestCase):
             go(clock)
         frame["img"] = topbar()
         go(1521)
+        go(1522)
         self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["radiant"][0]["end"])
         self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-radiant1-respawn-*.png"))), 1)
 
