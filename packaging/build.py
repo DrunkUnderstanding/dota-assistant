@@ -41,9 +41,10 @@ def say(msg: str) -> None:
 
 def version() -> str:
     try:
-        rev = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+        rev = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace").stdout.strip()
         dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT,
-                               capture_output=True, text=True).stdout.strip()
+                               capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     except OSError:
         rev, dirty = "", ""
     return f"{datetime.date.today():%Y%m%d}-{rev or 'nogit'}{'-改动未提交' if dirty else ''}"

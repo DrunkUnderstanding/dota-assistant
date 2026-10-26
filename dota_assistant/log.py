@@ -2,7 +2,7 @@
 
 - 文件里记 INFO 及以上（config.toml 的 log_level 可改成 DEBUG）；控制台（「启动助手」的黑窗口）只显示本程序的 WARNING 及以上；
 - 主线程 / 后台线程里没接住的异常带完整堆栈写进去；
-- STRATZ token 不会出现在日志里（输出前替换成 ***，包括异常堆栈）；
+- STRATZ token、AI API Key 不会出现在日志里（输出前替换成 ***，包括异常堆栈）；
 - Electron 界面的输出、页面脚本报错也转进来（logger 名 electron，见 webui.py）。
 出问题时把最新的日志文件发给开发者（控制面板「打开日志」，或 python -m dota_assistant logs）。
 
@@ -64,7 +64,7 @@ def setup(cfg: Config, command: str, to_file: bool = True) -> Path | None:
         root.removeHandler(h)
         h.close()
     _handlers.clear()
-    secrets = [cfg.stratz_token]
+    secrets = [cfg.stratz_token, cfg.ai_api_key]
 
     console = logging.StreamHandler()
     console.setLevel(logging.WARNING)
@@ -107,7 +107,8 @@ def _cleanup() -> None:
 def _header(cfg: Config, command: str) -> None:
     """开头记一下环境：开发机和游戏电脑不是同一台，看日志时先知道是哪台、什么配置"""
     conf = dataclasses.asdict(cfg)
-    conf["stratz_token"] = "已设置" if cfg.stratz_token else "未设置"
+    for k in ("stratz_token", "ai_api_key"):
+        conf[k] = "已设置" if conf[k] else "未设置"
     log.info("==== 启动：%s ====", " ".join(sys.argv[1:]) or command)
     log.info("Python %s | %s | 代码版本 %s", platform.python_version(), platform.platform(), _git_rev())
     log.info("配置：%s", conf)
@@ -119,7 +120,8 @@ def _git_rev() -> str:
         return stamp.read_text(encoding="utf-8").strip()
     try:
         r = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True,
-                           timeout=5, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+                           encoding="utf-8", errors="replace", timeout=5,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
         return r.stdout.strip() or "?"
     except (OSError, subprocess.SubprocessError):
         return "?（没装 git）"

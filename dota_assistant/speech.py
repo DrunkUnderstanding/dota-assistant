@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 _SCRIPT = r"""
 [Console]::InputEncoding = [Text.Encoding]::UTF8
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
 Add-Type -AssemblyName System.Speech
 $s = New-Object System.Speech.Synthesis.SpeechSynthesizer
 $zh = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'zh-*' } | Select-Object -First 1

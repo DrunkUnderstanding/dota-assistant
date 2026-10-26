@@ -1,0 +1,3 @@
+# Windows 批处理必须是 CRLF，否则 cmd 在 chcp 65001 下按字节偏移读错行
+*.bat text eol=crlf
+*.cmd text eol=crlf

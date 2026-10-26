@@ -45,7 +45,9 @@ class LogTest(unittest.TestCase):
         return path.read_text(encoding="utf-8")
 
     def test_writes_file_with_header_and_hides_token(self):
-        path = self.setup()
+        key = "sk-test-api-key-value"
+        path = self.setup(ai_api_key=key)
+        logging.getLogger("dota_assistant.llm").warning("请求失败 x-api-key %s", key)
         logging.getLogger("dota_assistant.data").warning("请求失败 Bearer %s", TOKEN)
         try:
             raise RuntimeError(f"带 token 的异常 {TOKEN}")
@@ -57,6 +59,8 @@ class LogTest(unittest.TestCase):
         self.assertIn("data: 请求失败 Bearer ***", text)
         self.assertIn("Traceback", text)
         self.assertNotIn(TOKEN, text)
+        self.assertIn("ai_api_key': '已设置'", text)
+        self.assertNotIn(key, text)                              # 2026-10-26 以前启动头里明文写了 AI Key
         console = logs._handlers[0].stream.getvalue()
         self.assertNotIn(TOKEN, console)
 
