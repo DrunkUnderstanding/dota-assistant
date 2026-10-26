@@ -215,6 +215,9 @@ def stats_path(cfg: Config) -> Path:
 _STRATZ_BRACKETS = {1: "HERALD_GUARDIAN", 2: "HERALD_GUARDIAN", 3: "CRUSADER_ARCHON", 4: "CRUSADER_ARCHON",
                     5: "LEGEND_ANCIENT", 6: "LEGEND_ANCIENT", 7: "DIVINE_IMMORTAL", 8: "DIVINE_IMMORTAL"}
 _POSITIONS = ("1", "2", "3", "4", "5")
+# 分位置胜率只算打到第几分钟还没结束的局。玩家 2026-10-26 定 30：速推局（一号位拉席克 35 分钟内结束的赢 72%）不算，
+# 回测区分度 0.0666（全部局 0.0673、≥25 分钟 0.0676、≥35 分钟 0.0651），在噪声内。见 HANDOFF 第 29 节
+POSITION_MIN_MINUTES = 30
 
 
 def _stratz_brackets(cfg: Config) -> list[str]:
@@ -224,17 +227,18 @@ def _stratz_brackets(cfg: Config) -> list[str]:
 
 
 def fetch_positions(cfg: Config) -> dict:
-    """{英雄 id: {位置 1~5: [局数, 胜场]}}，STRATZ 最近一周、对应段位。
-    maxTime: 0 不能省：不写时 STRATZ 只算「打到 35 分钟还没结束」的局（约 2/3），
-    后期英雄胜率偏高、前期英雄偏低，最多差 6 个百分点（2026-10-26 实测，见 HANDOFF 第 29 节）"""
-    q = """query($b: [RankBracketBasicEnum]) { heroStats { stats(bracketBasicIds: $b, groupByPosition: true, maxTime: 0) {
+    """{英雄 id: {位置 1~5: [局数, 胜场]}}，STRATZ 最近一周、对应段位，只算打到 POSITION_MIN_MINUTES 分钟的局。
+    STRATZ 不分时间的 stats 给的是「打到 maxTime 分钟还没结束」的局数 / 胜场，maxTime 不写默认 35（2026-10-26 实测），
+    写 0 是全部对局"""
+    q = """query($b: [RankBracketBasicEnum], $mx: Int) { heroStats { stats(bracketBasicIds: $b, groupByPosition: true, maxTime: $mx) {
              heroId position matchCount winCount } } }"""
     out: dict[str, dict[str, list[int]]] = defaultdict(dict)
-    for r in _stratz(cfg, q, b=_stratz_brackets(cfg))["heroStats"]["stats"]:
+    for r in _stratz(cfg, q, b=_stratz_brackets(cfg), mx=POSITION_MIN_MINUTES)["heroStats"]["stats"]:
         pos = (r["position"] or "").removeprefix("POSITION_")
         if pos in _POSITIONS:
             out[str(r["heroId"])][pos] = [r["matchCount"], r["winCount"]]
-    return {"fetched_at": int(time.time()), "brackets": _stratz_brackets(cfg), "heroes": out}
+    return {"fetched_at": int(time.time()), "brackets": _stratz_brackets(cfg), "min_minutes": POSITION_MIN_MINUTES,
+            "heroes": out}
 
 
 def positions_path(cfg: Config) -> Path:
