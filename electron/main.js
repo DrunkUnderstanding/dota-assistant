@@ -1,5 +1,5 @@
 // 界面外壳：由 python -m dota_assistant run 启动，参数 --server=http://127.0.0.1:端口。
-// 只开两个窗口加载 Python 服务的页面，逻辑全在 Python 那边。
+// 只开三个窗口加载 Python 服务的页面，逻辑全在 Python 那边。
 //   叠加层：透明、置顶、鼠标穿透、不抢焦点。它是一个普通的桌面窗口，盖在「无边框窗口」模式的 Dota 上面，
 //           不注入游戏、不读游戏内存（独占全屏下看不到，这是 Windows 的限制）。
 //           卡片右上角有把锁：点开（或按 F7）后鼠标移到卡片上就能按住拖动、按住右边缘的拉手改宽度，再点一下锁固定、恢复穿透；
@@ -8,6 +8,8 @@
 //           「哪里接鼠标」由页面报可点区域，主进程每 30ms 看系统光标在不在区域里来切换穿透。
 //           不靠页面的 mouseover / mouseout：窗口一从穿透切到接鼠标，Chromium 就会补发一次 mouseout，
 //           页面以为鼠标离开了按钮又切回穿透，按钮永远点不到（2026-10-22 实测出的问题）。
+//   买活 / 大招计时条：和叠加层一样透明、置顶、不抢焦点，盖在屏幕最上面一条（游戏顶栏），每个英雄头像下面一个买活小条、对面的再加一个大招小条；
+//           只有小条接鼠标（页面报区域，同上），不能拖，位置按屏幕高度换算（web/topbar.html）。
 //   控制面板：普通窗口，关掉它 = 退出助手。
 // 日志：往 stdout 写「级别 内容」一行，Python（webui._pipe_electron）收进 logs/ 下的日志文件；页面脚本报错也转过去。
 const path = require('path');
@@ -27,6 +29,11 @@ let resize = null;       // 改宽度中：{ dx, timer }
 const MIN_WIDTH = 340;   // 再窄推荐卡片就挤不下了
 let hitRects = [];       // 页面报来的可点区域（窗口内 CSS 像素 = 逻辑像素）：固定时是锁和 ×，解锁时是整张卡片
 let grabbing = false;    // 窗口现在是否接鼠标
+let topbar = null;       // 买活计时条
+let topbarRects = [];    // 它的可点区域（小条）
+let topbarGrabbing = false;
+const TOPBAR_HEIGHT = 260; // 买活 / 大招计时条窗口高（1080 高的屏幕上；Dota 顶栏头像高 40，买活小条在 43~60、对面大招小条在 62~79，
+                          // 右键大招小条弹的菜单从 83 往下约 170）；只有小条和打开的菜单接鼠标，其余透明点穿
 
 function log(level, ...parts) {
   const text = parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ');
@@ -121,6 +128,43 @@ function createOverlay(cfg) {
   overlay.on('closed', () => { clearInterval(timer); clearInterval(hitTimer); stopDrag(false); stopResize(false); overlay = null; });
 }
 
+// 买活计时条：整屏宽、顶上一条。Dota 界面按屏幕高度缩放，scale 传给页面换算头像位置
+function createTopbar() {
+  const { bounds } = display;
+  const scale = bounds.height / 1080;
+  const height = Math.round(TOPBAR_HEIGHT * scale);
+  topbar = new BrowserWindow({
+    x: bounds.x, y: bounds.y, width: bounds.width, height,
+    transparent: true, frame: false, resizable: false, movable: false, focusable: false,
+    skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    webPreferences: { backgroundThrottling: false, preload: path.join(__dirname, 'preload.js') },
+  });
+  log('INFO', `买活计时条：(${bounds.x},${bounds.y}) ${bounds.width}x${height}，缩放 ${scale.toFixed(3)}`);
+  watch(topbar, '买活计时');
+  topbar.setAlwaysOnTop(true, 'screen-saver');
+  topbar.setContentProtection(true);       // 同叠加层：不进截图
+  topbar.setIgnoreMouseEvents(true);
+  topbarGrabbing = false;
+  const hitTimer = setInterval(applyTopbarMouse, 30);
+  topbar.loadURL(`${SERVER}/topbar.html?scale=${scale}`);
+  topbar.once('ready-to-show', () => topbar.showInactive());
+  const timer = setInterval(() => {
+    if (topbar && !topbar.isDestroyed()) topbar.moveTop();
+  }, 3000);
+  topbar.on('closed', () => { clearInterval(timer); clearInterval(hitTimer); topbar = null; });
+}
+
+function applyTopbarMouse() {
+  if (!topbar || topbar.isDestroyed()) return;
+  const c = screen.getCursorScreenPoint();
+  const b = topbar.getBounds();
+  const want = topbarRects.some((r) => c.x - b.x >= r.x && c.x - b.x < r.x + r.w && c.y - b.y >= r.y && c.y - b.y < r.y + r.h);
+  if (want === topbarGrabbing) return;
+  topbarGrabbing = want;
+  topbar.setIgnoreMouseEvents(!want);
+}
+
 // ---------- 解锁 / 拖动 ----------
 
 function cursorOnHitRects() {
@@ -210,7 +254,13 @@ ipcMain.on('overlay:locked', (e, v) => {
   if (locked) { stopDrag(); stopResize(); }
 });
 ipcMain.on('overlay:hit-rects', (e, rects) => {
-  if (!fromOverlay(e) || !Array.isArray(rects)) return;
+  if (!Array.isArray(rects)) return;
+  if (topbar && !topbar.isDestroyed() && e.sender === topbar.webContents) {
+    topbarRects = rects.filter((r) => [r.x, r.y, r.w, r.h].every(Number.isFinite));
+    applyTopbarMouse();
+    return;
+  }
+  if (!fromOverlay(e)) return;
   hitRects = rects.filter((r) => [r.x, r.y, r.w, r.h].every(Number.isFinite));
   applyMouse();
 });
@@ -241,6 +291,7 @@ app.whenReady().then(async () => {
   log('INFO', `Electron ${process.versions.electron} 启动，服务 ${SERVER}`);
   const cfg = await loadConfig();
   createOverlay(cfg);
+  if (cfg.buyback_timer !== false || cfg.ult_timer !== false) createTopbar();
   createPanel();
 });
 

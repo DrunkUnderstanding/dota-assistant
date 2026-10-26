@@ -40,6 +40,9 @@ class Config:
     jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野 / 抢莲花，jungle.py）；局内点 × 能按种类关掉这一局的
     stack_second: int = 53            # 屯野提醒的秒数（x:53 拉）
     pull_second: int = 15             # 拉野提醒的秒数（x:15 拉）；不同野点 / 阵营差几秒，按自己那边调
+    buyback_timer: bool = True        # 买活计时：游戏顶栏每个英雄头像下面一个小条，看到谁买活就点一下（自己的按 GSI 自动算，buyback.py）
+    buyback_auto: bool = True         # 买活自动记：比赛中每秒截一次 Dota 窗口看顶栏，头像变回彩色时复活倒计时没走完 = 买活（buybackscan.py，未实测）
+    ult_timer: bool = True            # 对面大招冷却：买活小条下面再一条，看到对面放大招就点一下、右键菜单改大招等级 / 勾减冷却（ultcd.py）
     ai_plan: bool = True              # 本局要点里加「AI 打法」（每局一次，几十秒）
     ai_provider: str = "claude_code"  # AI 来源：claude_code（本机 Claude Code 订阅）/ anthropic（自己的 API Key）/ openai（OpenAI 兼容接口）
     ai_model: str = "claude-opus-5-5"

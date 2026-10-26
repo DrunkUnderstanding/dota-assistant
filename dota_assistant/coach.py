@@ -38,6 +38,9 @@ RHYTHM_RATIO = 0.80          # 正补 / 经济低于同分段平均的 80% 才�
 CHECKPOINTS = range(10, 61, 5)
 REPEAT_AFTER = 6             # 同一条缺口还没补上，隔几分钟再提醒一次（最多 2 次）
 MAX_PER_MOMENT = 2
+# 玩家 2026-10-26：出装建议要「大数据 + 本局」两种依据，缺一种只算提示。针对装（看对面机制）和按死法补装
+# 都还没有「出了更容易赢」的数据（HANDOFF 第 33 节：剑圣对上幻象英雄，哪件装备都测不出效果），先都算提示
+NO_DATA = "还没有大数据说明出了更容易赢"
 SUPPORT_POSITIONS = (4, 5)   # 辅助：对抗装（黑皇杖 / 金箍棒）不催你出，改成「提醒核心」
 
 
@@ -155,6 +158,7 @@ class Need:
     evidence: list[str] = field(default_factory=list)   # 依据（原句 / 数字），复盘时显示
     brief: str = ""               # 开局（本局要点卡片）的说法：那时还没到点，不能说「你还没有」
     minute: float = 0             # 建议几分钟出（出装顺序用）；0 = 按同分段中位购买时间
+    tip: str = ""                 # 非空 = 只算提示，写缺哪种依据（不进出装顺序 / 「下一件」）
 
 
 @dataclass(frozen=True)
@@ -266,17 +270,17 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         due = minute + CORE_LATE if minute else BKB_FALLBACK_MIN
         who = "、".join(f"{e.name}（{hits[0][0].name}）" for e, hits in ctrl)
         pierce = [f"{e.name}的{ab.name}" for e, hits in ctrl for ab, _, _ in hits if ab.pierces_immunity]
-        text = f"对面 {len(ctrl)} 个英雄有控制，你还没有黑皇杖，优先做"
+        text = f"对面 {len(ctrl)} 个英雄有控制，你还没有黑皇杖"
         when = (f"比同分段一般（{med:.0f} 分钟）早，{minute:.0f} 分钟左右出" if minute and minute < med
                 else f"{due:.0f} 分钟前要有")
-        early = f"对面 {len(ctrl)} 个英雄有控制（{who}），黑皇杖优先，{when}"
+        early = f"对面 {len(ctrl)} 个英雄有控制（{who}），可以考虑黑皇杖，{when}"
         tail = f"；注意 {'、'.join(dict.fromkeys(pierce))} 无视技能免疫，黑皇杖挡不住" if pierce else ""
         if support:
             notes.append(f"对面 {len(ctrl)} 个英雄有控制（{who}），提醒核心早出黑皇杖{tail}")
         else:
             needs.append(Need("bkb", text + tail, ("black_king_bar",), due, 0,
                               [f"{e.name}·{ab.name}：{s}" for e, hits in ctrl for ab, _, s in hits[:1]], early + tail,
-                              minute))
+                              minute, NO_DATA))
 
     # 2. 闪避：自己能处理就不推
     eva = [(e, _base_hits(e, "提供闪避")) for e in enemies]
@@ -298,7 +302,7 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
             first, second = (base.items[k].name for k in keys)
             needs.append(Need("mkb", f"对面{names}有闪避，考虑{first}或{second}", tuple(keys),
                               30, 2, [f"{e.name}·{hits[0][0].name}：{hits[0][2]}" for e, hits in eva],
-                              f"对面{names}有闪避，后期考虑{first}或{second}"))
+                              f"对面{names}有闪避，后期考虑{first}或{second}", tip=NO_DATA))
 
     # 3. 隐身：提醒队伍反隐，自己有反隐也说一声
     inv = [(e, e.with_tag("隐身")) for e in enemies]
@@ -339,7 +343,7 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         due = med + CORE_LATE if med else COUNTER_FALLBACK_MIN
         needs.append(Need(c.key, text, (k,), due, 2,
                           [f"{e.name}·{f[0][0]}：{f[0][1]}" for e, f in hits] + [f"{name}：{proof}"],
-                          f"{text}（同分段 {share:.0%} 的局会出，一般 {med:.0f} 分钟）"))
+                          f"{text}（同分段 {share:.0%} 的局会出，一般 {med:.0f} 分钟）", tip=NO_DATA))
     return needs, notes
 
 
@@ -394,8 +398,8 @@ class Coach:
         self.deaths: dict[str, int] = {}                 # 死法（itembuild.DeathRule.key）→ 本局几次
 
     def on_death(self, rec, st: State) -> list[tuple[str, str]]:
-        """死亡复盘（death.Recap）→ 数这种死法本局第几次；超过两次（第 DEATH_MIN 次起）才推对应装备，
-        并把它提到「下一件」最前面。保命手段没用上的那次照样算次数，只是那次不推"""
+        """死亡复盘（death.Recap）→ 数这种死法本局第几次；超过两次（第 DEATH_MIN 次起）才说对应装备。
+        只有本局依据、没有大数据依据，所以只算提示，不动「下一件」。保命手段没用上的那次照样算次数，只是那次不说"""
         from . import itembuild
         cause = itembuild.death_cause(rec)
         if cause is None or self.base is None:
@@ -407,11 +411,7 @@ class Coach:
         pick = itembuild.death_pick(rec, st.owned, timings, self.base, self.tree)
         if pick is None:
             return []
-        label = cause.label
-        steps = [x for x in self.build.steps if x.key != pick.key]
-        self.build.steps = [itembuild.Step(pick.key, pick.name, st.minute, "death", f"{n} 次{label}",
-                                           pick.quote, urgent=True)] + steps
-        return [("warn", f"本局第 {n} 次{label}，{pick.name}提到下一件：{pick.why}")]
+        return [("row", f"提示：本局第 {n} 次{cause.label}，可以考虑{pick.name}：{pick.why}（{NO_DATA}）")]
 
     def next_line(self, st: State) -> str | None:
         """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用；格子满了说卖哪件，后期说买了够不够买活"""
@@ -526,7 +526,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None) -> str:
         for n in coach.tick(st, checkpoint=why == "时间点"):
             got = min((t for t in (_when(buys, i, tree) for i in n.items) if t is not None), default=None)
             tail = (f"（实际 {_mmss(got)} 补上）" if got is not None else "（整局没补）") if n.items else ""
-            L.append(f"{_mmss(minute)} [{why}] {n.text}{tail}")
+            L.append(f"{_mmss(minute)} [{why}] {'提示：' if n.tip else ''}{n.text}{tail}")
         if why == "死亡" and (nxt := coach.next_line(st)):
             L.append(f"{_mmss(minute)} [死亡] {nxt}（录像里没有当时的钱）")
     return "\n".join(L)

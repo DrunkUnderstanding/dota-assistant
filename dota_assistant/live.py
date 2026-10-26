@@ -4,6 +4,8 @@
 对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片；
 死亡时同一张卡片先说「刚才是怎么死的」（death.py，看 GSI 里自己死前 20 秒的血量 / 状态 / 保命装备），复活后自动收起。
 对线期按位置 / 英雄到点前几秒提醒封野、拉野、屯野、抢莲花（jungle.py），叠在卡片顶上一行，没卡片时单独一张小卡片，过点自己收起。
+双方 10 个英雄的买活冷却（buyback.py）显示在游戏顶栏头像正下方（另一个透明窗口 web/topbar.html）：自己的按 GSI 自动算，别人的玩家点一下开始计时；
+对面 5 个英雄头像下面再加一条大招冷却（ultcd.py）：看到对面放大招点一下开始计时，右键弹菜单改大招等级、勾天赋 / 神杖 / 玲珑心减冷却。
 选人时点某个推荐英雄，就按「如果选它」先做一张同样的要点卡片（数据页 + AI 打法页），看完点 × 回到推荐。
 
 「控制面板的格子」就是这里的 self.slots，识别和网页输入都只往里写。
@@ -26,7 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, coach, config, death, gameplan, grid, jungle, lanestate, llm, roles
+from . import brief, buyback, buybackscan, coach, config, death, gameplan, grid, jungle, lanestate, llm, roles, ultcd
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
@@ -42,10 +44,14 @@ OPACITY_MIN = 0.3                              # 叠加层底色再透就看不�
 OVERLAY_WIDTH = (300, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内
 SIDES = ("radiant", "dire")
 DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒（复活很快 / 演示加速时也看得到）
+# 死后第几秒截一张 Dota 窗口，和死前推送存在一起（shots/deaths/<时间>-<秒>s.png）。
+# 2026-10-26：先看死亡画面上有没有「谁杀的 / 受到的伤害」，有的话再做识别（出装要看这局谁威胁最大）
+DEATH_SHOT_DELAYS = (0, 2)
 SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
 ROLE_RETRY = 3.0                               # 认位置：没认出来隔几秒再试
 GRID_CONFIRM_MIN = 0.5                         # 顶栏分数至少这么多，再加上网格核对才算认出
 SCAN_MODES = ("auto", "manual")                # 自动识别 / 手动输入
+CLOCK_SLACK = 1.5                              # 买活倒计时用的「游戏时钟 0 秒对应的本机时间」差多少秒才改（GSI 时钟是整秒、推送有延迟）
 log = logging.getLogger(__name__)
 
 
@@ -109,7 +115,8 @@ class Live:
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
                  overlay_file: Path | None = None, coach_prepare: Callable | None = None,
                  brief_build: Callable | None = None, plan_build: Callable | None = None,
-                 ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None):
+                 ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None,
+                 ocr: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.config_file: Path | None = None    # 账号设置写到哪；None = 项目根目录的 config.toml，测试里换成临时文件
@@ -169,10 +176,22 @@ class Live:
         self._coach_checkpoint = 0
         self._death_names: tuple | None = None   # 死亡复盘用的中文名 + 保命技能（按英雄缓存）
         self._death_shown = 0.0                  # 死亡卡片弹出的时间；复活后收起
+        self._death_shots: list[tuple[float, Path]] = []   # 待截的死亡画面：(到点时间, 存到哪)
         self.jungle: jungle.Plan | None = None   # 这局提醒哪些野区动作（局内提醒准备好时按位置 + 同分段数据定）
         self.jungle_cue: jungle.Cue | None = None   # 正显示的那条
         self._cue_muted: set[str] = set()        # 这局点 × 关掉的种类
         self._lane_logged: set[int] = set()      # 这局 3 / 6 / 10 分钟哪几个已经记进 data/lane_log.jsonl（lanestate.py）
+        self.buyback = buyback.Tracker()          # 双方买活冷却（顶栏头像下面的小条）
+        self._bb_match: str | None = None         # 为哪一局记的；换局清空
+        self._bb_show = False                     # 比赛开始（0:00）后才显示
+        self._bb_anchor: float | None = None      # 游戏时钟 0 秒对应的本机时间（time.time()），页面据此自己走秒
+        self._bb_paused: float | None = None      # 暂停时停在的游戏时钟
+        self.ults = ultcd.Tracker()               # 对面大招冷却（买活小条下面那条）
+        self._bb_watch = buybackscan.Watcher()    # 买活自动记：每秒看顶栏头像灰没灰
+        self._bb_scan_err = False                 # 截图 / 认图出过错（这局只记一次日志）
+        self._ocr = ocr or roles.ocr              # 认复活倒计时（Windows OCR），测试换成假的
+        self._kb_base = None                      # 知识库（查对面大招冷却用，第一次用到才读；读不到是 False）
+        self._kb_ops: dict = {}                   # 大招神杖 / 魔晶冷却的写法（ultcd.load_ops）
 
         # ---- 选人时「如果选它」：点推荐英雄做的要点卡片 ----
         self.pick_key: tuple | None = None       # (英雄 id, 局面 key, 位置)；None = 没在看
@@ -355,6 +374,12 @@ class Live:
             self.explain_pick(int(a["hero_id"]))
         elif t == "brief_page":
             self.set_brief_page(str(a.get("page")))
+        elif t == "buyback":
+            self.mark_buyback(str(a.get("side")), int(a["index"]))
+        elif t == "ult":
+            self.mark_ult(str(a.get("side")), int(a["index"]))
+        elif t == "ult_set":
+            self.set_ult(str(a.get("side")), int(a["index"]), a.get("level"), a.get("mod"), a.get("on"))
         elif t == "toggle_overlay":
             self.toggle_overlay()
         elif t == "toggle_lock":
@@ -690,6 +715,7 @@ class Live:
     # ---------- 局内缺口提醒 ----------
 
     def coach_tick(self) -> None:
+        self._take_death_shots()
         st = self.gsi.state if self.gsi else None
         selecting = bool(st and st.alive and st.game_state == SELECTION_STATE)
         if selecting and not self._in_selection:
@@ -707,11 +733,13 @@ class Live:
         if not (st and st.alive and (st.in_match or strategy)):
             self.coach_card = None               # 比赛结束 / 回到选人：收起卡片
             self.jungle_cue = None
+            self._bb_show = False
             return
         # 天梯的 matchid 选人时就有；本地 / 机器人局一直是 0（2026-10-23 实测），连开两局会被当成同一局
         key = st.match_id if st.match_id not in ("", "0") else f"本地{self._drafts_seen}"
         if key != self.brief_match:              # 策略时间就做；错过了（中途开助手）进游戏也补一张
             self._start_brief(key)
+        self._buyback_tick(st, key)
         if strategy:
             return
         if st.clock_minutes >= 0 and key != self._horn_match:
@@ -742,7 +770,8 @@ class Live:
             needs = self.coach.tick(cst, checkpoint=bool(passed))
             by_death = self.coach.on_death(recap, cst) if recap else []   # 先按死法调顺序，再说下一件
             nxt = self.coach.next_line(cst)
-        lines = [("warn" if n.priority == 0 else "row", n.text) for n in needs]
+        lines = [("row", f"提示：{n.text}（{n.tip}）") if n.tip else ("warn" if n.priority == 0 else "row", n.text)
+                 for n in needs]
         # 死了正好回家买东西：每次死亡都说下一件买什么；时间点的提醒只在本来就要弹的时候顺带一句
         shop = ([("head", "回家买")] if died else []) + by_death + ([("row" if died else "dim", nxt)] if nxt else [])             if (nxt or by_death) and (died or lines) else []
         if recap and recap.lines:
@@ -802,6 +831,217 @@ class Live:
             except OSError:
                 log.warning("对线记录没写进去", exc_info=True)
 
+    # ---------- 买活计时 ----------
+
+    def _buyback_tick(self, st, key: str) -> None:
+        """换局清空；对上游戏时钟（页面自己走秒，这里只在差得多 / 暂停时改）；自己的冷却按 GSI 自动算"""
+        if key != self._bb_match:
+            self._bb_match = key
+            self.buyback.reset()
+            self.ults.reset()
+            self._bb_watch.reset()
+            self._bb_scan_err = False
+        m = st.raw.get("map") or {}
+        clock = m.get("clock_time")
+        self._bb_show = bool((self.cfg.buyback_timer or self.cfg.ult_timer) and st.in_match
+                             and isinstance(clock, (int, float)) and clock >= 0)
+        if self._bb_show and self.cfg.ult_timer:
+            self._knowledge()                    # 第一次读知识库要一会儿，放在这里读，别拖慢推快照
+        if not isinstance(clock, (int, float)):
+            return
+        if m.get("paused"):
+            self._bb_paused = float(clock)
+        else:
+            self._bb_paused = None
+            anchor = st.updated - clock
+            if self._bb_anchor is None or abs(anchor - self._bb_anchor) > CLOCK_SLACK:
+                self._bb_anchor = anchor
+        me = self._my_slot(st)
+        if me and st.buyback:
+            self.buyback.sync_self(*me, float(clock), st.buyback[1])
+        if self._bb_show and self.cfg.buyback_timer and self.cfg.buyback_auto and self._bb_paused is None:
+            self._scan_buyback(float(clock), me)
+
+    def _scan_buyback(self, clock: float, me) -> None:
+        """截一帧 Dota 窗口看顶栏：刚死的在后台认复活倒计时，复活得比倒计时早 = 买活（buybackscan.py）"""
+        try:
+            img = self.grab()
+            if getattr(self.screen, "source", "window") != "window":
+                return                           # 截到的是整块屏幕（Dota 切出去了），顶栏不在那儿
+            deaths, revs = self._bb_watch.update(img, clock, skip={me} if me else ())
+        except Exception:
+            if not self._bb_scan_err:
+                self._bb_scan_err = True
+                log.warning("买活自动记：截图 / 认顶栏出错，这局不再记日志", exc_info=True)
+            return
+        match = self._bb_match
+        for d in deaths:
+            def work(d=d):
+                try:
+                    sec = buybackscan.read_timer(d, lambda im: [w.text for w in self._ocr(im)])
+                except Exception as e:           # 没有 OCR 之类
+                    log.warning("买活自动记：复活倒计时没认（%s）", e)
+                    sec = None
+                self.submit(self._timer_read, match, d, sec)
+            threading.Thread(target=work, daemon=True, name="buyback").start()
+        for rev in revs:
+            self._revived(rev)
+
+    def _timer_read(self, match, d, sec) -> None:
+        if match == self._bb_match:
+            self._bb_watch.set_timer(d, sec)
+            log.info("买活自动记：%s %s 死了，复活倒计时认到 %s", coach._mmss(d.clock / 60), self._slot_name(d.side, d.index), sec)
+
+    def _slot_name(self, side: str, index: int) -> str:
+        return self.slots[side][index] or f"{'天辉' if side == 'radiant' else '夜魇'}第 {index + 1} 个"
+
+    def _revived(self, rev) -> None:
+        name, when, bb = self._slot_name(rev.side, rev.index), coach._mmss(rev.clock / 60), rev.buyback
+        log.info("买活自动记：%s %s 复活（灰了 %.0f 秒，倒计时 %s → 该在 %s 复活）→ %s", when, name, rev.dead_for, rev.seconds,
+                 coach._mmss(rev.expected / 60) if rev.expected is not None else "?",
+                 {True: "买活", False: "正常复活", None: "倒计时没认出来，不记"}[bb])
+        try:
+            buybackscan.save_sample(rev, {True: "buyback", False: "respawn", None: "unknown"}[bb] + f"-{rev.seconds}")
+        except OSError:
+            log.warning("买活样本没存下来", exc_info=True)
+        if bb and self.buyback.start(rev.side, rev.index, rev.clock):
+            self.message = f"{when} {name}买活了（截图认的），冷却 8:00 开始倒计时；认错了点他头像下面的小条取消"
+
+    def _game_clock(self) -> float | None:
+        if self._bb_paused is not None:
+            return self._bb_paused
+        return time.time() - self._bb_anchor if self._bb_anchor is not None else None
+
+    def _my_slot(self, st) -> tuple[str, int] | None:
+        """我在顶栏哪一格：GSI 的 team_slot，没有就在格子里找我的英雄"""
+        side = st.team
+        if side not in SIDES:
+            return None
+        if st.team_slot is not None and 0 <= st.team_slot < 5:
+            return side, st.team_slot
+        i = next((i for i, t in enumerate(self.slots[side]) if (h := self._hero(t)) and h.key == st.my_hero_key), None)
+        return (side, i) if i is not None else None
+
+    def mark_buyback(self, side: str, index: int) -> None:
+        """顶栏头像下面的小条被点了：这个英雄刚买活，开始 8 分钟倒计时；正在倒计时就取消（点错了）"""
+        if side not in SIDES or not 0 <= index < 5:
+            raise ValueError("格子不存在")
+        clock = self._game_clock()
+        if not (self._bb_show and self.cfg.buyback_timer) or clock is None:
+            self.message = "比赛开始后才能记买活"
+            return
+        if (side, index) in self.buyback.auto:
+            self.message = "自己的买活冷却按 GSI 自动算，不用点"
+            return
+        name = self.slots[side][index] or f"{'天辉' if side == 'radiant' else '夜魇'}第 {index + 1} 个"
+        if self.buyback.mark(side, index, clock):
+            self.message = f"{name}买活了，冷却 {buyback.COOLDOWN // 60}:00 开始倒计时（点错了再点一下取消）"
+        else:
+            self.message = f"已取消{name}的买活计时"
+        log.info("买活计时 %s（游戏时间 %s）", self.message, coach._mmss(clock / 60))
+
+    def buyback_view(self) -> dict:
+        """给 topbar.html：冷却结束的游戏时钟 + 时钟锚点，页面自己每秒算剩多少（快照不用每秒变）"""
+        clock = self._game_clock()
+        if not self._bb_show or clock is None or self._bb_anchor is None:
+            return {"show": False}
+        st = self.gsi.state
+        me = self._my_slot(st)
+        return {"show": True, "anchor": round(self._bb_anchor * 1000), "paused": self._bb_paused,
+                "ready_show": buyback.READY_SHOW, "ult_ready_show": ultcd.READY_SHOW, "my_side": st.team,
+                "buyback_on": self.cfg.buyback_timer,
+                "slots": {s: [{"name": self.slots[s][i], "end": self.buyback.end(s, i, clock), "me": me == (s, i),
+                               "auto": (s, i) in self.buyback.auto, "ult": self._ult_view(s, i, clock)}
+                              for i in range(5)] for s in SIDES}}
+
+    # ---------- 对面大招冷却 ----------
+
+    def _knowledge(self):
+        if self._kb_base is None:
+            from . import kb
+            self._kb_base = kb.KnowledgeBase.load() or False
+            self._kb_ops = ultcd.load_ops(self._kb_base or None)
+        return self._kb_base or None
+
+    def _ult_of(self, side: str, index: int):
+        """顶栏这一格是对面的、填了英雄、知识库里有要计时的大招：(英雄, 大招, 能勾的减冷却)，否则 None"""
+        mine = self.side()
+        if not self.cfg.ult_timer or mine not in SIDES or side == mine:
+            return None
+        h = self._hero(self.slots[side][index])
+        base = self._knowledge() if h else None
+        hk = base.heroes.get(h.id) if base else None
+        ab = ultcd.pick(hk) if hk else None
+        return (hk, ab, ultcd.mods(hk, ab, base, self._kb_ops)) if ab else None
+
+    def _ult_cd(self, side: str, index: int, ab, mods) -> tuple[int, bool, list, float]:
+        """(按几级大招算, 等级是不是菜单里选的, 勾了的减冷却, 算出来的冷却)"""
+        key = (side, index)
+        lv = self.ults.levels.get(key)
+        fixed = lv is not None
+        if not fixed:
+            lv = ultcd.guess_level(self.gsi.state.level if self.gsi else None)
+        on = [m for m in mods if m.key in self.ults.mods.get(key, ())]
+        return lv, fixed, on, ultcd.cooldown(ab, lv, on)
+
+    def _ult_check(self, side: str, index: int):
+        if side not in SIDES or not 0 <= index < 5:
+            raise ValueError("格子不存在")
+        clock = self._game_clock()
+        if not self._bb_show or clock is None:
+            self.message = "比赛开始后才能记大招"
+            return None
+        u = self._ult_of(side, index)
+        if not u:
+            self.message = "这一格没有要计时的大招（不是对面 / 没填英雄 / 知识库里没有）"
+            return None
+        return clock, *u
+
+    def mark_ult(self, side: str, index: int) -> None:
+        """对面头像下面的大招小条被点了：他刚放了大招，开始倒计时；正在倒计时就取消（点错了）"""
+        if not (u := self._ult_check(side, index)):
+            return
+        clock, hk, ab, mods = u
+        lv, _, on, cd = self._ult_cd(side, index, ab, mods)
+        extra = "、".join(m.label.split("：")[0] for m in on)
+        if self.ults.mark(side, index, clock, cd):
+            self.message = (f"{hk.name}放了{ab.name}，按 {lv} 级{'+' + extra if extra else ''}算冷却 {cd:g} 秒开始倒计时"
+                            "（点错了再点一下取消，右键改等级 / 减冷却）")
+        else:
+            self.message = f"已取消{hk.name}{ab.name}的计时"
+        log.info("大招计时 %s（游戏时间 %s）", self.message, coach._mmss(clock / 60))
+
+    def set_ult(self, side: str, index: int, level=None, mod=None, on=None) -> None:
+        """右键菜单：选大招等级 / 勾减冷却，这局一直按选的算；正在冷却的跟着重算（从放的时候算起）"""
+        if not (u := self._ult_check(side, index)):
+            return
+        _, hk, ab, mods = u
+        key = (side, index)
+        if level is not None:
+            if int(level) not in range(1, len(ultcd.ULT_LEVELS) + 1):
+                raise ValueError("大招等级只有 1~3")
+            self.ults.levels[key] = int(level)
+        if mod is not None:
+            if mod not in {m.key for m in mods}:
+                raise ValueError(f"{ab.name}没有这项减冷却：{mod}")
+            got = self.ults.mods.setdefault(key, set())
+            got.add(mod) if on else got.discard(mod)
+        lv, _, picked, cd = self._ult_cd(side, index, ab, mods)
+        self.ults.recool(side, index, cd)
+        extra = "、".join(m.label.split("：")[0] for m in picked)
+        self.message = f"{hk.name}的{ab.name}按 {lv} 级{'+' + extra if extra else ''}算：冷却 {cd:g} 秒"
+        log.info("大招计时 %s", self.message)
+
+    def _ult_view(self, side: str, index: int, clock: float) -> dict | None:
+        u = self._ult_of(side, index)
+        if not u:
+            return None
+        hk, ab, mods = u
+        lv, fixed, on, cd = self._ult_cd(side, index, ab, mods)
+        return {"hero": hk.name, "name": ab.name, "end": self.ults.end(side, index, clock), "level": lv, "fixed": fixed,
+                "cd": cd, "cds": "/".join(f"{c:g}" for c in ultcd.cooldowns(ab)),
+                "mods": [{"key": m.key, "label": m.label, "on": m in on} for m in mods]}
+
     def mute_cue(self) -> None:
         """点 × / 按 F8 关掉正显示的野区提醒：这局不再提醒这一种"""
         kind = self.jungle_cue.kind
@@ -819,12 +1059,30 @@ class Live:
         history = st.history()
         rec = death.analyze(history, st.team, *self._death_names[1:])
         try:
-            death.dump(history, rec)
+            path = death.dump(history, rec)
         except OSError:
             log.warning("死亡复盘：推送没存下来", exc_info=True)
+        else:
+            now = time.monotonic()
+            self._death_shots = [(now + d, path.with_name(f"{path.stem}-{d}s.png")) for d in DEATH_SHOT_DELAYS]
+            self._take_death_shots()
         if rec is None:
             log.info("死亡复盘：历史里没有死前的推送（刚开助手？）")
         return rec
+
+    def _take_death_shots(self) -> None:
+        """到点的死亡截图截下来（只截 Dota 窗口，同 F10）"""
+        now = time.monotonic()
+        due = [p for t, p in self._death_shots if t <= now]
+        if not due:
+            return
+        self._death_shots = [(t, p) for t, p in self._death_shots if t > now]
+        try:
+            img = self.grab()
+            for p in due:
+                write_image(p, img)
+        except Exception:                        # 截不到不影响别的
+            log.warning("死亡截图没截下来", exc_info=True)
 
     def _start_coach(self, key: str) -> None:
         """敌方阵容用选人时格子里的（识别 / 手动填的），自己的英雄用 GSI 的"""
@@ -1170,6 +1428,7 @@ class Live:
             "config": self.settings_view(),
             "slots": slots,
             "bans_text": self.bans_text,
+            "buyback": self.buyback_view(),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

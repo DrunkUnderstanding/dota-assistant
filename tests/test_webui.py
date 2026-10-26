@@ -8,8 +8,10 @@ import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
+import numpy as np
+
 from dota_assistant import advisor as adv, config, grid
-from dota_assistant import brief, coach, death, gameplan, lanestate
+from dota_assistant import brief, buybackscan, coach, death, gameplan, lanestate
 from dota_assistant import live as live_mod
 from dota_assistant.config import Config
 from dota_assistant.engine import Engine, Suggestion
@@ -554,6 +556,7 @@ class CoachLiveTest(unittest.TestCase):
         """死亡：同一张卡片先说怎么死的，再列缺口；复活后自动收起"""
         death.DUMP_DIR = TMP / "deaths"
         self.live._death_names = ("phantom_lancer", {}, set())     # 不读知识库
+        self.live.screen, self.live._screen_factory = None, lambda: SimpleNamespace(grab=lambda: np.zeros((9, 16, 3), np.uint8))
         self.push(0)
         self.wait_coach()
         wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))
@@ -566,6 +569,7 @@ class CoachLiveTest(unittest.TestCase):
         self.assertTrue(lines[0]["text"].startswith("被瞬间打爆"), lines)
         self.assertEqual(lines[-2:], [{"kind": "head", "text": "还缺"}, {"kind": "warn", "text": "缺黑皇杖"}])
         self.assertEqual(len(list(death.DUMP_DIR.glob("*.json"))), 1)   # 死前推送存了一份
+        self.assertEqual(len(list(death.DUMP_DIR.glob("*-0s.png"))), 1)   # 死的那一刻截了 Dota 窗口；2 秒后那张还没到点
         old = live_mod.DEATH_MIN_SHOW
         live_mod.DEATH_MIN_SHOW = 0
         try:
@@ -573,6 +577,155 @@ class CoachLiveTest(unittest.TestCase):
             self.assertFalse(self.push(20.8, deaths=1)["visible"])              # 复活：收起
         finally:
             live_mod.DEATH_MIN_SHOW = old
+
+
+    def test_buyback_timer(self):
+        """0:00 后顶栏 10 个小条；点对面英雄开始 8 分钟倒计时、再点取消；自己的按 GSI 自动算、点了不改；暂停时钟停；换局清空"""
+        st = self.live.gsi.state
+
+        def go(clock, paused=False, cd=None, matchid="123", state="DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"):
+            hero = {"name": "npc_dota_hero_phantom_lancer", "alive": True}
+            if cd is not None:
+                hero |= {"buyback_cost": 1500, "buyback_cooldown": cd}
+            st.update({"map": {"matchid": matchid, "game_state": state, "clock_time": clock, "paused": paused},
+                       "player": {"team_name": "radiant", "team_slot": 1}, "hero": hero})
+            wait(self.live.submit(self.live.coach_tick))
+            return json.loads(self.live.current_snapshot)["buyback"]
+
+        self.assertFalse(go(-30, state="DOTA_GAMERULES_STATE_PRE_GAME")["show"])   # 号角前不显示
+        bb = go(1500)
+        self.assertTrue(bb["show"])
+        self.assertAlmostEqual(bb["anchor"] / 1000, time.time() - 1500, delta=2)   # 页面按这个自己走秒
+        self.assertEqual(bb["slots"]["dire"][0]["name"], "斧王")
+        self.assertTrue(bb["slots"]["radiant"][1]["me"])                         # GSI team_slot
+
+        msg = wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 0}))
+        self.assertIn("斧王买活了", msg)
+        end = json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["end"]
+        self.assertAlmostEqual(end, 1500 + 480, delta=2)
+        msg = wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 0}))
+        self.assertIn("已取消斧王", msg)
+        self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["end"])
+
+        bb = go(1510, cd=480)                                                     # 自己买活了：GSI 给冷却
+        self.assertEqual(bb["slots"]["radiant"][1]["end"], 1990)
+        self.assertTrue(bb["slots"]["radiant"][1]["auto"])
+        msg = wait(self.live.submit(self.live.action, {"type": "buyback", "side": "radiant", "index": 1}))
+        self.assertIn("GSI 自动算", msg)
+
+        wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 4}))
+        bb = go(1520, paused=True, cd=470)
+        self.assertEqual(bb["paused"], 1520)                                      # 暂停：页面停在这一秒
+        with self.assertRaises(ValueError):
+            wait(self.live.submit(self.live.action, {"type": "buyback", "side": "dire", "index": 5}))
+        bb = go(10, matchid="456")                                                # 换局清空
+        self.assertTrue(all(x["end"] is None for side in bb["slots"].values() for x in side))
+        self.assertFalse(go(0, state="DOTA_GAMERULES_STATE_POST_GAME")["show"])  # 比赛结束收起
+
+    def test_buyback_auto_from_screenshot(self):
+        """顶栏头像变灰 → 后台认倒计时（两帧对得上）→ 倒计时没走完就变回彩色 = 买活，自动开始计时、存样本"""
+        from tests.test_buyback import topbar
+        buybackscan.SAMPLES_DIR = TMP / f"bb-{time.monotonic_ns()}"
+        frame = {"img": topbar()}
+        self.live.screen = SimpleNamespace(grab=lambda: frame["img"], source="window")
+        self.live._ocr = lambda im: [SimpleNamespace(text=str(frame["timer"]))] * 3
+        st = self.live.gsi.state
+
+        def go(clock):
+            st.update({"map": {"matchid": "123", "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS",
+                               "clock_time": clock}, "player": {"team_name": "radiant", "team_slot": 1},
+                       "hero": {"name": "npc_dota_hero_phantom_lancer", "alive": True}})
+            wait(self.live.submit(self.live.coach_tick))
+            for _ in range(50):                                   # OCR 在后台线程
+                if not any(t.name == "buyback" for t in threading.enumerate()):
+                    break
+                time.sleep(0.02)
+            wait(self.live.submit(self.live.publish))
+            return json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]
+
+        go(1500)
+        dead = {("dire", 0)}
+        for clock in range(1501, 1505):                           # 死了，倒计时 40 → 37
+            frame["timer"] = 40 - (clock - 1501)
+            frame["img"] = topbar(dead, {("dire", 0): frame["timer"]})
+            go(clock)
+        self.assertEqual(self.live._bb_watch.slots[("dire", 0)].expected, 1541)
+        frame["img"] = topbar()
+        slot = go(1510)                                           # 1541 才该复活，1510 就活了
+        self.assertAlmostEqual(slot["end"], 1510 + 480, delta=1)
+        self.assertIn("斧王买活了（截图认的）", self.live.message)
+        self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-dire1-buyback-*.png"))), 1)
+
+        frame["img"] = topbar({("radiant", 0)}, {("radiant", 0): 9})   # 天辉第 1 个：倒计时走完正常复活
+        for clock, t in ((1511, 9), (1512, 9), (1513, 8)):
+            frame["timer"] = t
+            go(clock)
+        frame["img"] = topbar()
+        go(1521)
+        self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["radiant"][0]["end"])
+        self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-radiant1-respawn-*.png"))), 1)
+
+    def test_ult_timer(self):
+        """对面头像下面的大招小条：只给对面、按自己等级猜大招等级；点一下开始、再点取消；
+        右键菜单选等级 / 勾天赋、神杖、玲珑心，正在冷却的跟着重算；换局清空。天赋 / 神杖数值是编的，只测算法"""
+        from dota_assistant import kb
+        st = self.live.gsi.state
+        axe = self.live.db.find("斧王")
+        cull = kb.Entry(name="淘汰之刃", key="axe_culling_blade", text="", cooldown="80/75/70", ultimate=True,
+                        cd_talents=[("special_bonus_axe_cd", 10, 2)], cd_scepter=[20])
+        hero = kb.HeroKB(axe.id, "斧王", "axe", "近战", 150, [cull], [], [], {"special_bonus_axe_cd": (20, "-10秒 淘汰之刃冷却")})
+        octarine = kb.Entry(name="玲珑心", key="item_octarine_core", text="", stats=["+25% 冷却缩减"])
+        self.live._kb_base = SimpleNamespace(heroes={axe.id: hero}, items={"octarine_core": octarine})
+        self.live._kb_ops = {"axe_culling_blade": {"scepter": "-20"}}
+
+        def go(clock, level=8, matchid="123"):
+            st.update({"map": {"matchid": matchid, "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", "clock_time": clock},
+                       "player": {"team_name": "radiant", "team_slot": 1},
+                       "hero": {"name": "npc_dota_hero_phantom_lancer", "alive": True, "level": level}})
+            wait(self.live.submit(self.live.coach_tick))
+            return json.loads(self.live.current_snapshot)["buyback"]["slots"]
+
+        slots = go(900)
+        u = slots["dire"][0]["ult"]
+        self.assertEqual((u["name"], u["level"], u["cd"], u["cds"], u["end"]), ("淘汰之刃", 1, 80, "80/75/70", None))
+        self.assertIsNone(slots["radiant"][0]["ult"])                              # 自己这边不给
+        self.assertIsNone(slots["dire"][1]["ult"])                                 # 知识库里没有的英雄不给
+        self.assertEqual(go(900, level=12)["dire"][0]["ult"]["level"], 2)          # 12 级：按 2 级大招算
+
+        msg = wait(self.live.submit(self.live.action, {"type": "ult", "side": "dire", "index": 0}))
+        self.assertIn("斧王放了淘汰之刃，按 2 级算冷却 75 秒", msg)
+        self.assertAlmostEqual(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["ult"]["end"], 975, delta=2)
+        u = json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["ult"]
+        self.assertEqual([m["label"] for m in u["mods"]], ["20 级天赋：-10秒 淘汰之刃冷却", "神杖：-20秒 冷却", "玲珑心：-25% 冷却"])
+        set_ult = lambda **kw: wait(self.live.submit(self.live.action, {"type": "ult_set", "side": "dire", "index": 0} | kw))
+        msg = set_ult(level=3)
+        self.assertIn("按 3 级算：冷却 70 秒", msg)
+        u = json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["ult"]
+        self.assertEqual((u["level"], u["fixed"]), (3, True))
+        self.assertAlmostEqual(u["end"], 970, delta=2)                             # 从放的时候按新冷却重算
+        self.assertEqual(go(905, level=6)["dire"][0]["ult"]["level"], 3)          # 改过就不再按自己等级猜
+        set_ult(mod="talent:special_bonus_axe_cd", on=True)
+        msg = set_ult(mod="octarine", on=True)
+        self.assertIn("按 3 级+20 级天赋、玲珑心算：冷却 45 秒", msg)                # (70 - 10) × 0.75
+        set_ult(mod="scepter", on=True)
+        u = json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["ult"]
+        self.assertEqual((u["cd"], [m["on"] for m in u["mods"]]), (30, [True, True, True]))   # (70 - 10 - 20) × 0.75
+        self.assertAlmostEqual(u["end"], 930, delta=2)
+        set_ult(mod="scepter", on=False)
+        self.assertEqual(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]["ult"]["cd"], 45)
+        with self.assertRaises(ValueError):
+            set_ult(mod="shard", on=True)                                          # 没有这项
+        with self.assertRaises(ValueError):
+            set_ult(level=4)
+        msg = wait(self.live.submit(self.live.action, {"type": "ult", "side": "dire", "index": 0}))
+        self.assertIn("已取消斧王淘汰之刃", msg)
+        msg = wait(self.live.submit(self.live.action, {"type": "ult", "side": "radiant", "index": 0}))
+        self.assertIn("没有要计时的大招", msg)
+
+        wait(self.live.submit(self.live.action, {"type": "ult", "side": "dire", "index": 0}))
+        u = go(10, matchid="456")["dire"][0]["ult"]                                # 换局清空
+        self.assertEqual((u["end"], u["fixed"], u["level"], u["cd"]), (None, False, 1, 80))
+        self.assertFalse(any(m["on"] for m in u["mods"]))
 
 
 class BriefLiveTest(unittest.TestCase):

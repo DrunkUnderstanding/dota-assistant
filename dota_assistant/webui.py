@@ -2,12 +2,13 @@
 
   Python（live.Live：识别 / 推荐 / 语音 / GSI / 热键）
     └ 本机 HTTP 服务（只监听 127.0.0.1）
-        ├ /overlay.html /panel.html …   web/ 下的静态页面
+        ├ /overlay.html /panel.html /topbar.html …   web/ 下的静态页面
         ├ /portraits/<id>.png           英雄头像（data/portraits）
         ├ /api/events                   SSE：状态一变就推一份完整快照
         └ /api/action                   POST：控制面板的操作
-    └ Electron（electron/main.js）：开两个窗口加载上面的页面
+    └ Electron（electron/main.js）：开三个窗口加载上面的页面
         ├ 叠加层：透明、置顶、鼠标穿透、不抢焦点（普通窗口，不注入游戏）；解锁后可以拖动，固定后恢复穿透
+        ├ 买活 / 大招计时条：同样透明置顶，盖在游戏顶栏上，每个英雄头像下面一个买活小条、对面的再加一个大招小条（topbar.html）
         └ 控制面板：普通窗口，关掉它整个助手退出
 
 没装 Electron 时可以 --browser 用浏览器打开（叠加层只能当预览看，盖不到游戏上）。
@@ -43,7 +44,7 @@ def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
     """pos：用户拖过的位置（比例）和拉过的宽度，优先于 config.toml 里的 overlay_x / overlay_y / overlay_width"""
     pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
     return {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
-            "opacity": cfg.overlay_opacity}
+            "opacity": cfg.overlay_opacity, "buyback_timer": cfg.buyback_timer, "ult_timer": cfg.ult_timer}
 
 
 class WebServer:
@@ -166,7 +167,8 @@ def serve(live, browser: bool = False) -> int:
             webbrowser.open(srv.url + "/panel.html")
             webbrowser.open(srv.url + "/overlay.html?preview=1")
             log.info("浏览器模式：%s", srv.url)
-            print(f"界面：{srv.url}/panel.html（叠加层预览：{srv.url}/overlay.html?preview=1），Ctrl+C 退出")
+            print(f"界面：{srv.url}/panel.html（叠加层预览：{srv.url}/overlay.html?preview=1，"
+                  f"买活计时条预览：{srv.url}/topbar.html?preview=1），Ctrl+C 退出")
             threading.Event().wait()
             return 0
         exe = find_electron()

@@ -8,6 +8,7 @@
 - 出装：itembuild.make()（同分段核心装的中位购买时间 + coach.plan() 的针对装，知识库原文对原文）；
   30 分钟前的放中期那页，之后的放后期那页（「后期出装」，前面的针对装再提一遍 + 卖东西 / 买活）
 - 对面要防的：coach.plan() 的提示（隐身要带粉、不用专门出金箍棒、提醒核心出黑皇杖……）
+- 团战（后期那页）：teamfight.tips()，知识库原文的硬规则：对面要等的大招、留打断、控制留给对面核心、谁能保人
 对面的位置是猜的（lanes.guess：每个英雄在该分段打各位置的比例，五个人不重复），对线对手据此推出来。
 """
 from __future__ import annotations
@@ -17,7 +18,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, data, gameplan, itembuild, kb, lanes
+from . import coach, data, gameplan, itembuild, kb, lanes, teamfight
 from .config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 
@@ -37,12 +38,13 @@ LANE_VS = lanes.LANE_VS
 STAGES = (("lane", "对线期"), ("mid", "中期"), ("late", "后期"))
 STAGE_START = {"lane": None, "mid": 10, "late": 30}      # 第几分钟自动弹这一页；对线期在策略时间就弹
 SECTION_STAGE = {"说明": "lane", "对线": "lane", "起手": "lane", "对面要防": "lane", "出装": "mid", "强势期": "mid",
-                 "后期出装": "late"}
+                 "后期出装": "late", "团战": "late"}
 PLAN_PAGES = {gameplan.PHASES[0]: ("lane", "怎么打"), gameplan.PHASES[3]: ("lane", "对线劣势时"),
-              gameplan.PHASES[1]: ("mid", "怎么打"), gameplan.PHASES[2]: ("late", "怎么打")}
+              gameplan.PHASES[1]: ("mid", "怎么打"), gameplan.PHASES[2]: ("late", "怎么打"),
+              gameplan.PHASES[4]: ("late", "团战博弈")}
 # 卡片上每个小节最多显示几条，其余折叠（点「展开」看）；文字版 / 给 AI 的资料照旧是全文。
 # 玩家反馈对线期那页太长（2026-10-26），条数是实现假设，玩家没确认
-SHOW_MAX = {"对面要防": 2, "怎么打": 2, "对线劣势时": 2}
+SHOW_MAX = {"对面要防": 2, "怎么打": 2, "对线劣势时": 2, "团战": 3}
 LANE_TIPS_SHOWN = 2        # 「对线」小节只显示你这路对面是谁 + 前几条对线提示，三路分路和对线数据收起来
 
 
@@ -306,6 +308,9 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
     b.needs = needs
     build = itembuild.make(needs, bench, base)
     b.add("出装", itembuild.brief_lines(build, hi=STAGE_START["late"]))     # 中期那页：后期开始前的
+    allies = [base.heroes[h] for h in ally_ids if h in base.heroes]
+    b.add("团战", [("warn", w.text, w.quote) if w.kind == "bad" else ("row", f"✓ {w.text}", w.quote)
+                   for w in teamfight.tips(me, allies, enemies, pos, {name(h): p for h, p in guessed.items()})])
     b.add("后期出装", itembuild.late_lines(build, STAGE_START["late"]))
     b.add("对面要防", [("row", n) for n in notes])
     return b

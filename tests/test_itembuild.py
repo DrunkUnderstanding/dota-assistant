@@ -145,11 +145,23 @@ class RealKBTest(unittest.TestCase):
         needs, _ = self.plan("斯温", ["风行者", "沉默术士", "冥魂大帝", "莱恩", "末日使者"], bench)
         bkb_need = next(n for n in needs if n.key == "bkb")
         self.assertEqual(bkb_need.minute, 20)          # 5 个控制：按出得早的 1/4
+        self.assertTrue(all(n.tip for n in needs))     # 针对装都还没有大数据依据：只作提示
         b = itembuild.make(needs, bench, self.base)
-        self.assertEqual([(s.key, s.kind) for s in b.steps],
-                         [("dragon_lance", "core"), ("black_king_bar", "counter"), ("hurricane_pike", "core"),
-                          ("monkey_king_bar", "counter"), ("butterfly", "common")])   # 金箍棒：风行者有闪避
-        self.assertTrue(b.steps[1].urgent)
+        self.assertEqual([(s.key, s.kind) for s in b.steps],     # 顺序里只有同分段常买的（黑皇杖 30% 的局买：之后常见）
+                         [("dragon_lance", "core"), ("hurricane_pike", "core"), ("black_king_bar", "common"),
+                          ("butterfly", "common")])
+        self.assertEqual([(s.key, s.minute) for s in b.tips],    # 金箍棒：风行者有闪避
+                         [("black_king_bar", 20), ("monkey_king_bar", 30)])
+        self.assertTrue(b.tips[0].urgent)
+        lines = itembuild.brief_lines(b)
+        self.assertIn("提示 · 黑皇杖", lines[1][1])
+        self.assertIn(coach.NO_DATA, lines[1][1])
+        # 以后有数据支持（tip 为空）的针对装照旧排进顺序
+        for n in needs:
+            n.tip = ""
+        b = itembuild.make(needs, bench, self.base)
+        self.assertEqual([(s.key, s.kind) for s in b.steps][:2], [("dragon_lance", "core"), ("black_king_bar", "counter")])
+        self.assertEqual(b.tips, [])
 
 
 @unittest.skipUnless((kb.KB_DIR / "kb.json").exists(), "没有本地知识库，先 kb update")
@@ -198,7 +210,7 @@ class DeathPickTest(unittest.TestCase):
         self.assertEqual(self.pick(self.rec(secs={"silenced": 4}), manta=0.5).key, "manta")
         self.assertIsNone(self.pick(self.rec(secs={"silenced": 4, "muted": 4}), manta=0.5))   # 锁闭时物品也用不了
 
-    def test_repeat_moves_item_to_next(self):
+    def test_repeat_death_tip(self):
         b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
         c = coach.Coach([], None, self.tree, self.base, b, coach.items_const())
         st = coach.State(20, set(), gold=0)
@@ -208,8 +220,9 @@ class DeathPickTest(unittest.TestCase):
         self.assertEqual(c.on_death(self.rec("low"), st), [])         # 别的死法另算
         self.assertEqual(c.on_death(unused, st), [])                  # 第 2 次（跳刀没用上，照样算次数）：不推
         self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
-        self.assertEqual(c.on_death(rec, st), [("warn", "本局第 3 次被控死，黑皇杖提到下一件：黑皇杖开了以后控不住你")])
-        self.assertTrue(c.next_line(st).startswith("下一件：黑皇杖（3 次被控死），还差 4050 金；之后 魔龙枪"))
+        # 第 3 次：只有本局依据、没有大数据依据，只作提示，不动「下一件」
+        self.assertEqual(c.on_death(rec, st), [("row", f"提示：本局第 3 次被控死，可以考虑黑皇杖：黑皇杖开了以后控不住你（{coach.NO_DATA}）")])
+        self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
 
 
 class ShopCardTest(unittest.TestCase):

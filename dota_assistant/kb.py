@@ -167,11 +167,23 @@ def update(hero_ids: list[int], log=_say, force: bool = False) -> bool:
         old = json.loads(meta.read_text(encoding="utf-8")).get("patch")
         if old == current_patch():
             log(f"  知识库已是最新版本 {old}")
+            _update_cd_ops(log)
             return False
     kb = fetch(hero_ids, log)
     meta.write_text(json.dumps(kb, ensure_ascii=False), encoding="utf-8")
     log(f"  知识库 {kb['patch']}：{len(kb['heroes'])} 个英雄、{len(kb['items'])} 件物品")
+    _update_cd_ops(log)
     return True
+
+
+def _update_cd_ops(log) -> None:
+    """大招神杖 / 魔晶减冷却的符号（datafeed 里没有，从游戏文件取，见 ultcd.py）；取不到不影响知识库"""
+    from . import ultcd
+    try:
+        ultcd.update_ops(log=log)
+    except Exception as e:
+        logger.warning("大招神杖 / 魔晶冷却没取到", exc_info=True)
+        log(f"  大招神杖 / 魔晶冷却没取到（{e}），对面大招计时里不能勾神杖 / 魔晶")
 
 
 # ---------- 文本整理 ----------
@@ -258,6 +270,12 @@ class Entry:
     granted: bool = False                                # 神杖 / 魔晶才给的技能
     channelled: bool = False                             # 官方字段 behavior 带「持续施法」位
     targets_enemy: bool = False                          # 官方字段：能指向敌方单位施放（behavior 带「单位目标」位、target_team 含敌方）
+    # 冷却的加成（官方 special_values 里 AbilityCooldown 那一项）：天赋 [(天赋 key, 数值, operation)]，
+    # operation 2 = 减几秒、4 = 减百分之几（对过天赋原文：末日「-10秒 末日冷却」是 2，撼地者「-50% 回音击冷却」是 4）；
+    # 神杖 / 魔晶只有数值、没有符号（绝冥再生的 10 是「-10」，激怒的 30/24/18 是「=30 =24 =18」，datafeed 分不出来），符号见 ultcd.py
+    cd_talents: list[tuple[str, float, int]] = field(default_factory=list)
+    cd_scepter: list[float] = field(default_factory=list)
+    cd_shard: list[float] = field(default_factory=list)
 
     def full_text(self) -> str:
         return "\n".join([*self.stats, self.text, *self.notes, self.scepter, self.shard])
@@ -287,8 +305,12 @@ def tag_sentences(text: str, only: set[str] | None = None) -> dict[str, str]:
     return out
 
 
-# 官方 immunity 字段：1 = 无视技能免疫（来自 Valve 数据，比关键词更可靠）
-_PIERCES = {1: True, 2: False, 3: False, 4: False}
+# 官方 immunity 字段（SPELL_IMMUNITY_*）：3 = 对敌方无视技能免疫，4 = 对敌方不无视，5 = 对友方无视、对敌方不无视；
+# 1 / 2 是只作用于友方的技能（薄葬、守护天使），说不上「对敌人无不无视」。
+# 2026-10-26 以前错当成「1 = 无视」：把薄葬、守护天使标成无视免疫，黑洞、时间结界、决斗、末日反倒标成不无视。
+# 核对：原文 / 注释写「无视（减益）免疫」的 4 个技能里，3 个是 3（数箭齐发、牺牲、疯狂生长），1 个是友方增益授予力量（1）；
+# 写「对减益免疫无效」的两个都是 4
+_PIERCES = {3: True, 4: False, 5: False}
 BEHAVIOR_CHANNELLED = 1 << 7          # DOTA_ABILITY_BEHAVIOR_CHANNELLED
 BEHAVIOR_UNIT_TARGET = 1 << 3         # DOTA_ABILITY_BEHAVIOR_UNIT_TARGET
 TARGET_TEAM_ENEMY = (2, 3)            # DOTA_UNIT_TARGET_TEAM_ENEMY / BOTH
@@ -305,6 +327,7 @@ def _entry(ab: dict, is_item: bool) -> Entry:
                 stats.append(f"{sign}{_values(s['values_float'])}{'%' if s.get('is_percentage') else ''} {label}")
     cd = [v for v in ab.get("cooldowns") or [] if v]
     mc = [v for v in ab.get("mana_costs") or [] if v]
+    cd_sv = next((s for s in ab.get("special_values") or [] if s.get("name") == "AbilityCooldown"), {})
     tier = ab.get("item_neutral_tier")
     return Entry(
         name=ab["name_loc"], key=ab["name"], text=fill(ab.get("desc_loc"), ab),
@@ -318,6 +341,9 @@ def _entry(ab: dict, is_item: bool) -> Entry:
         granted=bool(ab.get("ability_is_granted_by_scepter") or ab.get("ability_is_granted_by_shard")),
         channelled=bool(int(ab.get("behavior") or 0) & BEHAVIOR_CHANNELLED),
         targets_enemy=bool(int(ab.get("behavior") or 0) & BEHAVIOR_UNIT_TARGET) and ab.get("target_team") in TARGET_TEAM_ENEMY,
+        cd_talents=[(x["name"], float(x["value"]), int(x.get("operation") or 0)) for x in cd_sv.get("bonuses") or []],
+        cd_scepter=[float(v) for v in cd_sv.get("values_scepter") or []],
+        cd_shard=[float(v) for v in cd_sv.get("values_shard") or []],
     )
 
 
@@ -331,6 +357,7 @@ class HeroKB:
     abilities: list[Entry]
     talents: list[tuple[int, str, str]]        # (等级, 左, 右)
     facets: list[tuple[str, str]]              # (名字, 说明)
+    talent_keys: dict[str, tuple[int, str]] = field(default_factory=dict)   # 天赋 key → (等级, 说明)
 
     def tags(self) -> dict[str, tuple[str, str]]:
         """标签 → (技能名, 原句)"""
@@ -359,9 +386,10 @@ class KnowledgeBase:
                          if a.get("name_loc") and not a["name"].startswith(("special_bonus", "generic_hidden"))]
             facets = [(f.get("title_loc") or f.get("name", ""), fill(f.get("description_loc"), f))
                       for f in h.get("facets") or []]
+            keys = {t["name"]: (10 + 5 * (i // 2), _talent_text(t, tv)) for i, t in enumerate(talents_raw)}
             self.heroes[h["id"]] = HeroKB(h["id"], h["name_loc"], h["name"].removeprefix("npc_dota_hero_"),
                                           "远程" if h.get("attack_capability") == 2 else "近战",
-                                          h.get("attack_range") or 0, abilities, pairs, facets)
+                                          h.get("attack_range") or 0, abilities, pairs, facets, keys)
         self.items = {it["name"].removeprefix("item_"): _entry(it, True) for it in raw["items"]}
         self.item_ids = {it["name"]: it["id"] for it in raw["items"]}
         self._item_lookup = {}

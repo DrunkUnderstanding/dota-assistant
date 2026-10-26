@@ -13,6 +13,7 @@ import json
 import re
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from .config import ROOT
 
@@ -300,12 +301,15 @@ def names_from_kb(base, hero_key: str | None) -> tuple[dict[str, str], set[str]]
     return names, saves
 
 
-def dump(history: list[tuple[float, dict]], rec: Recap | None) -> None:
-    """死前那段推送原样存下来（核对字段名、调阈值用），最多留最近 50 份"""
+def dump(history: list[tuple[float, dict]], rec: Recap | None) -> Path:
+    """死前那段推送原样存下来（核对字段名、调阈值用），最多留最近 50 份（同名的死亡截图一起删）。返回存的文件"""
     DUMP_DIR.mkdir(parents=True, exist_ok=True)
     out = {"recap": rec.lines if rec else None,
            "pushes": [{"t": round(w, 2), **r} for w, r in history]}
-    (DUMP_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.json").write_text(
-        json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+    path = DUMP_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
+    path.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     for old in sorted(DUMP_DIR.glob("*.json"))[:-50]:
         old.unlink(missing_ok=True)
+        for shot in DUMP_DIR.glob(f"{old.stem}-*.png"):
+            shot.unlink(missing_ok=True)
+    return path

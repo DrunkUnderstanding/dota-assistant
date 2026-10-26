@@ -65,6 +65,11 @@ class BriefTest(unittest.TestCase):
         self.assertEqual([t["on"] for t in b.view("mid")["tabs"]], [False, True, False])
         b.add("后期出装", [("row", "蝴蝶 32′")])
         self.assertEqual(titles("late"), ["后期出装", "怎么打 · AI"])
+        # 团战：数据小节和 AI 的「后期团战」都在后期那页
+        b.add("团战", [("warn", f"等大招{i}") for i in range(5)])
+        b.plan.sections.append(("后期团战", [Tip("先控斧王", "依据", "原文")]))
+        self.assertEqual(titles("late"), ["后期出装", "团战", "怎么打 · AI", "团战博弈 · AI"])
+        self.assertEqual(len(b.view("late")["sections"][1]["lines"]), 3)    # 卡片上只显示 3 条，其余折叠
 
     def test_fold_on_card(self):
         # 卡片上每小节只显示前几条，其余折叠（more，界面上点「展开」）；文字版（给 AI 的资料）还是全文

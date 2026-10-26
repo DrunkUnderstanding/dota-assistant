@@ -1,12 +1,13 @@
 """出装推荐：这局按什么顺序出、下一件买什么、还差多少钱。
 
 - 骨架：STRATZ 同分段、同英雄、同位置的核心装（≥40% 的局会买、≥1500 金），按中位购买时间排
-- 针对这局：coach.plan() 的对抗装（黑皇杖 / 金箍棒 / 林肯 / 白银之锋……，知识库原文对原文），
-  排在它在同分段的中位购买时间；黑皇杖、金箍棒以外的只推这个英雄会出的
+- 针对这局：coach.plan() 的对抗装（黑皇杖 / 金箍棒 / 林肯 / 白银之锋……，知识库原文对原文）。
+  还没有「出了更容易赢」的大数据（Need.tip 非空）的只作提示（Build.tips），不进顺序、不当「下一件」；
+  以后有数据支持的（tip 为空）才排进顺序，排在它在同分段的中位购买时间
 - 之后常见：15%~40% 的局会买的，补几件在后面
 - 下一件：顺序里第一件还没有的（合成后的也算有）；还差多少 = 成品价 - 已有零件价 - 身上的钱
 - 按死法补装（death_pick）：死亡复盘（death.py）看出是被控死 / 瞬间打爆 / 跑不掉……对应一件装备；
-  同一种死法本局超过两次（第 3 次起）才推，推的时候直接提到「下一件」最前面
+  同一种死法本局超过两次（第 3 次起）才说，同样只作提示（coach.Coach.on_death）
 
 不按胜率排：买得晚的大件（蝴蝶、撒旦）胜率天然高——买得起说明这局已经领先，不能说明装备本身好。
 """
@@ -44,6 +45,7 @@ class Step:
 @dataclass
 class Build:
     steps: list[Step] = field(default_factory=list)
+    tips: list[Step] = field(default_factory=list)      # 只作提示的针对装（缺大数据依据），不进顺序
 
     def todo(self, owned: set[str], tree: dict[str, set[str]]) -> list[Step]:
         return [s for s in self.steps if not coach.has(owned, s.key, tree)]
@@ -56,6 +58,7 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
         return timings.get(base.item_ids.get(f"item_{k}"), (0, 0))
 
     steps: dict[str, Step] = {}
+    tips: list[Step] = []
     common = []
     for k, e in base.items.items():
         share, med = stat(k)
@@ -70,12 +73,16 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
         if k is None:
             continue
         why, quote = n.brief or n.text, "\n".join(n.evidence)
+        share, med = stat(k)
+        if n.tip:
+            minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
+            tips.append(Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0))
+            continue
         if k in steps:                       # 本来就是核心装：标成针对，带上理由
             s = steps[k]
             s.kind, s.why, s.quote, s.urgent = "counter", why, quote, n.priority == 0
             s.minute = n.minute or s.minute
             continue
-        share, med = stat(k)
         minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
         steps[k] = Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0)
     for s in sorted(common, key=lambda s: -s.share):
@@ -84,7 +91,8 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
         if s.key not in steps:
             steps[s.key] = s
     # 「之后常见」排在核心和针对装后面：不是必出的，别让它挡住「下一件」
-    return Build(sorted(steps.values(), key=lambda s: (s.kind == "common", s.minute)))
+    return Build(sorted(steps.values(), key=lambda s: (s.kind == "common", s.minute)),
+                 sorted(tips, key=lambda s: s.minute))
 
 
 def remaining_cost(key: str, owned: set[str], const: dict) -> int:
@@ -151,26 +159,33 @@ def next_line(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[s
 
 
 def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]:
-    """本局要点「出装」一节：[lo, hi) 分钟的顺序一行 + 每件针对装的理由（悬停看原文）"""
-    steps = [s for s in b.steps if s.minute >= lo and (hi is None or s.minute < hi)]
-    if not steps:
+    """本局要点「出装」一节：[lo, hi) 分钟的顺序一行 + 每件针对装的理由（悬停看原文）+ 只作提示的针对装"""
+    inside = lambda s: s.minute >= lo and (hi is None or s.minute < hi)
+    steps, tips = [s for s in b.steps if inside(s)], [s for s in b.tips if inside(s)]
+    if not (steps or tips):
         return []
     mark = {"core": "", "counter": "★", "common": "·", "death": "✚"}
-    lines = [("row", " → ".join(f"{mark[s.kind]}{s.name} {s.minute:.0f}′" for s in steps))]
+    lines = [("row", " → ".join(f"{mark[s.kind]}{s.name} {s.minute:.0f}′" for s in steps))] if steps else []
     lines += [("warn" if s.urgent else "row", f"★{s.name}：{s.why}", s.quote) for s in steps if s.kind == "counter"]
-    lines.append(("dim", "′ = 同分段中位购买时间；无标记 = 核心（≥40% 的局买）；★ = 针对这局阵容；· = 之后常见"))
+    lines += [("row", f"提示 · {s.name}：{s.why}（{coach.NO_DATA}）", s.quote) for s in tips]
+    if steps:
+        lines.append(("dim", "′ = 同分段中位购买时间；无标记 = 核心（≥40% 的局买）；"
+                      + ("★ = 针对这局阵容；" if any(s.kind == "counter" for s in steps) else "") + "· = 之后常见"))
     return lines
 
 
 def late_lines(b: Build, late: float) -> list[tuple]:
     """本局要点「后期出装」一节：late 分钟以后的顺序 + 针对装；前面的针对装再列一遍（后期还没有就该补了）；
     再加卖东西 / 买活两条规矩（局内「下一件」会按身上的格子和钱具体说）。没有出装数据就不出这一节"""
-    if not b.steps:
+    if not (b.steps or b.tips):
         return []
     lines = brief_lines(b, lo=late)
     early = [s.name for s in b.steps if s.kind == "counter" and s.minute < late]
     if early:
         lines.insert(1 if lines else 0, ("row", f"针对这局的{'、'.join(early)}前面就该有，到后期还没有先补"))
+    early_tips = [s.name for s in b.tips if s.minute < late]
+    if early_tips:
+        lines.insert(1 if lines else 0, ("row", f"提示 · 前面提过的{'、'.join(early_tips)}，到后期还没有可以补（{coach.NO_DATA}）"))
     if not lines:
         lines.append(("row", "同分段到后期没有多数人都出的大件，看对面阵容补针对装"))
     lines.append(("dim", f"格子满了先卖身上最便宜的那件；{late:.0f} 分钟后买大件前留够买活钱"))

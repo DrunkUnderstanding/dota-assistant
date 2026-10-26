@@ -134,6 +134,12 @@ class GameState:
         return int((self.raw.get("player") or {}).get("deaths") or 0)
 
     @property
+    def level(self) -> int | None:
+        """自己英雄等级（hero.level，对照 Dota2GSI，没在真实推送里见过）"""
+        v = (self.raw.get("hero") or {}).get("level")
+        return int(v) if isinstance(v, (int, float)) else None
+
+    @property
     def last_hits(self) -> int | None:
         v = (self.raw.get("player") or {}).get("last_hits")
         return int(v) if v is not None else None

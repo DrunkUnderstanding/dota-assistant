@@ -26,6 +26,10 @@ coach_voice = false   # 局内缺口提醒要不要念出来（先只弹卡片�
 jungle_cues = true    # 野区计时提醒：四 / 五号位封野、拉野（双拉）、屯野，三 / 四 / 五号位 3、6 分钟抢莲花，会屯野的核心英雄提醒屯野；局内点 × 关掉这一局的这种提醒
 stack_second = 53     # 屯野提醒：x:53 拉（大野 / 远古早 1~2 秒）
 pull_second = 15      # 拉野提醒：x:15 拉；不同野点 / 阵营差几秒，实战里按自己那边调
+buyback_timer = true  # 买活计时：游戏顶栏每个英雄头像下面一个小条，看到谁买活就点一下开始 8 分钟倒计时（再点取消）；自己的按 GSI 自动算
+buyback_auto = true   # 买活自动记：比赛中每秒截一次 Dota 窗口看顶栏，有人复活时倒计时没走完就算买活、自动开始计时（认错了点小条取消）
+ult_timer = true      # 对面大招冷却：对面头像下面买活小条再往下一条，看到他放大招（骷髅王是复活）就点一下开始倒计时（再点取消）；
+                      # 大招等级按你自己的等级猜；右键弹菜单改等级、勾天赋 / 神杖 / 魔晶 / 玲珑心减冷却
 ai_plan = true        # 本局要点里加「AI 打法」：前 / 中 / 后期怎么打、对线劣势怎么办
 ai_provider = "claude_code"  # AI 来源：claude_code = 本机 Claude Code 订阅 / anthropic = 自己的 Anthropic API Key / openai = OpenAI 兼容接口
 ai_model = "claude-opus-5-5" # 用 openai 时换成那家的模型名，例如 deepseek-chat
