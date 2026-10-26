@@ -483,7 +483,7 @@ class Live:
             log.info("局面：我 %s · 队友 %s · 对面 %s · 禁用 %s · %d 号位 → 推荐 %s",
                      draft.my_hero.name_cn if draft.my_hero else "未选", _names(draft.allies), _names(draft.enemies),
                      _names(draft.bans), self.position,
-                     "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.mine + advice.other) or "无")
+                     "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.picks + advice.targeted) or "无")
         if force_speech or changed:
             text = adv.speech(self.prev_draft, advice, force=force_speech)
             if text:

@@ -44,9 +44,9 @@ class GSITest(unittest.TestCase):
 class SpeechTextTest(unittest.TestCase):
     def advice(self, draft):
         eng = Engine(HeroDB(HEROES), make_stats({}))
-        mine = [Suggestion(TIDE, 0.1, 0.1, in_pool=True)]
-        other = [Suggestion(CM, 0.0, 0.0)]
-        return adv.Advice(1, draft, mine if not draft.my_hero else [], other if not draft.my_hero else [], None)
+        picks = [Suggestion(TIDE, 0.1, 0.1, in_pool=True)]
+        targeted = [Suggestion(CM, 0.0, 0.0)]
+        return adv.Advice(1, draft, picks if not draft.my_hero else [], targeted if not draft.my_hero else [], None)
 
     def test_new_enemy_announced_with_top_two(self):
         prev = adv.Draft(enemies=[PL])

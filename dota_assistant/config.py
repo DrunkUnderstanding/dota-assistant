@@ -26,8 +26,8 @@ class Config:
     pool: list[str] = field(default_factory=list)   # 我的英雄池（中文名 / 英文名 / 别名）
     only_pool: bool = False           # True=只在英雄池里推荐
     position_filter: bool = True      # True=按位置粗筛候选
-    top: int = 3                      # 推荐总数 = top + top_other（不再分「你的英雄 / 其他」）
-    top_other: int = 2                # 见上一行
+    top: int = 3                      # 「推荐」几个：按综合胜率排
+    top_other: int = 3                # 「针对这局」几个：综合前 top 个之外按克制 + 配合挑（advisor.split_targeted）
 
     # ---- 实时助手（python -m dota_assistant run）----
     monitor: int = 1                  # 截哪块屏幕（mss 编号，1=主屏）

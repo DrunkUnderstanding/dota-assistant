@@ -83,6 +83,11 @@ class Suggestion:
     def winrate(self) -> float:
         return sigmoid(self.score) * 100
 
+    @property
+    def situational(self) -> float:
+        """这局阵容带来的加减（克制 + 配合 − 反制风险，logit）：综合分去掉英雄自身强度"""
+        return self.score - self.base
+
     def reason_parts(self) -> list[tuple[str, str]]:
         """推荐理由的各段：[(种类, 文字)]，种类 = good 克 / syn 配 / bad 怕 / risk 易被反制 / meta 版本强势 / me 个人 / pool 英雄池"""
         parts = []
@@ -98,6 +103,8 @@ class Suggestion:
         hard = [(h, v) for h, v in self.counters if pct(v) >= RISK_HINT]
         if self.enemies_left >= 3 and hard:
             parts.append(("risk", "易被反制：" + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in hard[:2])))
+        if not parts and pct(self.situational) >= 1.0:      # 单个都不显著，但几个小克制 / 配合加起来不少
+            parts.append(("good", f"克制 + 配合合计 {pct(self.situational):+.1f}%"))
         if not parts:
             parts.append(("meta", f"版本强势（自身 {sigmoid(self.base) * 100:.1f}%）"))
         if self.my_games:

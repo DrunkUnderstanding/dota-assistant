@@ -9,6 +9,7 @@ from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .heroes import Hero, HeroDB
 
 TEAM_PICKS = 2          # 剩余位置每个推荐几个英雄
+TARGETED_TITLE = "针对这局"
 
 
 @dataclass
@@ -42,8 +43,8 @@ class TeamSlot:
 class Advice:
     position: int
     draft: Draft
-    mine: list[Suggestion]
-    other: list[Suggestion]
+    picks: list[Suggestion]               # 综合推荐：按综合胜率排的前 cfg.top 个
+    targeted: list[Suggestion]            # 针对这局：剩下的里按克制 + 配合排的前 cfg.top_other 个（见 Advisor.advise）
     threat: tuple[Hero, float] | None     # 对我方威胁最大的敌方英雄（够显著才有）
     why: dict[int, list[explain.Why]] = field(default_factory=dict)   # 推荐英雄 id → 机制上克 / 怕谁（知识库原文）
     lanes: lanes.Lanes | None = None      # 对面分路（猜的）
@@ -108,10 +109,10 @@ class Advisor:
             return Advice(position, draft, [], [], threat, lanes=lane, lane_tips=self.lane_tips(draft.my_hero, lane),
                           team=self.team_slots(draft, position, []))
         res = self._suggest(draft, position)
-        # 不再分「你的英雄 / 其他选择」：打过几局不影响排名，合成一个榜（2026-10-25 玩家要求）
-        picks = res[:self.cfg.top + self.cfg.top_other]
+        picks, targeted = split_targeted(res, self.cfg.top, self.cfg.top_other, bool(draft.enemies or draft.allies))
         slots = self.team_slots(draft, position, res) if draft.allies else []
-        return Advice(position, draft, [], picks, threat, self.explain(picks, draft.enemies), lane, team=slots)
+        return Advice(position, draft, picks, targeted, threat, self.explain(picks + targeted, draft.enemies), lane,
+                      team=slots)
 
     def lane_tips(self, me: Hero, lane: lanes.Lanes | None) -> list[explain.Why]:
         if not (self.kb and lane and me.id in self.kb.heroes):
@@ -128,9 +129,25 @@ class Advisor:
                 for s in picks if s.hero.id in self.kb.heroes}
 
 
+def split_targeted(res: list[Suggestion], top: int, targeted: int, has_draft: bool) -> tuple[list, list]:
+    """(综合推荐, 针对这局)。res 已按综合分排好。
+    版本强势的英雄自身强度领先 3~5 个百分点，单个敌人的克制中位数才 1 个百分点，只看综合分每局前几名都差不多
+    （2026-10-26 玩家反馈「推荐趋同」）。所以综合前 top 个之外，再从剩下的里按「克制 + 配合」挑 targeted 个，
+    只要综合胜率不低于 50%（免得挑出自身太弱、克一个人也救不回来的）。
+    还没有人选（没有克制 / 配合可言）时只有综合推荐，一共 top + targeted 个。"""
+    if not has_draft:
+        return res[:top + targeted], []
+    rest = sorted((s for s in res[top:] if s.score >= 0), key=lambda s: -s.situational)
+    return res[:top], rest[:targeted]
+
+
 def best(advice: Advice) -> list[Suggestion]:
-    """播报用的前两名"""
-    return (advice.mine + advice.other)[:2]
+    """播报用的前两名（综合推荐）"""
+    return (advice.picks + advice.targeted)[:2]
+
+
+def groups(advice: Advice) -> list[tuple[str, list[Suggestion]]]:
+    return [("推荐", advice.picks), (TARGETED_TITLE, advice.targeted)]
 
 
 def speech(prev: Draft | None, advice: Advice, force: bool = False) -> str | None:
@@ -168,9 +185,9 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
     if d.my_hero:
         out.append(("head", f"你已选：{d.my_hero.name_cn}"))
         out += [("dim", f"　{'✓' if w.kind == 'good' else '✗'} {w.text}") for w in advice.lane_tips]
-    for title, group in (("推荐", advice.mine + advice.other),):
+    for title, group in groups(advice):
         if group:
-            out.append(("head", title))
+            out.append(("head", title + ("（克制 + 配合最多的）" if title == TARGETED_TITLE else "")))
             for s in group:
                 out.append(("row", f"{s.hero.name_cn}  {s.winrate:.1f}%　{s.reason()}"))
                 if s.vs:
@@ -218,10 +235,10 @@ def _namer(d: Draft):
 def render_view(advice: Advice, side: str | None) -> dict:
     """和 render_lines 同样的内容，但保留结构（英雄 id、胜率、理由分段），给网页叠加层画头像 / 卡片用。可直接转 JSON。"""
     d = advice.draft
-    groups = []
-    for title, group in (("推荐", advice.mine + advice.other),):
+    out = []
+    for title, group in groups(advice):
         if group:
-            groups.append({"title": title, "items": [
+            out.append({"title": title, "items": [
                 {**hero_ref(s.hero), "winrate": round(s.winrate, 1),
                  "tags": [{"kind": k, "text": t} for k, t in s.reason_parts()],
                  # 对每个已选敌人的克制（百分点，正 = 这个推荐克他），按敌方选人顺序，各卡片列对齐
@@ -241,7 +258,7 @@ def render_view(advice: Advice, side: str | None) -> dict:
         "allies": [hero_ref(h) for h in d.allies],
         "bans": [hero_ref(h) for h in d.bans],
         "my_hero": hero_ref(d.my_hero) if d.my_hero else None,
-        "groups": groups,
+        "groups": out,
         "threat": threat,
         # 对面分路（猜的）+ 我选好英雄后我这路的对线提示
         "lanes": lanes.view(replace(advice.lanes, side=side), lambda i: {"id": i, "name": _namer(d)(i)},

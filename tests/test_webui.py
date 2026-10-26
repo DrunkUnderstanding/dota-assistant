@@ -19,7 +19,7 @@ from dota_assistant.heroes import HeroDB
 from dota_assistant.live import Live
 from dota_assistant.vision import Calibration
 from dota_assistant.webui import WebServer, overlay_config
-from tests.test_engine import AXE, CM, HEROES, PL, TIDE, make_stats
+from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
 
 
 class FakeSpeaker:
@@ -83,6 +83,20 @@ class RenderViewTest(unittest.TestCase):
         self.assertEqual(v["threat"]["delta"], 2.0)
         json.dumps(v, ensure_ascii=False)          # 能直接转 JSON
         self.assertIsNone(v["lanes"])              # 没有分位置数据：不猜分路
+
+    def test_targeted_group(self):
+        # 综合前 2 个之外，按「克制 + 配合」挑：综合排第 4 的斧王克制最多排第一；综合胜率不到 50% 的冥魂大帝不要
+        res = [Suggestion(PL, 0.20, 0.18), Suggestion(TIDE, 0.15, 0.10), Suggestion(CM, 0.06, 0.03),
+               Suggestion(AXE, 0.05, -0.05), Suggestion(WK, -0.01, -0.20)]
+        picks, targeted = adv.split_targeted(res, 2, 2, has_draft=True)
+        self.assertEqual([s.hero for s in picks], [PL, TIDE])
+        self.assertEqual([s.hero for s in targeted], [AXE, CM])
+        self.assertEqual(adv.split_targeted(res, 2, 2, has_draft=False), (res[:4], []))   # 没人选：只有综合推荐
+        self.assertEqual(targeted[0].reason(), "克制 + 配合合计 +2.5%")       # 单项都不显著时说合计，不说「版本强势」
+        advice = adv.Advice(1, adv.Draft(enemies=[]), picks, targeted, None)
+        self.assertEqual([g["title"] for g in adv.render_view(advice, None)["groups"]], ["推荐", "针对这局"])
+        self.assertIn(("head", "针对这局（克制 + 配合最多的）"), adv.render_lines(advice, None))
+        self.assertEqual(adv.best(advice), picks)                             # 播报只念综合推荐
 
     def test_lanes_view(self):
         from dota_assistant import explain, lanes

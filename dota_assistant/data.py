@@ -380,8 +380,11 @@ def update(cfg: Config, log=_say) -> None:
     if cfg.stratz_token:
         log("拉取英雄分位置数据（STRATZ）…")
         pos = fetch_positions(cfg)
-        positions_path(cfg).write_text(json.dumps(pos), encoding="utf-8")
-        log(f"  {len(pos['heroes'])} 个英雄")
+        if pos["heroes"]:
+            positions_path(cfg).write_text(json.dumps(pos), encoding="utf-8")
+            log(f"  {len(pos['heroes'])} 个英雄")
+        else:   # 2026-10-26 STRATZ 偶尔返回空表，覆盖掉以后推荐退回按定位标签筛位置（赏金猎人进中单），所以保留旧的
+            log("  STRATZ 返回了空数据，保留原来的分位置数据")
     update_player(cfg, log)
     log(f"拉取最近 {cfg.days} 天天梯对局的克制 / 配合数据 …")
     stats = fetch_stats(cfg, log)
