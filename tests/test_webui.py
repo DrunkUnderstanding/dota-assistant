@@ -135,13 +135,17 @@ class TeamSlotsTest(unittest.TestCase):
         self.assertEqual([t.position for t in advice.team if t.open], [1, 2, 3, 4])
         taken = advice.team[4]
         self.assertEqual((taken.ally.hero, taken.ally.pos), (CM.id, 5))
-        self.assertTrue(all(len(t.picks) == 2 for t in advice.team if t.open))
+        # 每个空位置固定「推荐 3 + 针对这局 3」（不跟 config 的 top=2 / top_other=2），两组不重复；
+        # 只剩 3 个候选（5 个英雄去掉已选的 2 个）→ 全进推荐，针对这局为空
+        self.assertTrue(all(len(t.picks) == 3 and not t.targeted for t in advice.team if t.open))
+        self.assertEqual(len(advice.picks), 2)
         self.assertEqual(advice.team[0].picks[0].hero, TIDE)
         v = adv.render_view(advice, "radiant")["team"]
         self.assertEqual([r["current"] for r in v], [True, False, False, False, False])
         self.assertEqual(sum(r["best"] for r in v), 1)
         self.assertEqual(v[4]["ally"]["name"], "水晶室女")
         self.assertEqual(v[0]["picks"][0]["id"], TIDE.id)
+        self.assertEqual(v[0]["targeted"], [])
         json.dumps(v, ensure_ascii=False)
         self.assertTrue(any(t.startswith("剩余位置：一号位（当前） 潮汐猎人") for _, t in adv.render_lines(advice, None)))
 

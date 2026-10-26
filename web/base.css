@@ -145,7 +145,17 @@ img { display: block; }
 .team-row.is-best { border-color: rgba(216, 167, 78, 0.45); background: var(--gold-soft); }
 .team-label { width: 40px; flex: none; font-size: 11px; color: var(--text-dim); }
 .team-row.is-cur .team-label { color: var(--gold); font-weight: 700; }
-.team-picks { display: flex; gap: 6px; }
+.team-picks { display: flex; align-items: center; gap: 6px; }
+/* 展开后两排：推荐 / 针对这局，排头一个小字标签 */
+.team-groups { display: grid; gap: 3px; }
+.team-grp { width: 22px; flex: none; font-style: normal; font-size: 10px; color: var(--text-faint); }
+.team-row.is-unfolded { padding-top: 4px; padding-bottom: 4px; }
+.team-fold {
+  margin-left: auto; flex: none; padding: 0 6px; border: 1px dashed var(--line-strong); border-radius: 6px;
+  background: none; color: var(--text-dim); font: 11px/1.6 var(--font); white-space: nowrap; cursor: pointer;
+}
+.team-fold:hover { color: var(--gold); border-color: var(--gold); }
+.team-row em ~ .team-fold { margin-left: 4px; }
 .team-pick { display: flex; align-items: center; gap: 3px; }
 .team-pick b { font: 600 11px/1 var(--num); color: var(--text-dim); }
 .team-none { font-size: 11px; color: var(--text-faint); }

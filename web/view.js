@@ -68,8 +68,25 @@ function lanesHTML(l) {
   };
 }
 
-// 我方五个位置：队友占了的显示队友（猜的标 ?），空着的给两个推荐。
+// 我方五个位置：队友占了的显示队友（猜的标 ?），空着的给「推荐 3 + 针对这局 3」（advisor.TEAM_TOP / TEAM_TARGETED）。
+// 平时只露第一推荐，点行尾「▾」展开两排；展开了哪些位置记在这里，重画后保持（和要点卡片的展开一个思路）。
 // 我还没选：推荐是给我挑位置的，点空位置切过去；我选好以后：我那格是我的英雄，空位置的推荐是给队友的（不能点），一直留到进游戏
+const teamUnfolded = new Set();
+const teamPick = (p) => `<span class="team-pick">${face(p, 'face-sm')}<b>${p.winrate.toFixed(1)}</b></span>`;
+function teamPicksHTML(t) {
+  const targeted = t.targeted || [];
+  if (!t.picks.length) return { body: '<span class="team-none">无候选</span>', fold: '' };
+  const open = teamUnfolded.has(t.position);
+  const more = t.picks.length + targeted.length > 1;
+  const fold = more ? `<button class="team-fold" type="button" data-team-fold="${t.position}" title="${open ? '收起' : '展开：推荐 + 针对这局'}">`
+    + `${open ? '▴ 收起' : `▾ ${t.picks.length}+${targeted.length}`}</button>` : '';
+  const row = (label, ps) => `<div class="team-picks"><i class="team-grp">${label}</i>${ps.map(teamPick).join('')}</div>`;
+  const body = open
+    ? `<div class="team-groups">${row('推荐', t.picks)}${targeted.length ? row('针对', targeted) : ''}</div>`
+    : `<div class="team-picks">${teamPick(t.picks[0])}</div>`;
+  return { body, fold, open };
+}
+
 function teamHTML(team, picked) {
   if (!team) return '';
   const rows = team.map((t) => {
@@ -85,19 +102,19 @@ function teamHTML(team, picked) {
       return `<div class="team-row is-taken ${cur ? 'is-cur' : ''}" title="${esc(tip)}"><span class="team-label">${esc(t.name)}</span>`
         + `<span class="lane-hero ${t.ally.sure ? '' : 'is-unsure'}">${face(t.ally, 'face-sm')}${t.ally.sure ? '' : '<b>?</b>'}</span>${warn}${flags}</div>`;
     }
-    const picks = t.picks.map((p) => `<span class="team-pick">${face(p, 'face-sm')}<b>${p.winrate.toFixed(1)}</b></span>`).join('')
-      || '<span class="team-none">无候选</span>';
+    const { body, fold, open } = teamPicksHTML(t);
+    const unfolded = open ? 'is-unfolded' : '';
     if (picked) {
-      return `<div class="team-row is-ally-pick" title="${esc(`队友打${t.name}可以选这些`)}">`
-        + `<span class="team-label">${esc(t.name)}</span><div class="team-picks">${picks}</div></div>`;
+      return `<div class="team-row is-ally-pick ${unfolded}" title="${esc(`队友打${t.name}可以选这些`)}">`
+        + `<span class="team-label">${esc(t.name)}</span>${body}${fold}</div>`;
     }
     const tip = cur ? `你现在按${t.name}推荐` : `点一下：改按${t.name}推荐`;
-    return `<div class="team-row is-open ${cur ? 'is-cur' : ''} ${t.best ? 'is-best' : ''}" data-pos="${t.position}" title="${esc(tip)}">`
-      + `<span class="team-label">${esc(t.name)}</span><div class="team-picks">${picks}</div>${flags}</div>`;
+    return `<div class="team-row is-open ${unfolded} ${cur ? 'is-cur' : ''} ${t.best ? 'is-best' : ''}" data-pos="${t.position}" title="${esc(tip)}">`
+      + `<span class="team-label">${esc(t.name)}</span>${body}${flags}${fold}</div>`;
   }).join('');
   const [hint, small] = picked
     ? ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是给队友的推荐（算上和你的配合）', '给队友的推荐']
-    : ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是你打这个位置的前两个推荐', '点空位置切换'];
+    : ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是你打这个位置的推荐（▾ 展开看推荐 + 针对这局）', '点空位置切换'];
   return `
     <section class="ov-team" title="${hint}">
       <h3>剩余位置<small>${small}</small></h3>${rows}
@@ -220,13 +237,19 @@ export function renderOverlay(root, view) {
 }
 
 // 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，剩余位置 → 切位置，要点卡片的标签 → 翻页，
-// 要点小节的「展开 / 收起」→ 只在本地重画，× → 关卡片
+// 要点小节 / 剩余位置的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
     const fold = e.target.closest('.brief-fold[data-fold]');
     if (fold) {
       const key = fold.dataset.fold;
       if (!unfolded.delete(key)) unfolded.add(key);
+      return renderOverlay(root, root._view);
+    }
+    const teamFold = e.target.closest('.team-fold[data-team-fold]');
+    if (teamFold) {                                     // 在行里面，先拦下，不当成「切到这个位置」
+      const p = Number(teamFold.dataset.teamFold);
+      if (!teamUnfolded.delete(p)) teamUnfolded.add(p);
       return renderOverlay(root, root._view);
     }
     const tab = e.target.closest('.brief-tab[data-page]');

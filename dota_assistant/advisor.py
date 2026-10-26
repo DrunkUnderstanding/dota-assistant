@@ -8,8 +8,8 @@ from .config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .heroes import Hero, HeroDB
 
-TEAM_PICKS = 2          # 剩余位置每个推荐几个英雄
 TARGETED_TITLE = "针对这局"
+TEAM_TOP, TEAM_TARGETED = 3, 3   # 剩余位置每个空位置：推荐几个 + 针对这局几个（玩家要求 3 + 3，不跟 config 的 top / top_other）
 
 
 @dataclass
@@ -28,10 +28,12 @@ class Draft:
 @dataclass
 class TeamSlot:
     """我方一个位置：有人占了（ally，me = 是我自己选好的英雄），或者还空着
-    （picks = 这个位置的前几个推荐：我还没选时是给我挑位置的，我选好以后是给队友的）"""
+    （picks / targeted = 这个位置的「推荐 + 针对这局」，TEAM_TOP + TEAM_TARGETED 个：
+    我还没选时是给我挑位置的，我选好以后是给队友的）"""
     position: int
     ally: lanes.Guess | None = None
     picks: list[Suggestion] = field(default_factory=list)
+    targeted: list[Suggestion] = field(default_factory=list)
     me: bool = False
 
     @property
@@ -76,8 +78,9 @@ class Advisor:
                                    position_filter=self.cfg.position_filter, top=None)
 
     def team_slots(self, draft: Draft, position: int, current: list[Suggestion]) -> list[TeamSlot]:
-        """队友已选的英雄占了哪几个位置（选人界面认出的优先，其余按常打位置猜），剩下的位置各推荐前 TEAM_PICKS 个。
-        我还没选：不先替我占位，推荐按「我打这个位置」算（英雄池、个人战绩都算）——帮我挑打哪个位置；current = 当前位置已经算好的推荐。
+        """队友已选的英雄占了哪几个位置（选人界面认出的优先，其余按常打位置猜），剩下的位置各给「推荐 + 针对这局」
+        （split_targeted，TEAM_TOP + TEAM_TARGETED 个）。
+        我还没选：不先替我占位，推荐按「我打这个位置」算（英雄池、个人战绩都算）——帮我挑打哪个位置；current = 当前位置已经算好的完整排序。
         我选好了：我占当前位置，空位置推荐给队友（算上和我的配合，不算我的英雄池 / 战绩），一直显示到进游戏。"""
         me = draft.my_hero
         guesses = {g.pos: g for g in lanes.guess([a.id for a in draft.allies], self.engine.positions,
@@ -88,12 +91,12 @@ class Advisor:
                 out.append(TeamSlot(p, lanes.Guess(me.id, p, 1.0), me=True))
             elif p in guesses:
                 out.append(TeamSlot(p, guesses[p]))
-            elif me:
-                picks = self.engine.suggest(position=p, allies=[*draft.allies, me], enemies=draft.enemies, bans=draft.bans,
-                                            position_filter=self.cfg.position_filter, top=TEAM_PICKS)
-                out.append(TeamSlot(p, picks=picks))
             else:
-                out.append(TeamSlot(p, picks=(current if p == position else self._suggest(draft, p))[:TEAM_PICKS]))
+                res = (self.engine.suggest(position=p, allies=[*draft.allies, me], enemies=draft.enemies, bans=draft.bans,
+                                           position_filter=self.cfg.position_filter, top=None) if me
+                       else current if p == position else self._suggest(draft, p))
+                picks, targeted = split_targeted(res, TEAM_TOP, TEAM_TARGETED, True)
+                out.append(TeamSlot(p, picks=picks, targeted=targeted))
         return out
 
     def advise(self, draft: Draft, position: int) -> Advice:
@@ -200,7 +203,7 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
 
 
 def team_line(advice: Advice) -> str:
-    """一行字的剩余位置：「一号位 敌法师 52.1% / 幽鬼 51.8%　四号位 …　（队友占了：五号位 水晶室女?）推荐打一号位」；
+    """一行字的剩余位置：「一号位 敌法师 52.1% / 幽鬼 51.8% / … ｜针对 …　四号位 …　（队友占了：五号位 水晶室女?）推荐打一号位」；
     我选好以后：「（给队友）中单 … （已占：一号位 你 敌法师、…）」"""
     names = {"open": [], "taken": []}
     for t in advice.team:
@@ -208,7 +211,8 @@ def team_line(advice: Advice) -> str:
         if t.me:
             names["taken"].append(f"{POSITION_NAMES[t.position]} 你 {advice.draft.my_hero.name_cn}")
         elif t.open:
-            picks = " / ".join(f"{s.hero.name_cn} {s.winrate:.1f}%" for s in t.picks) or "无候选"
+            names_of = lambda ss: " / ".join(f"{s.hero.name_cn} {s.winrate:.1f}%" for s in ss)
+            picks = (names_of(t.picks) + (f" ｜针对 {names_of(t.targeted)}" if t.targeted else "")) or "无候选"
             names["open"].append(f"{POSITION_NAMES[t.position]}{mark} {picks}")
         else:
             h = _namer(advice.draft)(t.ally.hero)
@@ -282,4 +286,5 @@ def team_view(advice: Advice) -> list[dict] | None:
         "ally": {"id": t.ally.hero, "name": namer(t.ally.hero), "conf": round(t.ally.conf, 2),
                  "sure": t.ally.conf >= lanes.SURE} if t.ally else None,
         "picks": [{**hero_ref(s.hero), "winrate": round(s.winrate, 1)} for s in t.picks],
+        "targeted": [{**hero_ref(s.hero), "winrate": round(s.winrate, 1)} for s in t.targeted],
     } for t in advice.team]

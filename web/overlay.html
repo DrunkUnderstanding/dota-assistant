@@ -99,8 +99,10 @@ connect((s) => {
 // ---------- 可点区域：固定时只有右上角的锁和 ×，解锁时整张卡片；Electron 据此切换鼠标穿透 ----------
 let lastRects = '';
 function reportHitRects() {
-  // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」）+ 要点卡片的翻页标签 / 展开收起；其余地方照样点穿
-  const els = locked ? [...document.querySelectorAll('.ov-tools button, .ov:not(.is-hidden) .pick[data-id], .ov:not(.is-hidden) .brief-tab[data-page], .ov:not(.is-hidden) .brief-fold')] : [wrap];
+  // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」）+ 要点卡片的翻页标签 / 展开收起
+  // + 剩余位置的空位置（点了切位置）/ 展开收起；其余地方照样点穿
+  const hits = ['.pick[data-id]', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold'];
+  const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [wrap];
   const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
     .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }));
   const key = JSON.stringify(rects);
@@ -171,6 +173,7 @@ lockBtn.addEventListener('click', () => act('set', { key: 'overlay_locked', valu
 closeBtn.addEventListener('click', () => act('close_overlay'));
 root.addEventListener('click', (e) => { if (!locked) e.stopImmediatePropagation(); }, true);   // 解锁时是在拖动，不算点
 bindOverlayClicks(root, act);
+root.addEventListener('click', () => requestAnimationFrame(reportHitRects));   // 本地展开 / 收起后可点区域跟着变
 
 </script>
 </body>
