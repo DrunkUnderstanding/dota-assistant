@@ -161,6 +161,22 @@ class GameState:
         return out
 
     @property
+    def inventory(self) -> list[str]:
+        """身上 6 格（slot0~5，背包 / 储藏处不算），按格子顺序；空格是 """""
+        items = self.raw.get("items") or {}
+        names = [((items.get(f"slot{i}") or {}).get("name") or "") for i in range(6)]
+        return [n.removeprefix("item_") if n.startswith("item_") else "" for n in names]
+
+    @property
+    def buyback(self) -> tuple[int, float] | None:
+        """(买活价, 买活冷却还剩几秒)。字段名 hero.buyback_cost / buyback_cooldown 对照的是 Dota2GSI，
+        没在真实推送里见过；没有就是 None"""
+        h = self.raw.get("hero") or {}
+        if h.get("buyback_cost") is None:
+            return None
+        return int(h["buyback_cost"]), float(h.get("buyback_cooldown") or 0)
+
+    @property
     def team(self) -> str | None:
         t = (self.raw.get("player") or {}).get("team_name")
         return t if t in ("radiant", "dire") else None

@@ -9,7 +9,7 @@ import urllib.request
 from types import SimpleNamespace
 
 from dota_assistant import advisor as adv, config, grid
-from dota_assistant import brief, coach, death, gameplan
+from dota_assistant import brief, coach, death, gameplan, lanestate
 from dota_assistant import live as live_mod
 from dota_assistant.config import Config
 from dota_assistant.engine import Engine, Suggestion
@@ -47,6 +47,7 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
+lanestate.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
 
 
 def no_brief(*args, **kw):
@@ -496,6 +497,59 @@ class CoachLiveTest(unittest.TestCase):
         self.push(40, state="DOTA_GAMERULES_STATE_POST_GAME")
         self.assertIsNone(self.live.coach_card)                 # 比赛结束收起
 
+    def test_jungle_cues_for_support(self):
+        """五号位：号角前弹封野，到点前几秒亮屯野 / 拉野；有卡片时叠在顶上；死了不亮；点 × 这局不再提醒这一种"""
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))      # 关掉「开局提示」
+        self.assertEqual(self.live.jungle.kinds, {"block", "pull", "stack", "lotus"})
+        ov = self.push(-0.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.assertTrue(ov["visible"] and ov["view"]["jungle"])
+        self.assertEqual(ov["view"]["title"], "封野 · 1:00 前")
+        self.assertFalse(self.push(1.5)["visible"])                               # 1:30：没到点
+        ov = self.push(1 + 50 / 60)
+        self.assertEqual(ov["view"]["title"], "屯野 · 1:53")
+
+        self.live.coach_card = {"kind": "notice", "title": "局内提醒", "lines": [], "closable": True}
+        ov = self.push(2 + 10 / 60)
+        self.assertEqual(ov["view"]["title"], "局内提醒")                          # 卡片还在，提醒叠在顶上
+        self.assertEqual(ov["view"]["cue"]["title"], "拉野 · 2:15")
+        wait(self.live.submit(self.live.toggle_overlay))                          # 先关卡片
+        self.assertEqual(self.live.jungle_cue.kind, "pull")
+        wait(self.live.submit(self.live.toggle_overlay))                          # 再关提醒：这局不再提醒拉野
+        self.assertFalse(self.push(3 + 12 / 60)["visible"])
+        self.assertEqual(self.push(3 + 50 / 60)["view"]["title"], "屯野 · 3:53")   # 屯野照样提醒
+        self.assertFalse(self.push(4 + 12 / 60)["visible"])
+        self.assertFalse(self.push(4 + 50 / 60, alive=False)["visible"])          # 死了不提醒
+        self.assertIsNone(self.live.jungle_cue)
+        self.assertEqual(self.push(5 + 45 / 60)["view"]["title"], "屯野 5:53 / 抢莲花 6:00")  # 5:45 正好提前 15 秒（秒数换算不能差 1 秒）
+        self.assertEqual(self.push(7 + 45 / 60)["view"]["title"], "屯野 · 7:53")
+
+    def test_no_jungle_cues_for_carry_without_data(self):
+        self.push(0)
+        self.wait_coach()
+        self.assertEqual(self.live.jungle.kinds, set())
+
+    def test_lane_moments_logged(self):
+        """3:00 / 6:00 / 10:00 各记一笔自己的 GSI 数据；同一刻不重复记；过了 20 秒才到的不补记"""
+        log_file = TMP / f"lane-{time.monotonic_ns()}.jsonl"
+        old, lanestate.LOG_FILE = lanestate.LOG_FILE, log_file
+        try:
+            self.push(0)
+            self.wait_coach()
+            self.push(2.9)
+            self.push(3 + 5 / 60)
+            self.push(3 + 10 / 60)
+            self.push(6 + 30 / 60)                                  # 6:30 才收到：不补记
+            self.push(10)
+            recs = [json.loads(x) for x in log_file.read_text(encoding="utf-8").splitlines()]
+        finally:
+            lanestate.LOG_FILE = old
+        self.assertEqual([(r["minute"], r["clock"]) for r in recs], [(3, 185), (10, 600)])
+        self.assertEqual((recs[0]["match"], recs[0]["pos"], recs[0]["hero_key"]), ("123", 1, "phantom_lancer"))
+        self.assertEqual(recs[0]["player"]["last_hits"], 40)
+
     def test_death_recap_then_respawn(self):
         """死亡：同一张卡片先说怎么死的，再列缺口；复活后自动收起"""
         death.DUMP_DIR = TMP / "deaths"
@@ -522,7 +576,7 @@ class CoachLiveTest(unittest.TestCase):
 
 
 class BriefLiveTest(unittest.TestCase):
-    """策略时间弹本局要点 → 号角响收起 → 热键再看；有了要点就不再单独弹「开局提示」"""
+    """策略时间弹本局要点对线期那页 → 号角响收起 → 10 / 30 分钟弹中期 / 后期 → 关了热键再看；有了要点就不再单独弹「开局提示」"""
 
     def setUp(self):
         self.built = []
@@ -531,6 +585,7 @@ class BriefLiveTest(unittest.TestCase):
             self.built.append((my_id, sorted(ally_ids), sorted(enemy_ids), pos))
             b = brief.Brief("本局要点 · 幻影长矛手 一号位")
             b.add("对线", [("warn", "对上斧王比平时难打")])
+            b.add("出装", [("row", "相位鞋 → 散夜对剑")])
             return b
 
         def prepare(cfg, my_id, enemy_ids, pos):
@@ -540,7 +595,9 @@ class BriefLiveTest(unittest.TestCase):
 
         def plan(cfg, my_id, ally_ids, enemy_ids, lane_ids, text):
             self.plan_go.wait(5)
-            return gameplan.Plan([("对线劣势时", [gameplan.Tip("退到塔下补刀", "束缚击原文", "将目标束缚")])])
+            return gameplan.Plan([("对线劣势时", [gameplan.Tip("退到塔下补刀", "束缚击原文", "将目标束缚")]),
+                                  ("中期（10~30 分钟）", [gameplan.Tip("带线等黑皇杖", "强势期数据", "越拖越强")]),
+                                  ("后期（30 分钟后）", [gameplan.Tip("分推牵制", "幻象原文", "制造幻象")])])
 
         self.live = make_live(coach_prepare=prepare, brief_build=build, plan_build=plan)
         self.live.gsi = SimpleNamespace(state=GameState(), stop=lambda: None)
@@ -565,33 +622,59 @@ class BriefLiveTest(unittest.TestCase):
         self.assertIsNone(self.push("HERO_SELECTION")["view"].get("sections"))   # 选人中不做
         ov = self.push("STRATEGY_TIME")
         self.assertEqual(self.built, [(PL.id, [CM.id], [AXE.id, TIDE.id], 1)])
-        self.assertEqual(ov["view"]["kind"], "brief")
-        self.assertEqual(ov["view"]["sections"][0]["lines"], [{"kind": "warn", "text": "对上斧王比平时难打"}])
+        v = ov["view"]
+        self.assertEqual((v["kind"], v["page"]), ("brief", "lane"))           # 策略时间只弹对线期那页
+        self.assertEqual([t["label"] for t in v["tabs"]], ["对线期", "中期", "后期"])
+        self.assertEqual(v["sections"][0]["lines"], [{"kind": "warn", "text": "对上斧王比平时难打"}])
+        self.assertNotIn("出装", [s["title"] for s in v["sections"]])         # 出装在中期那页
+        self.assertIn("正在写", v["sections"][-1]["lines"][0]["text"])
         self.assertTrue(ov["visible"])
 
-        wait(self.live.submit(self.live.show_brief))           # F6 翻到打法页：还在生成
-        ov = json.loads(self.live.current_snapshot)["overlay"]
-        self.assertEqual(ov["view"]["page"], "plan")
-        self.assertIn("正在写", ov["view"]["sections"][0]["lines"][0]["text"])
-        wait(self.live.submit(self.live.show_brief))           # 再按：回数据页
-        self.plan_go.set()                                      # 写完：自动翻到打法页
+        pages = []
+        for _ in range(3):                                      # F6 翻页：中期 → 后期 → 回到对线期
+            wait(self.live.submit(self.live.show_brief))
+            pages.append(json.loads(self.live.current_snapshot)["overlay"]["view"]["page"])
+        self.assertEqual(pages, ["mid", "late", "lane"])
+        self.plan_go.set()                                      # 写完：补进当前这页，不翻页
         ov = self.push("STRATEGY_TIME")
-        self.assertEqual(ov["view"]["page"], "plan")
-        self.assertEqual(ov["view"]["sections"][-1]["lines"],
-                         [{"kind": "warn", "text": "退到塔下补刀", "note": "束缚击原文"}])
+        self.assertEqual(ov["view"]["page"], "lane")
+        self.assertEqual(ov["view"]["sections"][-1], {"title": "对线劣势时 · AI", "lines": [
+            {"kind": "warn", "text": "退到塔下补刀", "note": "束缚击原文"}]})
+        self.assertNotIn("带线等黑皇杖", json.dumps(ov["view"], ensure_ascii=False))   # 中期的不塞进来
 
         ov = self.push("PRE_GAME", -1)                          # 出门：要点还在，「开局提示」不单独弹
         self.assertEqual(ov["view"]["kind"], "brief")
         self.assertEqual(len(self.built), 1)
         self.assertFalse(self.push("GAME_IN_PROGRESS", 0.2)["visible"])          # 号角响：收起
+        self.assertIn("中期", self.live.message)
+        self.push("GAME_IN_PROGRESS", 5)
+        self.assertIsNone(self.live.coach_card)                                  # 对线期中间不再弹
 
-        wait(self.live.submit(self.live.action, {"type": "show_brief"}))         # 热键 / 面板按钮再看：先看打法
-        ov = json.loads(self.live.current_snapshot)["overlay"]
-        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief" and ov["view"]["page"] == "plan")
-        ov = self.push("GAME_IN_PROGRESS", 0.5)                                  # 下一轮 tick：不能又被收起
-        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief")
-        wait(self.live.submit(self.live.toggle_overlay))                         # F8 关掉
+        ov = self.push("GAME_IN_PROGRESS", 10.1)                                 # 到中期：弹中期那页
+        v = ov["view"]
+        self.assertTrue(ov["visible"])
+        self.assertEqual((v["kind"], v["page"]), ("brief", "mid"))
+        self.assertEqual([s["title"] for s in v["sections"]], ["出装", "怎么打 · AI"])
+        wait(self.live.submit(self.live.toggle_overlay))                         # F8 关掉：告诉我怎么找回来
         self.assertIsNone(self.live.coach_card)
+        self.assertIn("再看", self.live.message)
+        self.assertIsNone(self.push("GAME_IN_PROGRESS", 12).get("view", {}).get("page"))   # 关了不会自己再弹
+
+        wait(self.live.submit(self.live.action, {"type": "show_brief"}))         # 热键 / 面板按钮再看：当前阶段那页
+        ov = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief" and ov["view"]["page"] == "mid")
+        ov = self.push("GAME_IN_PROGRESS", 12.5)                                 # 下一轮 tick：不能又被收起
+        self.assertTrue(ov["visible"] and ov["view"]["kind"] == "brief")
+        wait(self.live.submit(self.live.action, {"type": "brief_page", "page": "lane"}))   # 点标签翻回对线期
+        self.assertEqual(self.live.coach_card["page"], "lane")
+        wait(self.live.submit(self.live.toggle_overlay))
+
+        wait(self.live.submit(self.live._show_coach, "局内提醒", [("warn", "缺黑皇杖")]))
+        self.assertEqual(self.push("GAME_IN_PROGRESS", 30.2)["view"]["title"], "局内提醒")   # 别的卡片弹着：后期先等
+        wait(self.live.submit(self.live.toggle_overlay))
+        v = self.push("GAME_IN_PROGRESS", 30.4)["view"]                          # 关了以后再弹后期那页
+        self.assertEqual((v["kind"], v["page"]), ("brief", "late"))
+        self.assertEqual(v["sections"][0]["lines"][0]["text"], "分推牵制")
 
 
 class PickLiveTest(unittest.TestCase):
@@ -630,18 +713,22 @@ class PickLiveTest(unittest.TestCase):
         self.assertEqual(self.built, [(PL.id, [], [AXE.id], 1)])
         self.assertEqual(v["kind"], "brief")
         self.assertTrue(v["title"].startswith("如果选幻影长矛手"))
-        self.assertEqual(v["page"], "data")
+        self.assertEqual(v["page"], "lane")
         self.assertIn("正在写", self.live.pick_brief.plan_note)
 
         wait(self.live.submit(self.live.action, {"type": "explain_pick", "hero_id": PL.id}))   # 同一局面再点：不重做
         self.assertEqual(len(self.built), 1)
 
-        self.plan_go.set()
+        self.plan_go.set()                                      # 写完：补进对线期那页
         v = self.view()
-        self.assertEqual(v["page"], "plan")
-        self.assertEqual(v["sections"][0]["lines"][0]["text"], "先补刀")
-        wait(self.live.submit(self.live.action, {"type": "brief_page", "page": "data"}))
-        self.assertEqual(self.view()["page"], "data")
+        self.assertEqual(v["page"], "lane")
+        self.assertEqual(v["sections"][-1]["lines"][0]["text"], "先补刀")
+        wait(self.live.submit(self.live.action, {"type": "brief_page", "page": "mid"}))
+        self.assertEqual(self.view()["page"], "mid")
+        wait(self.live.submit(self.live.show_brief))            # 热键接着翻
+        self.assertEqual(self.view()["page"], "late")
+        with self.assertRaises(ValueError):
+            self.live.set_brief_page("plan")
 
         wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "dire", "index": 1, "text": "潮汐猎人"}))
         self.assertIn("阵容变了", self.view()["title"])

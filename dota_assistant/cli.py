@@ -14,6 +14,8 @@
   say <文字>                   测试语音
   backtest [--matches N]       用统计之后的新对局检验推荐和胜负的关系
   lanes-test [--matches N]     用同一批对局检验「对面分路」猜得准不准
+  lane-test [--matches N]      回测：3 / 6 分钟时看击杀 / 死亡 / 等级能不能猜出对线优劣；屯野 / 莲花和对线结果
+  lane-review                  实战记录（3 / 6 / 10 分钟自己的数据）对照 STRATZ 赛后的对线结果
   backtest-ai [--moments N]    大模型选人盲测（用 Claude Code 订阅，和统计引擎同题对比）
   coach-sim <比赛编号...>       拿已解析的录像重放，看「局内缺口提醒」当时会说什么
   death-sim [文件...]           拿 shots/deaths/ 里存下的真实死亡重放，看「按死法补装」会说什么（默认全部）
@@ -36,7 +38,7 @@ from . import log as logs
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
-                     "coach-sim", "brief-sim", "lanes-test"}
+                     "coach-sim", "brief-sim", "lanes-test", "lane-test"}
 
 
 def _split(s: str | None) -> list[str]:
@@ -210,8 +212,9 @@ def cmd_logs(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    for stream in (sys.stdout, sys.stderr):                 # 被重定向到管道 / 文件时默认是 GBK
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser(prog="dota_assistant", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -246,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     bp.add_argument("--tune", action="store_true", help="网格搜对线权重 / 反制风险权重（一半调参一半验证）")
     lt = sub.add_parser("lanes-test", help="回测：对面分路猜得准不准")
     lt.add_argument("--matches", type=int, default=3000)
+    lv = sub.add_parser("lane-test", help="回测：3 / 6 分钟时看击杀 / 死亡 / 等级能不能猜出对线优劣，屯野 / 莲花和对线结果")
+    lv.add_argument("--matches", type=int, default=3000)
+    sub.add_parser("lane-review", help="实战记录：3 / 6 / 10 分钟记下的自己数据，对照 STRATZ 赛后的对线结果")
     ap2 = sub.add_parser("backtest-ai", help="大模型选人盲测")
     ap2.add_argument("--moments", type=int, default=300)
     ap2.add_argument("--model", default="claude-opus-5-5")
@@ -320,6 +326,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         matches = backtest.fetch_matches(cfg, stats["hi_id"], args.matches)
         print(lanes.evaluate(matches, data.load_positions(cfg)))
+        return 0
+    if args.cmd == "lane-test":
+        from .lanestate import run as lane_test
+        print(lane_test(cfg, args.matches))
+        return 0
+    if args.cmd == "lane-review":
+        from .lanestate import review
+        print(review(cfg))
         return 0
     if args.cmd == "backtest-ai":
         from .aibacktest import run as ai_run

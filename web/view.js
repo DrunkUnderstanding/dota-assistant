@@ -155,13 +155,23 @@ function noticeHTML(v) {
     <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${esc(l.text)}</p>`).join('')}</section>`;
 }
 
-// 本局要点：两页（数据：分路 + 对线 / 起手 / 强势期 / 对面要防 / 关键装备；打法：AI 写的前中后期），热键翻页
+// 本局要点：按阶段分页（对线期：分路 + 对线 / 起手 / 对面要防；中期：出装 / 强势期；各页再接 AI 写的这一阶段打法），热键翻页
+// 每个小节只显示前几条，其余（more）折叠，点「展开」看；展开了哪些记在这里，重画（例如 AI 写完补进来）后保持
+const unfolded = new Set();
+const foldKey = (v, s) => `${v.title}|${v.page}|${s.title}`;
+const briefLine = (l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`;
 function briefHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭">×</button>' : '';
   const tabs = (v.tabs || []).map((t) => `<span class="brief-tab ${t.on ? 'is-on' : ''}" data-page="${esc(t.page)}">${esc(t.label)}</span>`).join('');
-  const sections = v.sections.map((s) => `
+  const sections = v.sections.map((s) => {
+    const more = s.more || [];
+    const key = foldKey(v, s);
+    const open = more.length && unfolded.has(key);
+    const fold = more.length ? `<button class="brief-fold" type="button" data-fold="${esc(key)}">${open ? '▴ 收起' : `▾ 展开另 ${more.length} 条`}</button>` : '';
+    return `
     <section class="brief-sec"><h3>${esc(s.title)}</h3>
-      ${s.lines.map((l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${esc(l.text)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`).join('')}</section>`).join('');
+      ${s.lines.map(briefLine).join('')}${open ? `<div class="brief-more">${more.map(briefLine).join('')}</div>` : ''}${fold}</section>`;
+  }).join('');
   return `
     <header class="ov-head"><span class="ov-pos">${esc(v.title)}</span><span class="ov-brand">选人助手</span>${close}</header>
     ${tabs ? `<div class="brief-tabs">${tabs}<em>${esc(v.hint || '')}</em></div>` : ''}
@@ -176,18 +186,32 @@ export function applyOverlayStyle(el, style) {
   el.style.setProperty('--ov-fill', `rgba(${r}, ${g}, ${b}, ${style.opacity})`);
 }
 
+// 野区提醒（封野 / 拉野 / 屯野）：弹着别的卡片时叠在顶上一行，不挤掉那张卡片
+function cueHTML(c) {
+  return `<div class="ov-cue"><b>${esc(c.title)}</b><span>${esc(c.text)}</span></div>`;
+}
+
 export function renderOverlay(root, view) {
   const html = !view || !view.kind ? '<div class="ov-empty">等待助手…</div>'
-    : view.kind === 'notice' ? noticeHTML(view) : view.kind === 'brief' ? briefHTML(view) : draftHTML(view);
+    : (view.cue ? cueHTML(view.cue) : '')
+      + (view.kind === 'notice' ? noticeHTML(view) : view.kind === 'brief' ? briefHTML(view) : draftHTML(view));
+  root._view = view;                                  // 点「展开 / 收起」时按这份重画
   if (root._html === html) return false;
   root._html = html;
   root.innerHTML = html;
   return true;
 }
 
-// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，剩余位置 → 切位置，要点卡片的标签 → 翻页，× → 关卡片
+// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，剩余位置 → 切位置，要点卡片的标签 → 翻页，
+// 要点小节的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
+    const fold = e.target.closest('.brief-fold[data-fold]');
+    if (fold) {
+      const key = fold.dataset.fold;
+      if (!unfolded.delete(key)) unfolded.add(key);
+      return renderOverlay(root, root._view);
+    }
     const tab = e.target.closest('.brief-tab[data-page]');
     const pos = e.target.closest('.team-row[data-pos]');
     if (pos) return act('set', { key: 'position', value: Number(pos.dataset.pos) });

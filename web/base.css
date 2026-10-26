@@ -251,6 +251,13 @@ img { display: block; }
   margin: 10px 0 4px; padding: 0; background: none; border: 0;
   font-size: 11px; font-weight: 600; letter-spacing: 1px; color: var(--text-faint);
 }
+.ov-cue {
+  display: flex; align-items: baseline; gap: 8px; margin: -2px 0 10px; padding: 6px 10px;
+  border-radius: 8px; font-size: 12px; line-height: 1.5;
+  background: var(--gold-soft); border: 1px solid rgba(216, 167, 78, 0.45); color: var(--text);
+  animation: pick-in 0.28s ease both;
+}
+.ov-cue b { flex: none; color: var(--gold); font-family: var(--num), var(--font); }
 .ov-close {
   width: 24px; height: 24px; margin-left: 2px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px;
   background: rgba(255, 255, 255, 0.05); color: var(--text-dim); font: 16px/1 var(--font); cursor: pointer;
@@ -271,6 +278,13 @@ img { display: block; }
 .brief-tab.is-on { border-color: var(--gold); color: var(--gold); background: var(--gold-soft); }
 .brief-tabs em { margin-left: auto; font-style: normal; font-size: 11px; color: var(--text-faint); }
 .brief-sec .brief-dim { border-left-color: transparent; background: none; color: var(--text-dim); font-size: 11px; padding: 0 8px; }
+/* 折叠起来的几条：展开后比显示的那几条淡一点；按钮做成一整行，游戏里好点中 */
+.brief-more p { opacity: 0.8; }
+.brief-fold {
+  display: block; width: 100%; margin: 0; padding: 2px 8px; border: 1px dashed var(--line-strong); border-radius: 6px;
+  background: none; color: var(--text-dim); font: 11px/1.6 var(--font); text-align: left; cursor: pointer;
+}
+.brief-fold:hover { color: var(--gold); border-color: var(--gold); }
 .ov-empty { padding: 14px 4px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 @keyframes pick-in {
@@ -278,5 +292,5 @@ img { display: block; }
   to { opacity: 1; transform: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pick, .ov-notice p { animation: none; }
+  .pick, .ov-notice p, .ov-cue { animation: none; }
 }

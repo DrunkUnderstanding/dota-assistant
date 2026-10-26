@@ -1,7 +1,9 @@
 """实时助手的主控（不依赖任何界面库）：定时识别、局面、推荐、语音、热键，状态整理成 JSON 推给网页界面。
-选完人（GSI 策略时间）弹「本局要点」卡片（brief.py），后台再让大模型写「打法」第二页（gameplan.py），号角响后收起；
+选完人（GSI 策略时间）弹「本局要点」卡片的对线期一页（brief.py），后台再让大模型补上各阶段打法（gameplan.py），号角响后收起；
+到 10 / 30 分钟再弹一次中期 / 后期那页（正弹着死亡复盘之类的就等它关了再弹），关掉以后热键 / 面板按钮随时再看、翻页；
 对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片；
 死亡时同一张卡片先说「刚才是怎么死的」（death.py，看 GSI 里自己死前 20 秒的血量 / 状态 / 保命装备），复活后自动收起。
+对线期按位置 / 英雄到点前几秒提醒封野、拉野、屯野、抢莲花（jungle.py），叠在卡片顶上一行，没卡片时单独一张小卡片，过点自己收起。
 选人时点某个推荐英雄，就按「如果选它」先做一张同样的要点卡片（数据页 + AI 打法页），看完点 × 回到推荐。
 
 「控制面板的格子」就是这里的 self.slots，识别和网页输入都只往里写。
@@ -24,7 +26,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, coach, config, death, gameplan, grid, llm, roles
+from . import brief, coach, config, death, gameplan, grid, jungle, lanestate, llm, roles
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
@@ -92,6 +94,11 @@ HOTKEY_ACTIONS = {
 }
 
 
+def _next_stage(page: str) -> str:
+    order = [p for p, _ in brief.STAGES]
+    return order[(order.index(page) + 1) % len(order)] if page in order else order[0]
+
+
 def _mask(secret: str) -> dict:
     return {"set": bool(secret), "tail": secret[-4:] if len(secret) >= 8 else ""}
 
@@ -151,7 +158,8 @@ class Live:
         self._brief_build = brief_build or brief.build
         self.brief_match: str | None = None      # 本局要点为哪一局做的
         self.brief: brief.Brief | None = None    # 做好的本局要点（关掉以后按热键还能再看）
-        self.brief_page = "data"                 # 卡片显示哪一页：data 数据 / plan AI 打法
+        self.brief_page = "lane"                 # 卡片显示哪一页：lane 对线期 / mid 中期 / late 后期（brief.STAGES）
+        self._brief_stage = "lane"               # 这局自动弹到了哪一阶段（每阶段只自动弹一次）
         self._horn_match: str | None = None      # 哪一局已经在号角响时收起过本局要点
         self._drafts_seen = 0                    # 进过几次选人阶段：本地 / 机器人局 matchid 一直是 0，靠它区分换局
         self._in_selection = False
@@ -161,11 +169,15 @@ class Live:
         self._coach_checkpoint = 0
         self._death_names: tuple | None = None   # 死亡复盘用的中文名 + 保命技能（按英雄缓存）
         self._death_shown = 0.0                  # 死亡卡片弹出的时间；复活后收起
+        self.jungle: jungle.Plan | None = None   # 这局提醒哪些野区动作（局内提醒准备好时按位置 + 同分段数据定）
+        self.jungle_cue: jungle.Cue | None = None   # 正显示的那条
+        self._cue_muted: set[str] = set()        # 这局点 × 关掉的种类
+        self._lane_logged: set[int] = set()      # 这局 3 / 6 / 10 分钟哪几个已经记进 data/lane_log.jsonl（lanestate.py）
 
         # ---- 选人时「如果选它」：点推荐英雄做的要点卡片 ----
         self.pick_key: tuple | None = None       # (英雄 id, 局面 key, 位置)；None = 没在看
         self.pick_brief: brief.Brief | None = None
-        self.pick_page = "data"
+        self.pick_page = "lane"
         self.pick_note = ""                      # 还没做好 / 出错时显示什么
 
         self.last_view: DraftView | None = None
@@ -332,7 +344,9 @@ class Live:
             self.save_shot()
         elif t == "dismiss_coach":
             if self.coach_card:
-                self.coach_card = None
+                self._close_card()
+            elif self.jungle_cue:
+                self.mute_cue()
             else:
                 self.pick_key = None
         elif t == "show_brief":
@@ -692,6 +706,7 @@ class Live:
         strategy = bool(st and st.alive and st.game_state == STRATEGY_STATE)
         if not (st and st.alive and (st.in_match or strategy)):
             self.coach_card = None               # 比赛结束 / 回到选人：收起卡片
+            self.jungle_cue = None
             return
         # 天梯的 matchid 选人时就有；本地 / 机器人局一直是 0（2026-10-23 实测），连开两局会被当成同一局
         key = st.match_id if st.match_id not in ("", "0") else f"本地{self._drafts_seen}"
@@ -703,9 +718,12 @@ class Live:
             self._horn_match = key               # 号角响了：本局要点收起一次，之后按热键再看就不收了
             if self._showing_brief():
                 self.coach_card = None
+                self.message = f"本局要点已收起，到中期 / 后期会再弹；想看按 {self.cfg.hotkey_brief}"
         if key != self.coach_match:
             self._start_coach(key)
             return
+        self._jungle_tick(st)
+        self._lane_log(st, key)
         minute = st.clock_minutes
         died = st.deaths > self._coach_deaths
         self._coach_deaths = st.deaths
@@ -720,7 +738,7 @@ class Live:
             self._coach_checkpoint = passed[-1]
         needs, nxt, by_death = [], None, []
         if self.coach and (died or passed):     # coach 是 None：还在准备（后台线程）或者准备失败
-            cst = coach.State(minute, st.items, st.last_hits, st.net_worth, st.gold)
+            cst = coach.State(minute, st.items, st.last_hits, st.net_worth, st.gold, st.inventory, st.buyback)
             needs = self.coach.tick(cst, checkpoint=bool(passed))
             by_death = self.coach.on_death(recap, cst) if recap else []   # 先按死法调顺序，再说下一件
             nxt = self.coach.next_line(cst)
@@ -733,6 +751,64 @@ class Live:
         elif lines or shop:
             self._show_coach(f"局内提醒 · {coach._mmss(minute)} {'死亡' if died else '时间点'}", lines + shop,
                              on_death=died)
+        self._stage_tick(minute)
+
+    def _stage_tick(self, minute: float) -> None:
+        """到了中期 / 后期弹一次本局要点的那一页；正弹着别的卡片（死亡复盘、缺口提醒）就等它关了再弹"""
+        stage, order = brief.stage_at(minute), [p for p, _ in brief.STAGES]
+        if not self.brief or order.index(stage) <= order.index(self._brief_stage):
+            return
+        if self.coach_card and not self._showing_brief():
+            return
+        self._brief_stage = stage
+        if not self.brief.has(stage):            # 例如没开 AI 时后期那页是空的
+            return
+        self.brief_page = stage
+        self.coach_card = self._brief_view()
+        self.user_hidden = False
+        log.info("本局要点：%s，弹%s那页", coach._mmss(minute), dict(brief.STAGES)[stage])
+
+    def _jungle_tick(self, st) -> None:
+        """到点前几秒亮一条野区提醒；死了不提醒（做不了，也别挡死亡复盘）"""
+        alive = (st.raw.get("hero") or {}).get("alive") is not False
+        clock = round(st.clock_minutes * 60)     # 分钟换回秒有浮点误差（4:07 会算成 4:06.999）
+        cue = self.jungle.cue(clock, self._cue_muted) if self.jungle and alive else None
+        if cue and cue != self.jungle_cue:
+            log.info("野区提醒「%s」：%s", cue.title, " / ".join(t for _, t in cue.lines))
+            self.user_hidden = False             # 和局内提醒一样，新的一条总要让人看见
+        self.jungle_cue = cue
+
+    def _lane_log(self, st, key: str) -> None:
+        """3:00 / 6:00 / 10:00 把自己的 GSI 数据原样记一笔，赛后 lane-review 对照 STRATZ 的对线结果。
+        过了 20 秒才开助手的那个时刻不补记（数据已经不是那一刻的）"""
+        clock = round(st.clock_minutes * 60)
+        for m in lanestate.LOG_MINUTES:
+            if m in self._lane_logged or not m * 60 <= clock <= m * 60 + 20:
+                continue
+            self._lane_logged.add(m)
+            hero = st.raw.get("hero") or {}
+            ratio = lambda a, b: hero[a] / hero[b] if hero.get(a) is not None and hero.get(b) else None
+            draft = self.current_draft()
+            rec = {"at": datetime.now().isoformat(timespec="seconds"), "match": key, "minute": m, "clock": clock,
+                   "hero_key": st.my_hero_key, "hero_id": hero.get("id") or (draft.my_hero.id if draft.my_hero else None),
+                   "hero_name": draft.my_hero.name_cn if draft.my_hero else None, "pos": self.position, "team": st.team,
+                   "player": {k: v for k, v in (st.raw.get("player") or {}).items() if not isinstance(v, (dict, list))},
+                   "hero": {k: v for k, v in hero.items() if not isinstance(v, (dict, list))},
+                   "hp": ratio("health", "max_health"), "mana": ratio("mana", "max_mana"),
+                   "items": sorted(st.items), "cue": self.jungle_cue.title if self.jungle_cue else None}
+            try:
+                lanestate.log_moment(rec)
+                log.info("对线记录：%d:00 已记下（赛后 python -m dota_assistant lane-review 对照）", m)
+            except OSError:
+                log.warning("对线记录没写进去", exc_info=True)
+
+    def mute_cue(self) -> None:
+        """点 × / 按 F8 关掉正显示的野区提醒：这局不再提醒这一种"""
+        kind = self.jungle_cue.kind
+        self._cue_muted.add(kind)
+        self.jungle_cue = None
+        self.message = f"这局不再提醒{jungle.LABELS[kind]}（config.toml 里 jungle_cues = false 能全部关掉）"
+        log.info(self.message)
 
     def _death_recap(self, st) -> death.Recap | None:
         """刚死：把死前那段推送整理成「怎么死的」，顺手原样存一份（核对字段 / 调阈值用）"""
@@ -756,6 +832,7 @@ class Live:
         if not draft.my_hero:
             return                               # GSI 还没给英雄，下一轮再试
         self.coach_match, self.coach = key, None
+        self.jungle, self.jungle_cue, self._cue_muted, self._lane_logged = None, None, set(), set()
         self._coach_deaths = self.gsi.state.deaths  # 中途开助手：之前的死亡不算
         my_id, enemy_ids, pos = draft.my_hero.id, [h.id for h in draft.enemies], self.position
         log.info("比赛 %s：准备局内提醒（%s · %d 号位 · 对面 %s）", key, draft.my_hero.name_cn, pos, _names(draft.enemies))
@@ -778,6 +855,11 @@ class Live:
             self.message = f"局内提醒没准备好：{err}"
             return
         self.coach, notes = res
+        if self.cfg.jungle_cues:
+            self.jungle = jungle.make(self.position, getattr(self.coach, "bench", None),
+                                      self.cfg.stack_second, self.cfg.pull_second)
+            log.info("野区提醒：%d 号位 · %s", self.position,
+                     "、".join(jungle.LABELS[k] for k in sorted(self.jungle.kinds)) or "不提醒")
         st = self.gsi.state
         self._coach_deaths = st.deaths
         self._coach_checkpoint = max((c for c in coach.CHECKPOINTS if c < st.clock_minutes), default=0)
@@ -789,7 +871,7 @@ class Live:
         draft = self.current_draft()
         if not draft.my_hero:
             return                               # GSI 还没给英雄，下一轮再试
-        self.brief_match, self.brief = key, None
+        self.brief_match, self.brief, self._brief_stage = key, None, "lane"
         self.pick_key = None                     # 真的选完了，「如果选它」的卡片就不用了
         ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
         lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
@@ -813,19 +895,20 @@ class Live:
         if err:
             self.message = f"本局要点没做出来：{err}"
             return
-        self.brief, self.brief_page = res, "data"
+        self.brief, self.brief_page = res, "lane"
         if self.cfg.ai_plan:
             self._start_plan(key, res, ids)
         else:
             res.plan_note = "AI 打法没开（控制面板右上角「设置」里打开）"
         st = self.gsi.state if self.gsi else None
         if st and st.alive and st.in_match and st.clock_minutes >= 0:
+            self._brief_stage = brief.stage_at(st.clock_minutes)   # 中途开的助手：当前阶段不弹，后面的阶段照弹
             self.message = f"本局要点已就绪（已经开打，按 {self.cfg.hotkey_brief} 查看）"
             return
         self.show_brief()
 
     def _start_plan(self, key: str, b: brief.Brief, ids: tuple) -> None:
-        b.plan_note = "AI 正在写本局打法…（一般 30~60 秒，做好会自动切到这页）"
+        b.plan_note = "AI 正在写本局打法…（一般 30~60 秒，做好会补进各阶段的页里）"
 
         def work():
             t0 = time.monotonic()
@@ -846,8 +929,7 @@ class Live:
         else:
             self.brief.plan = plan
             self.brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
-        if self._showing_brief():                # 正在看要点：自动翻到打法页
-            self.brief_page = "plan"
+        if self._showing_brief():                # 正在看要点：这一页补上 AI 写的
             self.coach_card = self._brief_view()
         else:
             self.message = f"本局打法已就绪，按 {self.cfg.hotkey_brief} 查看"
@@ -856,21 +938,22 @@ class Live:
         return bool(self.coach_card and self.coach_card.get("kind") == "brief")
 
     def _brief_view(self) -> dict:
-        return self.brief.view(self.brief_page, f"{self.cfg.hotkey_brief} 切换数据 / 打法")
+        return self.brief.view(self.brief_page, f"{self.cfg.hotkey_brief} 翻页")
 
     def show_brief(self) -> None:
-        """热键：没在看就打开（打法做好了先看打法），正在看就翻页"""
+        """热键 / 面板按钮：没在看就打开当前阶段那页，正在看就翻到下一阶段（后期再按回到对线期）"""
         if not self._showing_brief() and self.pick_brief and self.pick_key:
-            self.pick_page = "plan" if self.pick_page == "data" else "data"
+            self.pick_page = _next_stage(self.pick_page)
             self.user_hidden = False
             return
         if not self.brief:
             self.message = "这局还没有本局要点（要等选完人、GSI 告诉我你的英雄）"
             return
         if self._showing_brief():
-            self.brief_page = "plan" if self.brief_page == "data" else "data"
+            self.brief_page = _next_stage(self.brief_page)
         else:
-            self.brief_page = "plan" if self.brief.plan else "data"
+            st = self.gsi.state if self.gsi else None
+            self.brief_page = brief.stage_at(st.clock_minutes) if st and st.alive and st.in_match else "lane"
         self.coach_card = self._brief_view()
         self.user_hidden = False
 
@@ -886,7 +969,7 @@ class Live:
         self.user_hidden = False
         if key == self.pick_key:
             return                               # 同一个局面已经在做 / 做好了，直接看
-        self.pick_key, self.pick_brief, self.pick_page = key, None, "data"
+        self.pick_key, self.pick_brief, self.pick_page = key, None, "lane"
         self.pick_note = f"正在整理选{h.name_cn}的对线 / 装备数据…"
         ids = (hero_id, [a.id for a in draft.allies], [e.id for e in draft.enemies])
         lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
@@ -914,7 +997,7 @@ class Live:
         if not self.cfg.ai_plan:
             res.plan_note = "AI 打法没开（控制面板右上角「设置」里打开）"
             return
-        res.plan_note = "AI 正在写选它怎么打…（一般 30~60 秒，做好会自动切到这页）"
+        res.plan_note = "AI 正在写选它怎么打…（一般 30~60 秒，做好会补进各阶段的页里）"
 
         def work():
             t0 = time.monotonic()
@@ -935,10 +1018,9 @@ class Live:
             return
         self.pick_brief.plan = plan
         self.pick_brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
-        self.pick_page = "plan"
 
     def set_brief_page(self, page: str) -> None:
-        if page not in ("data", "plan"):
+        if page not in dict(brief.STAGES):
             raise ValueError(f"没有这一页 {page!r}")
         if self._showing_brief():
             self.brief_page = page
@@ -979,16 +1061,26 @@ class Live:
     def toggle_overlay(self) -> None:
         """有局内提醒弹着时先关提醒（局内叠加层鼠标点不到，靠热键关）"""
         if self.coach_card:
-            self.coach_card = None
+            self._close_card()
+        elif self.jungle_cue:
+            self.mute_cue()
         elif self.pick_key:
             self.pick_key = None
         else:
             self.user_hidden = not self.user_hidden
 
+    def _close_card(self) -> None:
+        if self._showing_brief():
+            self.message = f"本局要点已收起，按 {self.cfg.hotkey_brief} 或控制面板「本局要点」再看"
+        self.coach_card = None
+
     def close_overlay(self) -> None:
         """叠加层右上角的 ×：弹着局内提醒就只关提醒，否则把整个叠加层收起（解锁着也一并固定）"""
         if self.coach_card:
-            self.coach_card = None
+            self._close_card()
+            return
+        if self.jungle_cue:
+            self.mute_cue()
             return
         if self.pick_key:
             self.pick_key = None
@@ -1038,7 +1130,7 @@ class Live:
             return True
         if self.user_hidden:
             return False
-        if self.coach_card or self.pick_key:
+        if self.coach_card or self.pick_key or self.jungle_cue:
             return True
         in_game_not_draft = bool(self.gsi and self.gsi.state.alive and not self.gsi.state.in_draft
                                  and self.mode == "auto")
@@ -1080,9 +1172,19 @@ class Live:
             "bans_text": self.bans_text,
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
-                        "view": self.coach_card or self.pick_view() or self.notice or self.draft_view()},
+                        "view": self.overlay_view()},
             "status": self.status(),
         }
+
+    def overlay_view(self) -> dict:
+        """野区提醒：有卡片时叠在卡片顶上一行，没卡片时自己一张小卡片（能关）"""
+        cue = self.jungle_cue
+        if cue and self.coach_card:
+            return {**self.coach_card, "cue": {"title": cue.title, "text": cue.lines[0][1]}}
+        if cue:
+            return {"kind": "notice", "title": cue.title, "closable": True, "jungle": True,
+                    "lines": [{"kind": k, "text": t} for k, t in cue.lines]}
+        return self.coach_card or self.pick_view() or self.notice or self.draft_view()
 
     def heroes(self) -> list[dict]:
         return sorted(({"id": h.id, "name": h.name_cn, "en": h.name_en} for h in self.db),

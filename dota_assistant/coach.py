@@ -45,7 +45,13 @@ SUPPORT_POSITIONS = (4, 5)   # 辅助：对抗装（黑皇杖 / 金箍棒）不�
 
 # 2：itemFullPurchase 加 matchLimit: 0（不加只返回前中期最常见的几件，黑皇杖都没有）
 # 3：只算第一次购买（instance 0），分母改成「买鞋最多的那种鞋的局数」（见 item_timings）
-BENCH_VERSION = 3
+# 4：每分钟多存平均屯野数（stacks），野区提醒（jungle.py）看要不要提醒屯野
+# 5：每分钟数据拉到 BENCH_MAX_MIN（以前没写 maxTime，STRATZ 默认只给到 35 分钟）；总局数改用第 0 分钟的局数
+BENCH_VERSION = 5
+# STRATZ heroStats.stats 按时间分组：不写 maxTime 默认只给 0~35 分钟（2026-10-26 实测），最多给到 75 分钟。
+# 第 t 分钟 = 打到第 t 分钟还没结束的局的平均值；局数少于 PER_MIN_MIN_MATCHES 的分钟不要，冷门英雄就到它数据够的最后一分钟为止
+BENCH_MAX_MIN = 90
+PER_MIN_MIN_MATCHES = 100
 
 
 def fetch_bench(cfg: Config, hero_id: int, pos: int) -> dict:
@@ -55,13 +61,16 @@ def fetch_bench(cfg: Config, hero_id: int, pos: int) -> dict:
         if cached.get("v") == BENCH_VERSION:
             return cached
     br = data._stratz_brackets(cfg)
-    q = """query($h: Short!, $hs: [Short], $p: [MatchPlayerPositionType], $b: [RankBracketBasicEnum]) { heroStats {
-             stats(heroIds: $hs, positionIds: $p, bracketBasicIds: $b, groupByTime: true) { time matchCount cs networth }
+    q = """query($h: Short!, $hs: [Short], $p: [MatchPlayerPositionType], $b: [RankBracketBasicEnum], $mx: Int) { heroStats {
+             stats(heroIds: $hs, positionIds: $p, bracketBasicIds: $b, groupByTime: true, maxTime: $mx) {
+               time matchCount cs networth campsStacked }
              itemFullPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b, matchLimit: 0) { itemId instance time matchCount }
-             itemBootPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b) { itemId instance matchCount }
-             total: stats(heroIds: $hs, positionIds: $p, bracketBasicIds: $b) { matchCount } } }"""
-    d = data._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br)["heroStats"]
-    per_min = {str(r["time"]): {"cs": r["cs"], "networth": r["networth"]} for r in d["stats"] if r["matchCount"] >= 100}
+             itemBootPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b) { itemId instance matchCount } } }"""
+    d = data._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br, mx=BENCH_MAX_MIN)["heroStats"]
+    per_min = {str(r["time"]): {"cs": r["cs"], "networth": r["networth"], "stacks": r["campsStacked"]}
+               for r in d["stats"] if r["matchCount"] >= PER_MIN_MIN_MATCHES}
+    # 第 0 分钟的局数 = 全部局数。不分时间的 stats 其实给的是「打到 maxTime（默认 35）分钟的局数」，不能当总数
+    total = next((r["matchCount"] for r in d["stats"] if r["time"] == 0), 0)
     items: dict[str, list[list[int]]] = {}
     for r in d["itemFullPurchase"]:
         if not r["instance"]:                    # 同一件买第二次（instance 1+）不算
@@ -71,7 +80,7 @@ def fetch_bench(cfg: Config, hero_id: int, pos: int) -> dict:
         if not r["instance"]:
             boots[r["itemId"]] = boots.get(r["itemId"], 0) + r["matchCount"]
     out = {"v": BENCH_VERSION, "hero_id": hero_id, "pos": pos, "brackets": br,
-           "matches": (d["total"] or [{}])[0].get("matchCount", 0), "boots_max": max(boots.values(), default=0),
+           "matches": total, "boots_max": max(boots.values(), default=0),
            "per_min": per_min, "items": items}
     BENCH_DIR.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(out), encoding="utf-8")
@@ -80,8 +89,9 @@ def fetch_bench(cfg: Config, hero_id: int, pos: int) -> dict:
 
 def item_timings(bench: dict) -> dict[int, tuple[float, float]]:
     """itemId → (购买比例, 中位购买分钟)。
-    分母：STRATZ 的 stats 总局数和物品统计口径对不上（2026-10-25 实测卓尔一号位 stats 2513 局，
-    动力鞋却有 3533 局买），所以取「总局数」和「买得最多的那种鞋的局数」里大的那个——几乎每局都买鞋"""
+    分母：取「总局数」和「买得最多的那种鞋的局数」里大的那个——几乎每局都买鞋。
+    （2026-10-25 卓尔一号位 stats 2513 局、动力鞋却有 3533 局买，是因为当时的总局数其实是「打到 35 分钟的局数」，
+    BENCH_VERSION 5 已改成真正的总局数；鞋的局数留着兜底）"""
     out = {}
     total = max(bench.get("matches") or 0, bench.get("boots_max") or 0) or 1
     for iid, rows in bench["items"].items():
@@ -179,6 +189,25 @@ def _targeted_ult(e: kb.HeroKB) -> list[tuple[str, str]]:
     return [(ab.name, ab.text.split("\n")[0]) for ab in e.abilities if ab.ultimate and ab.targets_enemy and not ab.granted]
 
 
+# 自己能造出一群可控幻象的英雄（幻影长矛手、娜迦海妖、混沌骑士、恐怖利刃）。
+# 「无法控制」的（幽鬼如影随形）、造别人幻象的（暗影恶魔崩裂禁锢「该单位的」）、百戏大王的道具（【使用】）不算
+ILLUSION_RE = re.compile(r"(制造|创造|召唤|产生)[^。；]{0,14}(幻象|镜像)")
+ILLUSION_SKIP = re.compile(r"无法控制|该单位的|【使用")
+
+
+def _illusions(e: kb.HeroKB) -> list[tuple[str, str]]:
+    out = []
+    for ab in e.abilities:
+        if ab.granted:
+            continue
+        sents = (x.strip() for x in re.split(r"(?<=[。！；\n])", ab.text))
+        sent = next((x for x in sents if ILLUSION_RE.search(x) and not ILLUSION_SKIP.search(x)
+                     and x not in ab.scepter and x not in ab.shard), None)
+        if sent:
+            out.append((ab.name, sent))
+    return out
+
+
 COUNTERS = (
     Counter("linken", _targeted_ult, 2, (("sphere", r"抵挡.{0,6}指向性技能"), ("lotus_orb", r"指向性技能反馈给施法者")),
             "抵挡 / 反馈指向技能", "对面{who}是指向性大招，可以出{item}"),
@@ -188,6 +217,10 @@ COUNTERS = (
             "", "对面{who}能吸血，{item}能降低回复"),
     Counter("pierce", _tagged("提供技能免疫"), 1, (("abyssal_blade", r"无视减益免疫"),),
             "无视技能免疫", "对面{who}能技能免疫，{item}的击晕无视减益免疫"),
+    # 2026-10-26 玩家：后期出装要看对面英雄。范围伤害一下打一片幻象（实现假设，玩家没确认装备选哪几件）
+    Counter("illusion", _illusions, 1, (("mjollnir", r"\d+个目标之间跳跃"), ("bfury", r"锥形区域内敌人造成"),
+                                        ("radiance", r"每秒对敌军造成"), ("shivas_guard", r"寒冷的波动，对敌人造成")),
+            "", "对面{who}会造幻象，{item}是范围伤害，一下打一片"),
 )
 
 
@@ -317,6 +350,8 @@ class State:
     cs: int | None = None
     networth: int | None = None
     gold: int | None = None       # 身上的钱（GSI player.gold）
+    slots: list[str] | None = None            # 身上 6 格（GSI slot0~5），格子满了要卖东西
+    buyback: tuple[int, float] | None = None  # (买活价, 买活冷却剩余秒)
 
 
 def check(needs: list[Need], st: State, bench: dict | None, tree, base: kb.KnowledgeBase,
@@ -379,11 +414,13 @@ class Coach:
         return [("warn", f"本局第 {n} 次{label}，{pick.name}提到下一件：{pick.why}")]
 
     def next_line(self, st: State) -> str | None:
-        """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用"""
+        """「下一件：黑皇杖，还差 850 金；之后 …」，死了回家买东西时最有用；格子满了说卖哪件，后期说买了够不够买活"""
         if self.build is None:
             return None
         from . import itembuild
-        return itembuild.next_line(self.build, st.owned, st.gold, self.tree, self.const)
+        names = {k: e.name for k, e in self.base.items.items()} if self.base else {}
+        return itembuild.next_line(self.build, st.owned, st.gold, self.tree, self.const,
+                                   slots=st.slots, buyback=st.buyback, minute=st.minute, names=names)
 
     def tick(self, st: State, checkpoint: bool) -> list[Need]:
         out = []

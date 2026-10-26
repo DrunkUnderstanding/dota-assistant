@@ -37,6 +37,9 @@ class Config:
     voice: bool = False               # 语音播报先关掉、面板开关也隐藏了（玩家 2026-10-22 决定），这里改 true 能打开
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
+    jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野 / 抢莲花，jungle.py）；局内点 × 能按种类关掉这一局的
+    stack_second: int = 53            # 屯野提醒的秒数（x:53 拉）
+    pull_second: int = 15             # 拉野提醒的秒数（x:15 拉）；不同野点 / 阵营差几秒，按自己那边调
     ai_plan: bool = True              # 本局要点里加「AI 打法」（每局一次，几十秒）
     ai_provider: str = "claude_code"  # AI 来源：claude_code（本机 Claude Code 订阅）/ anthropic（自己的 API Key）/ openai（OpenAI 兼容接口）
     ai_model: str = "claude-opus-5-5"

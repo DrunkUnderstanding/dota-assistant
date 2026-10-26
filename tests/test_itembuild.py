@@ -34,6 +34,50 @@ class MoneyTest(unittest.TestCase):
         self.assertEqual(line, "下一件：黑皇杖（针对），钱够了（要 3050，身上 3100）")
         self.assertIsNone(itembuild.next_line(b, {"hurricane_pike", "black_king_bar"}, 0, TREE, CONST))
 
+    def test_sell_cheapest_when_full(self):
+        const = {**CONST, "branches": {"cost": 50, "qual": "consumable"}, "tango": {"cost": 90, "qual": "consumable"},
+                 "magic_wand": {"cost": 450}, "aegis": {"cost": 0}}
+        tree = coach.item_tree(const)
+        full = ["magic_wand", "branches", "tango", "aegis", "force_staff", "mithril_hammer"]
+        self.assertEqual(itembuild.sell_pick(full, "dragon_lance", tree, const), ("branches", 50))   # 树枝算，最便宜
+        no_branch = ["magic_wand", "tango", "aegis", "force_staff", "mithril_hammer", "ogre_axe"]
+        self.assertEqual(itembuild.sell_pick(no_branch, "dragon_lance", tree, const), ("magic_wand", 450))  # 吃的、盾不算
+        self.assertIsNone(itembuild.sell_pick(no_branch[:5] + [""], "dragon_lance", tree, const))       # 有空格
+        self.assertIsNone(itembuild.sell_pick(no_branch, "black_king_bar", tree, const))   # 身上有零件，合成会空出格子
+        b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
+        line = itembuild.next_line(b, set(no_branch), 0, tree, const, slots=no_branch, names={"magic_wand": "魔杖"})
+        self.assertEqual(line, "下一件：魔龙枪，还差 2000 金；格子满了，先卖魔杖（450 金，身上最便宜）")
+
+    def test_buyback_after_late(self):
+        b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
+        line = lambda minute, bb: itembuild.next_line(b, set(), 3000, TREE, CONST, buyback=bb, minute=minute)
+        self.assertEqual(line(35, (1500, 0)), "下一件：魔龙枪，钱够了（要 2000，身上 3000），但买完只剩 1000，不够买活（1500）")
+        self.assertEqual(line(20, (1500, 0)), "下一件：魔龙枪，钱够了（要 2000，身上 3000）")     # 后期前不提
+        self.assertEqual(line(35, (1500, 60)), "下一件：魔龙枪，钱够了（要 2000，身上 3000）")    # 买活冷却中
+        self.assertEqual(line(35, (900, 0)), "下一件：魔龙枪，钱够了（要 2000，身上 3000）")      # 买完还够
+
+    def test_split_by_stage(self):
+        b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core"),
+                             itembuild.Step("black_king_bar", "黑皇杖", 25, "counter", "对面控制多"),
+                             itembuild.Step("hurricane_pike", "飓风长戟", 34, "core")])
+        mid = itembuild.brief_lines(b, hi=30)
+        self.assertEqual(mid[0], ("row", "魔龙枪 15′ → ★黑皇杖 25′"))
+        late = itembuild.late_lines(b, 30)
+        self.assertEqual(late[0], ("row", "飓风长戟 34′"))
+        self.assertIn(("row", "针对这局的黑皇杖前面就该有，到后期还没有先补"), late)
+        self.assertIn("最便宜", late[-1][1])
+        self.assertEqual(itembuild.late_lines(itembuild.Build(), 30), [])        # 没有出装数据就没有这一节
+
+    def test_gsi_inventory_and_buyback(self):
+        st = GameState()
+        st.update({"items": {"slot0": {"name": "item_magic_wand"}, "slot1": {"name": "empty"},
+                             "slot6": {"name": "item_branches"}},
+                   "hero": {"buyback_cost": 1800, "buyback_cooldown": 0}})
+        self.assertEqual(st.inventory, ["magic_wand", "", "", "", "", ""])      # 背包不算
+        self.assertEqual(st.buyback, (1800, 0.0))
+        st.update({"hero": {}})
+        self.assertIsNone(st.buyback)
+
     def test_gsi_gold(self):
         st = GameState()
         st.update({"player": {"gold": 1234}})
@@ -77,6 +121,17 @@ class RealKBTest(unittest.TestCase):
         self.assertTrue(any("法术反制" in n and "不用专门出" in n for n in notes), notes)
         needs, _ = self.plan("斯温", ["莱恩", "末日使者"], bench)
         self.assertIn("linken", [n.key for n in needs])
+
+    def test_illusion_counter(self):
+        # 能自己造一群幻象的才算；幽鬼的如影随形「无法控制」、暗影恶魔造的是别人的幻象，不算
+        self.assertEqual({h.name for h in self.base.heroes.values() if coach._illusions(h)},
+                         {"幻影长矛手", "娜迦海妖", "混沌骑士", "恐怖利刃"})
+        needs, _ = self.plan("主宰", ["娜迦海妖"], self.bench(bfury=(30, 14), mjollnir=(10, 30)))
+        need = next(n for n in needs if n.key == "illusion")
+        self.assertEqual(need.items, ("bfury",))                     # 两件都出：挑买得多的
+        self.assertTrue(any("锥形区域" in e for e in need.evidence), need.evidence)
+        needs, _ = self.plan("主宰", ["幽鬼", "暗影恶魔"], self.bench(bfury=(30, 14)))
+        self.assertNotIn("illusion", [n.key for n in needs])
 
     def test_shard_only_evasion_ignored(self):
         # 狼人的狼要魔晶才有闪避，不值得为它出金箍棒

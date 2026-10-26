@@ -224,8 +224,10 @@ def _stratz_brackets(cfg: Config) -> list[str]:
 
 
 def fetch_positions(cfg: Config) -> dict:
-    """{英雄 id: {位置 1~5: [局数, 胜场]}}，STRATZ 最近一周、对应段位"""
-    q = """query($b: [RankBracketBasicEnum]) { heroStats { stats(bracketBasicIds: $b, groupByPosition: true) {
+    """{英雄 id: {位置 1~5: [局数, 胜场]}}，STRATZ 最近一周、对应段位。
+    maxTime: 0 不能省：不写时 STRATZ 只算「打到 35 分钟还没结束」的局（约 2/3），
+    后期英雄胜率偏高、前期英雄偏低，最多差 6 个百分点（2026-10-26 实测，见 HANDOFF 第 29 节）"""
+    q = """query($b: [RankBracketBasicEnum]) { heroStats { stats(bracketBasicIds: $b, groupByPosition: true, maxTime: 0) {
              heroId position matchCount winCount } } }"""
     out: dict[str, dict[str, list[int]]] = defaultdict(dict)
     for r in _stratz(cfg, q, b=_stratz_brackets(cfg))["heroStats"]["stats"]:

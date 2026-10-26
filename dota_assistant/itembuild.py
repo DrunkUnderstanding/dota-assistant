@@ -26,6 +26,7 @@ NEXT_SHOW = 2                # 「下一件」后面再列几件
 DEATH_MIN = 3                # 同一种死法本局第几次起才推对应装备（玩家 2026-10-25：超过两次才推）
 DEATH_SILENCE = 2            # 被沉默至少几秒才算「被沉默死」
 DEATH_HARD = 2               # 没归到别的死法（瞬间打爆 / 残血拖太久…）时，眩晕 / 妖术至少几秒也按被控处理
+BUYBACK_FROM = 30            # 第几分钟起「下一件」要提醒买了还够不够买活（和本局要点「后期」那页同一时间）
 
 
 @dataclass
@@ -104,8 +105,31 @@ def remaining_cost(key: str, owned: set[str], const: dict) -> int:
     return need(key)
 
 
-def next_line(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[str]], const: dict) -> str | None:
-    """「下一件：黑皇杖，还差 850 金；之后 蝴蝶、白银之锋」"""
+def sell_pick(slots: list[str] | None, next_key: str, tree: dict[str, set[str]], const: dict) -> tuple[str, int] | None:
+    """身上 6 格满了，买下一件之前卖哪件：价值（买价）最低的那件（玩家 2026-10-26：「六个格子满了一般会卖掉价值最小的那件」）。
+    身上有下一件的零件就不用卖（合成会空出格子）。吃掉 / 用掉的消耗品（树枝除外）和没有买价的（不朽之守护）不算——
+    这条是实现假设，玩家没确认。返回 (装备 key, 买价)"""
+    if not slots or len(slots) < 6 or not all(slots):
+        return None
+    if any(next_key in tree.get(k, ()) for k in slots):
+        return None
+    menu = []
+    for k in slots:
+        it = const.get(k) or {}
+        cost = int(it.get("cost") or 0)
+        if cost > 0 and (it.get("qual") != "consumable" or k == "branches"):
+            menu.append((cost, k))
+    if not menu:
+        return None
+    cost, k = min(menu)
+    return k, cost
+
+
+def next_line(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[str]], const: dict,
+              slots: list[str] | None = None, buyback: tuple[int, float] | None = None, minute: float = 0,
+              names: dict[str, str] | None = None) -> str | None:
+    """「下一件：黑皇杖，还差 850 金；之后 蝴蝶、白银之锋」。
+    格子满了加一句先卖哪件；BUYBACK_FROM 分钟后钱够了但买完不够买活，也说一声"""
     todo = b.todo(owned, tree)
     if not todo:
         return None
@@ -116,20 +140,40 @@ def next_line(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[s
         money = f"还要 {left} 金"
     elif gold >= left:
         money = f"钱够了（要 {left}，身上 {gold}）"
+        if buyback and minute >= BUYBACK_FROM and buyback[1] <= 0 and gold - left < buyback[0]:
+            money += f"，但买完只剩 {gold - left}，不够买活（{buyback[0]}）"
     else:
         money = f"还差 {left - gold} 金"
     after = "、".join(x.name for x in todo[1:1 + NEXT_SHOW])
-    return f"下一件：{name}，{money}" + (f"；之后 {after}" if after else "")
+    sell = sell_pick(slots, s.key, tree, const)
+    sell_text = f"；格子满了，先卖{(names or {}).get(sell[0], sell[0])}（{sell[1]} 金，身上最便宜）" if sell else ""
+    return f"下一件：{name}，{money}{sell_text}" + (f"；之后 {after}" if after else "")
 
 
-def brief_lines(b: Build) -> list[tuple]:
-    """本局要点「出装」一节：顺序一行 + 每件针对装的理由（悬停看原文）"""
-    if not b.steps:
+def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]:
+    """本局要点「出装」一节：[lo, hi) 分钟的顺序一行 + 每件针对装的理由（悬停看原文）"""
+    steps = [s for s in b.steps if s.minute >= lo and (hi is None or s.minute < hi)]
+    if not steps:
         return []
     mark = {"core": "", "counter": "★", "common": "·", "death": "✚"}
-    lines = [("row", " → ".join(f"{mark[s.kind]}{s.name} {s.minute:.0f}′" for s in b.steps))]
-    lines += [("warn" if s.urgent else "row", f"★{s.name}：{s.why}", s.quote) for s in b.steps if s.kind == "counter"]
+    lines = [("row", " → ".join(f"{mark[s.kind]}{s.name} {s.minute:.0f}′" for s in steps))]
+    lines += [("warn" if s.urgent else "row", f"★{s.name}：{s.why}", s.quote) for s in steps if s.kind == "counter"]
     lines.append(("dim", "′ = 同分段中位购买时间；无标记 = 核心（≥40% 的局买）；★ = 针对这局阵容；· = 之后常见"))
+    return lines
+
+
+def late_lines(b: Build, late: float) -> list[tuple]:
+    """本局要点「后期出装」一节：late 分钟以后的顺序 + 针对装；前面的针对装再列一遍（后期还没有就该补了）；
+    再加卖东西 / 买活两条规矩（局内「下一件」会按身上的格子和钱具体说）。没有出装数据就不出这一节"""
+    if not b.steps:
+        return []
+    lines = brief_lines(b, lo=late)
+    early = [s.name for s in b.steps if s.kind == "counter" and s.minute < late]
+    if early:
+        lines.insert(1 if lines else 0, ("row", f"针对这局的{'、'.join(early)}前面就该有，到后期还没有先补"))
+    if not lines:
+        lines.append(("row", "同分段到后期没有多数人都出的大件，看对面阵容补针对装"))
+    lines.append(("dim", f"格子满了先卖身上最便宜的那件；{late:.0f} 分钟后买大件前留够买活钱"))
     return lines
 
 
