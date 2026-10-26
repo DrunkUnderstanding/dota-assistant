@@ -72,8 +72,9 @@ import { act, connect } from './api.js';
 // 天辉第 1 个中心在屏幕中线左边 391、夜魇第 1 个在右边 138（天辉总在左边）。Dota 界面按屏幕高度等比缩放，所以都乘 s = 屏幕高 / 1080。
 // 假设 Dota 是「无边框窗口」占满叠加层那块屏（和叠加层一样）；没在别的分辨率 / 宽高比下量过。
 // 小条宽 W、高 24（2026-10-26 玩家嫌 54×17 不好点，加大；两个头像之间只剩 3 像素空）。
+// 买活小条从 y=69 起：头像下面 y 40~66 是 Dota 自己的复活倒计时框（shots/buyback/ 实战样本量的），2026-10-27 玩家说别挡住它。
 // 大招小条在买活小条下面（ULT_TOP），只给对面；右键弹的菜单在它下面。Electron 那边窗口高 TOPBAR_HEIGHT 要盖得住
-const W = 60, TOP = 43, ULT_TOP = 70, PITCH = 63, CENTER0 = { radiant: -391, dire: 138 };
+const W = 60, TOP = 69, ULT_TOP = 96, PITCH = 63, CENTER0 = { radiant: -391, dire: 138 };
 const GOLD_ICON = '/icons/icons/gold.png';   // Python 那边第一次从 Valve CDN 下（webui.py）
 const params = new URLSearchParams(location.search);
 const preview = params.has('preview');
