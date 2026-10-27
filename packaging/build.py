@@ -10,7 +10,8 @@
   web/ knowledge/ data/          页面、知识库规则、数据缓存（英雄表、头像、克制统计、知识库）
   config.example.toml            第一次启动复制成 config.toml；账号和 AI 在控制面板「设置」里填
 
-不打进去的：config.toml（个人 token / key）、logs/、shots/、data 里的个人数据（player.json、overlay.json）。
+不打进去的：config.toml（个人 token / key）、logs/、shots/、data 里的个人数据（player.json、overlay.json、lane_log.jsonl）
+和开发用的回测数据。打包前先把头像、装备常量 / 图标、顶栏图标这些死数据补全（要联网），用的人第一次启动不用再下。
 最后会扫一遍产物，确认本机 config.toml 里的密钥没混进去。
 
 需要：pip install pyinstaller；electron/ 下装过一次 npm install（要它的 Electron 本体）。
@@ -31,7 +32,8 @@ NAME = "Dota选人助手"
 OUT = BUILD / NAME
 ELECTRON_DIST = ROOT / "electron" / "node_modules" / "electron" / "dist"
 KEEP_LOCALES = {"zh-CN.pak", "en-US.pak"}                 # 其余 50 多种语言包 ~45MB，用不到
-DATA_SKIP = {"player.json", "overlay.json", ".gsi_hint_shown", "bench"}   # 个人数据 / 开发用的回测数据
+DATA_SKIP = {"player.json", "overlay.json", ".gsi_hint_shown", "lane_log.jsonl",   # 个人数据（lane_log 里有 Steam ID / 名字）
+             "bench", "backtest_matches.json"}                                       # 开发用的回测数据
 SECRET_KEYS = ("stratz_token", "ai_api_key")
 
 
@@ -48,6 +50,21 @@ def version() -> str:
     except OSError:
         rev, dirty = "", ""
     return f"{datetime.date.today():%Y%m%d}-{rev or 'nogit'}{'-改动未提交' if dirty else ''}"
+
+
+def prefetch() -> None:
+    """死数据打包前补全：只补缺的，已有的不重下（装备常量重下一份，跟上版本）"""
+    say("== 补全头像、装备、顶栏图标 …")
+    sys.path.insert(0, str(ROOT))
+    from dota_assistant import data, kb
+    if kb.KnowledgeBase.load() is None or not (data.DATA_DIR / "heroes.json").exists():
+        sys.exit("还没有英雄表 / 知识库：先运行 python -m dota_assistant update")
+    data.fetch_portraits(say)
+    data.fetch_items_const(say)
+    data.fetch_item_icons(say)
+    data.fetch_icons(say)
+    if not data.ICONS_DONE.exists():
+        sys.exit("顶栏图标没下到（断网？），停止")
 
 
 def pyinstaller() -> None:
@@ -128,6 +145,7 @@ def size_mb(p: Path) -> float:
 
 def main() -> None:
     ver = version()
+    prefetch()
     for d in (OUT, BUILD / "pyi-dist"):
         if d.exists():
             shutil.rmtree(d)

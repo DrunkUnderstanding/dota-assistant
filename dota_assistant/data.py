@@ -162,7 +162,38 @@ def _download_icon(rel: str, out: Path) -> None:
     tmp.replace(out)
 
 
+ICONS_DONE = ICON_DIR / "prefetched.txt"   # 预下过一遍的标记（写的是知识库版本），start 看它决定要不要补下
+
+
+def fetch_icons(log=_say) -> None:
+    """顶栏 / 买活自动记要的图标一次下全，局内不用临时下：金币、每个英雄的小图标、每个对面会给小条的大招图标。
+    已有的跳过；第一张就下不到（断网）就不试剩下的、不写标记，下次再补；个别 CDN 没有的照样写标记（运行时按需再试）"""
+    from concurrent.futures import ThreadPoolExecutor
+    from . import kb, ultcd
+    base = kb.KnowledgeBase.load()
+    rels = ["icons/gold.png"] + [f"heroes/icons/{h.key}.png" for h in load_heroes().by_id.values()]
+    rels += [f"abilities/{ab.key}.png" for h in (base.heroes.values() if base else ()) if (ab := ultcd.pick(h))]
+    todo = [r for r in rels if not (ICON_DIR / r).is_file()]
+    if todo and fetch_icon(todo[0]) is None:
+        log("  顶栏图标没下到（断网？），局内用到时再下")
+        return
+    with ThreadPoolExecutor(8) as pool:
+        missing = [r for r, p in zip(todo[1:], pool.map(fetch_icon, todo[1:])) if p is None]
+    ICONS_DONE.write_text(base.patch if base else "", encoding="utf-8")
+    log(f"  顶栏图标：新下载 {len(todo) - len(missing)} 张，共 {len(rels) - len(missing)}/{len(rels)} 张"
+        + (f"（CDN 没有：{'、'.join(missing)}）" if missing else ""))
+
+
 ITEM_ICON_DIR = DATA_DIR / "items"
+
+
+def fetch_items_const(log=_say) -> None:
+    """OpenDota 装备常量（价格 / 合成 / 图标地址，coach.items_const 读）。以前只在没有时下一次、之后不再更新，
+    版本改了价格 / 出了新装备跟不上；现在跟全量更新一起刷新"""
+    from .coach import ITEMS_CONST
+    raw = _get(f"{OPENDOTA}/constants/items")
+    ITEMS_CONST.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    log(f"  装备常量：{len(raw)} 件")
 
 
 def fetch_item_icons(log=_say) -> None:
@@ -488,10 +519,12 @@ def update(cfg: Config, log=_say) -> None:
     (DATA_DIR / "heroes.json").write_text(json.dumps(heroes, ensure_ascii=False, indent=1), encoding="utf-8")
     log(f"  {len(heroes)} 个英雄")
     fetch_portraits(log)
+    fetch_items_const(log)
     fetch_item_icons(log)
     log("知识库（Valve 官方技能 / 物品说明）…")
     from . import kb
     kb.update([h["id"] for h in heroes], log)
+    fetch_icons(log)                       # 要知识库挑大招，放在它后面
     if cfg.stratz_token:
         log("拉取英雄分位置数据（STRATZ）…")
         pos = fetch_positions(cfg)

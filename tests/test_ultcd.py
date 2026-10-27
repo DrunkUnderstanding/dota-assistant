@@ -153,5 +153,43 @@ class RealKBTest(unittest.TestCase):
         self.assertIn("玲珑心：-25% 冷却", labels)
 
 
+class PrefetchTest(unittest.TestCase):
+    """顶栏图标一次下全（data.fetch_icons）：金币 + 每个英雄小图标 + 会给小条的大招；已有的不下；断网不写标记"""
+
+    def run_fetch(self, d: Path, fetch):
+        from unittest import mock
+        from dota_assistant import data
+        from dota_assistant.heroes import Hero, HeroDB
+        db = HeroDB([Hero(1, "doom_bringer", "末日使者", "Doom", (), "str"), Hero(2, "pudge", "帕吉", "Pudge", (), "str")])
+        base = mock.Mock(patch="7.41f", heroes={1: hero(ab("doom_bringer_doom", "140/130/120")),
+                                                2: hero(ab("pudge_dismember", "30/25/20"))})
+        asked = []
+
+        def fake(rel):
+            asked.append(rel)
+            return fetch(rel)
+        with (mock.patch.object(data, "ICON_DIR", d), mock.patch.object(data, "ICONS_DONE", d / "done.txt"),
+              mock.patch.object(data, "load_heroes", return_value=db), mock.patch.object(data, "fetch_icon", fake),
+              mock.patch.object(kb.KnowledgeBase, "load", return_value=base)):
+            data.fetch_icons(log=lambda *_: None)
+        return asked
+
+    def test_fetch_all_skip_existing(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            (d / "icons").mkdir()
+            (d / "icons" / "gold.png").write_bytes(b"x")
+            asked = self.run_fetch(d, lambda rel: d / rel)
+            self.assertEqual(sorted(asked), ["abilities/doom_bringer_doom.png", "heroes/icons/doom_bringer.png",
+                                             "heroes/icons/pudge.png"])          # 金币已有；帕吉肢解不给小条不下
+            self.assertEqual((d / "done.txt").read_text(encoding="utf-8"), "7.41f")
+
+    def test_offline_stops(self):
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            self.assertEqual(len(self.run_fetch(d, lambda rel: None)), 1)      # 第一张下不到就不试剩下的
+            self.assertFalse((d / "done.txt").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
