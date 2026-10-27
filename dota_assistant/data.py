@@ -126,7 +126,8 @@ def fetch_portraits(log=_say) -> None:
 
 
 ICON_DIR = DATA_DIR / "icons"
-ICON_PATH = re.compile(r"(abilities|icons)/[a-z0-9_]+\.png")   # 技能图标 abilities/<技能 key>.png、金币 icons/gold.png
+# 技能图标 abilities/<技能 key>.png、金币 icons/gold.png、英雄小图标 heroes/icons/<英雄 key>.png（买活自动记比对消息栏用）
+ICON_PATH = re.compile(r"(abilities|icons|heroes/icons)/[a-z0-9_]+\.png")
 _icon_locks: dict[str, threading.Lock] = {}   # 每张图一把锁：页面一打开 10 个买活小条同时要金币图标，只下一次；别的图不用等
 _icon_failed: set[str] = set()                 # 这次运行下不到的不再试（断网时每张都要等超时）
 

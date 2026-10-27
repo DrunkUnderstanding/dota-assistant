@@ -2,7 +2,19 @@
 
 玩家 2026-10-26 问（原话）：「买活这种事件不会弹出提示吗，弹出提示的时候截个图然后AI自动记录或者你做一个程序自动记录，
 买活是正常的全图广播信息吧」。是全场公开的：买活时全场有音效，顶栏那个头像下面冒一个金币堆、留几秒（Fandom「Buyback」）。
-但金币堆长什么样、在哪一格我们还没截到过，不敢拿它当判据，先用下面这个**能从已知画面推出来**的办法：
+
+**2026-10-27 起按「买活了」这条消息记**（玩家：「应该还是得按照事件来吧，比如买活了以后屏幕左侧会有一个xxx买活的标记」
+「用英雄的头像小图应该也可以确认吧」「可以多次确认，超过两个说明对的概率就大了」）：
+买活时屏幕左边消息栏出一行「<英雄小图> 玩家名 [战队] 买活了」，聊天区还有一行「玩家名（英雄名）买活了!」
+（2026-10-26 实战截图 shots/deaths/20261026-225257、235009 看到的）。顶栏某一格变回彩色（复活）后，接下来 FEED_TRIES 帧
+每帧把消息栏给 Windows OCR，找带「买活」的行，再拿那一行开头的小图和这局 10 个英雄的小图标（Valve CDN
+heroes/icons/<key>.png，和消息栏里的是同一套图）比：**「买活」字 + 小图（或聊天行里的英雄名）都对上刚复活的那个英雄，
+有 FEED_AGREE 帧都这样才记**。玩家名 OCR 常认错（「大王师傅123」认成「夭王师傅12新」），不用它。
+真实截图验证：两次真买活的小图在全部 127 个英雄里都排第一（0.79 / 0.83，第二名 ≤ 0.56），
+一整列 11 行消息的小图全认对（第一 0.74~0.90，第二 ≤ 0.69）。只有这两次真买活的样本，都是 1080p。
+下面倒计时那套（第 3 条）现在只在小图标下不到（断网、第一次用）时兜底：消息栏有「买活」字 + 倒计时也说早复活了，才记。
+
+原来的办法（**能从已知画面推出来**的）：
 
 1. 死了的英雄顶栏头像变灰（饱和度掉到接近 0），头像下面显示复活倒计时；活着的头像是彩色的
    （1920×1080 真实截图实测：活着的 10 个头像平均饱和度 75~197，转成灰度图是 0）。
@@ -56,6 +68,18 @@ PORTRAIT_BOTTOM = 40         # 头像底边（1080 高时的 y）
 AGREE = 2                    # 两次认到的「该复活的时刻」差在这么多秒内才算数（防认错：10 认成 1、14 认成 4）
 MIN_HEIGHT = 480               # 截图再小就不是 Dota 画面了（或者窗口缩得太小，顶栏认不了）
 SIDES = ("radiant", "dire")
+# 消息栏（1080 高时的坐标；2026-10-26 实战截图：「买活了」那行在 y≈626 / 664，聊天行在 y≈746、x 到 870，小地图从 y≈800 起）
+FEED = (0, 440, 900, 900)    # x0, y0, x1, y1
+FEED_SCALE = 2               # 放大了再给 OCR（实测原样给认不全）
+FEED_TRIES = 5               # 复活后看几帧消息栏
+FEED_AGREE = 2               # 几帧都认到才算买活（玩家：「超过两个说明对的概率就大了」）
+BUYBACK_TEXT = "买活"
+ICON_SIZES = range(19, 27)   # 消息栏里英雄小图的边长（1080 高时 ≈22，按图高缩放）
+ICON_X = 90                  # 小图在这一行开头：x < 这个
+ICON_DY = 20                 # 行中心上下这么多里找小图
+FEED_TEXT_X = 200            # 这一行的字从这个 x 以后才开始 = 聊天行（「玩家名（英雄名）买活了!」，行首没有小图，靠英雄名）
+ICON_MIN = 0.7               # 小图相似度（TM_CCOEFF_NORMED）到这个才算认出来；实测对的 0.74~0.90，错的最高 0.69
+HERO_ICON = "heroes/icons/{}.png"   # Valve CDN 上的英雄小图标（data.fetch_icon 下、存 data/icons）
 
 
 def _box(img: np.ndarray, side: str, i: int, y0: float, y1: float, half: float) -> np.ndarray:
@@ -201,8 +225,9 @@ def read_timer(d: Death, ocr) -> int | None:
     return parse_seconds(ocr(for_ocr(d.crop)))
 
 
-def save_sample(rev: Revival, label: str, out_dir: Path | None = None) -> Path:
-    """刚死时那一格 + 复活那一格左右拼一张存下来，文件名带判断结果；只留最近 SAMPLES_KEEP 张"""
+def save_sample(rev: Revival, label: str, out_dir: Path | None = None, feed: np.ndarray | None = None) -> Path:
+    """刚死时那一格 + 复活那一格左右拼一张存下来，文件名带判断结果；只留最近 SAMPLES_KEEP 张。
+    feed：判断时看的那一帧消息栏，同名存到 feed/ 子目录（核对「买活了」那行认得对不对）"""
     from .vision import write_image
     out_dir = out_dir or SAMPLES_DIR
     parts = [a for a in (rev.before, rev.after) if a is not None and a.size]
@@ -210,6 +235,125 @@ def save_sample(rev: Revival, label: str, out_dir: Path | None = None) -> Path:
     pad = lambda a: cv2.copyMakeBorder(a, 0, h - a.shape[0], 0, 4, cv2.BORDER_CONSTANT, value=(255, 0, 255))
     path = out_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{rev.side}{rev.index + 1}-{label}.png"
     write_image(path, np.hstack([pad(a) for a in parts]))
-    for old in sorted(out_dir.glob("*.png"))[:-SAMPLES_KEEP]:
-        old.unlink(missing_ok=True)
+    if feed is not None and feed.size:
+        write_image(out_dir / "feed" / path.name, feed)
+    for d in (out_dir, out_dir / "feed"):
+        for old in sorted(d.glob("*.png"))[:-SAMPLES_KEEP]:
+            old.unlink(missing_ok=True)
     return path
+
+
+# ---------- 消息栏：「<英雄小图> 玩家名 买活了」 ----------
+
+@dataclass
+class FeedLine:
+    """消息栏里带「买活」的一行"""
+    text: str                    # OCR 认到的整行（玩家名常认错，只拿来找「买活」和聊天行里的英雄名）
+    y: float                     # 行中心在整张截图里的 y
+    hero: str | None             # 行首小图认出来是哪个英雄（key）；没认出来 / 没有小图标可比 / 聊天行是 None
+    score: float = 0.0
+
+
+def feed_crop(img: np.ndarray) -> np.ndarray:
+    s = img.shape[0] / 1080
+    x0, y0, x1, y1 = (int(v * s) for v in FEED)
+    return img[y0:y1, x0:x1]
+
+
+def load_icon(path: Path | None) -> np.ndarray | None:
+    """英雄小图标（带透明通道的 PNG）；没有 / 读不出是 None"""
+    if path is None:
+        return None
+    im = cv2.imdecode(np.fromfile(str(path), np.uint8), cv2.IMREAD_UNCHANGED)
+    return im if im is not None and im.ndim == 3 and im.shape[2] == 4 else None
+
+
+def icon_score(region: np.ndarray, icon: np.ndarray, s: float) -> float:
+    """小图在 region 里最像的地方有多像：几种大小都试，只比不透明的像素（TM_CCOEFF_NORMED 带遮罩）。
+    不用 TM_CCORR_NORMED：带遮罩时它对所有英雄都给 0.9 上下，分不开（2026-10-27 真实截图实测）"""
+    best = -1.0
+    reg = region.astype(np.float32)
+    for z in ICON_SIZES:
+        n = max(8, round(z * s))
+        if n > reg.shape[0] or n > reg.shape[1]:
+            continue
+        t = cv2.resize(icon, (n, n), interpolation=cv2.INTER_AREA).astype(np.float32)
+        mask = (t[..., 3] > 200).astype(np.float32)
+        if mask.sum() < n:                       # 几乎全透明，比不了
+            continue
+        r = cv2.matchTemplate(reg, np.ascontiguousarray(t[..., :3]), cv2.TM_CCOEFF_NORMED, mask=cv2.merge([mask] * 3))
+        r[~np.isfinite(r)] = -1
+        best = max(best, float(r.max()))
+    return best
+
+
+def read_feed(img: np.ndarray, ocr, icons: dict[str, np.ndarray]) -> list[FeedLine]:
+    """消息栏里带「买活」的行，每行认一下行首小图是 icons 里的哪个英雄。ocr(img) -> [roles.Word]；没有 OCR 抛 OSError"""
+    s = img.shape[0] / 1080
+    crop = feed_crop(img)
+    if not crop.size:
+        return []
+    words = ocr(cv2.resize(crop, None, fx=FEED_SCALE, fy=FEED_SCALE, interpolation=cv2.INTER_CUBIC))
+    lines: dict[int, list] = {}
+    for w in words:
+        lines.setdefault(w.line, []).append(w)
+    out = []
+    for ws in lines.values():
+        text = "".join(w.text for w in ws)
+        if BUYBACK_TEXT not in text:
+            continue
+        cy = FEED[1] * s + sum(w.y + w.h / 2 for w in ws) / len(ws) / FEED_SCALE
+        if FEED[0] * s + min(w.x for w in ws) / FEED_SCALE > FEED_TEXT_X * s:
+            out.append(FeedLine(text, cy, None))     # 聊天行：行首那儿的小图是别的消息的（2026-10-27 实测认成了獸）
+            continue
+        region = img[max(0, int(cy - (ICON_DY + max(ICON_SIZES) / 2) * s)):int(cy + (ICON_DY + max(ICON_SIZES) / 2) * s),
+                     :int((ICON_X + max(ICON_SIZES)) * s)]
+        scores = sorted(((icon_score(region, ic, s), k) for k, ic in icons.items()), reverse=True)
+        hero, score = (scores[0][1], scores[0][0]) if scores and scores[0][0] >= ICON_MIN else (None, scores[0][0] if scores else 0.0)
+        out.append(FeedLine(text, cy, hero, score))
+    return out
+
+
+@dataclass
+class FeedCheck:
+    """复活了的一格：接下来几帧看消息栏有没有「买活了」、行首小图是不是他"""
+    rev: Revival
+    hero: str | None             # 这一格的英雄 key（格子没填是 None）
+    name: str | None             # 中文名（聊天行「玩家名（英雄名）买活了」里找）
+    seen: int = 0                # 看了几帧
+    hits: int = 0                # 几帧「买活」+ 小图 / 英雄名都对上他
+    text_hits: int = 0           # 几帧有「买活」行但没法确认是谁（行首小图没认出来）
+    others: int = 0              # 几帧的「买活」行是别的英雄的
+    has_icon: bool = True        # 他的小图标有没有（下不到就只能兜底；每次看消息栏时更新）
+    busy: bool = False
+    feed: np.ndarray | None = None   # 存样本用的那一帧消息栏（第一次对上的那帧，没对上就是最后一帧）
+
+    def add(self, lines: list[FeedLine], feed: np.ndarray | None) -> None:
+        self.seen += 1
+        self.busy = False
+        mine = [ln for ln in lines if (self.hero and ln.hero == self.hero) or (self.name and self.name in ln.text.replace(" ", ""))]
+        if mine:
+            self.hits += 1
+            if self.hits == 1:
+                self.feed = feed
+        elif any(ln.hero is None for ln in lines):
+            self.text_hits += 1
+        elif lines:
+            self.others += 1
+        if self.hits == 0:
+            self.feed = feed
+
+    @property
+    def verdict(self) -> tuple[bool | None, str]:
+        """(是不是买活，怎么判的)；还没看够帧数是 None"""
+        if self.hits >= FEED_AGREE:
+            return True, f"消息栏 {self.hits} 帧认到他买活"
+        if self.seen < FEED_TRIES:
+            return None, ""
+        if not self.has_icon and self.text_hits + self.hits >= FEED_AGREE and self.rev.buyback:
+            return True, "没有他的小图标可比：消息栏有「买活」+ 倒计时也说早复活了"
+        if self.hits or self.text_hits:
+            return False, f"消息栏只有 {self.hits} 帧对上他（有「买活」没对上的 {self.text_hits} 帧），不够 {FEED_AGREE} 帧"
+        if self.others:
+            return False, "消息栏的买活是别的英雄的"
+        return False, "消息栏没有买活"

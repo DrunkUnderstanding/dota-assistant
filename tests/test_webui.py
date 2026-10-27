@@ -634,12 +634,16 @@ class CoachLiveTest(unittest.TestCase):
         self.assertFalse(go(0, state="DOTA_GAMERULES_STATE_POST_GAME")["show"])  # 比赛结束收起
 
     def test_buyback_auto_from_screenshot(self):
-        """顶栏头像变灰 → 后台认倒计时（两帧对得上）→ 倒计时没走完就变回彩色 = 买活，自动开始计时、存样本"""
-        from tests.test_buyback import topbar
+        """顶栏头像变灰 → 后台认倒计时 → 变回彩色后看消息栏：「买活了」+ 行首小图是他，两帧都对上才自动计时、存样本；
+        消息栏没有买活（倒计时说早复活了也一样）不记"""
+        from tests.test_buyback import feed_line, feed_words, hero_icon, topbar
         buybackscan.SAMPLES_DIR = TMP / f"bb-{time.monotonic_ns()}"
-        frame = {"img": topbar()}
+        frame = {"img": topbar(), "feed": []}
         self.live.screen = SimpleNamespace(grab=lambda: frame["img"], source="window")
-        self.live._ocr = lambda im: [SimpleNamespace(text=str(frame["timer"]))] * 3
+        # 小的图是顶栏那一格（认倒计时），大的是消息栏
+        self.live._ocr = lambda im: frame["feed"] if im.shape[1] > 600 else [SimpleNamespace(text=str(frame["timer"]))] * 3
+        icons = {"axe": hero_icon(1), "tidehunter": hero_icon(2)}
+        self.live._hero_icon = icons.get                       # 不联网下小图标
         st = self.live.gsi.state
 
         def go(clock):
@@ -647,34 +651,46 @@ class CoachLiveTest(unittest.TestCase):
                                "clock_time": clock}, "player": {"team_name": "radiant", "team_slot": 1},
                        "hero": {"name": "npc_dota_hero_phantom_lancer", "alive": True}})
             wait(self.live.submit(self.live.coach_tick))
-            for _ in range(50):                                   # OCR 在后台线程
+            for _ in range(100):                                  # OCR 在后台线程
                 if not any(t.name == "buyback" for t in threading.enumerate()):
                     break
                 time.sleep(0.02)
             wait(self.live.submit(self.live.publish))
             return json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][0]
 
-        go(1500)
-        dead = {("dire", 0)}
-        for clock in range(1501, 1505):                           # 死了，倒计时 40 → 37
-            frame["timer"] = 40 - (clock - 1501)
-            frame["img"] = topbar(dead, {("dire", 0): frame["timer"]})
-            go(clock)
-        self.assertEqual(self.live._bb_watch.slots[("dire", 0)].expected, 1541)
-        frame["img"] = topbar()
-        self.assertIsNone(go(1510)["end"])                        # 彩色一帧还不算复活
-        slot = go(1511)                                           # 1541 才该复活，1510 就活了
-        self.assertAlmostEqual(slot["end"], 1510 + 480, delta=1)
-        self.assertIn("斧王买活了（截图认的）", self.live.message)
-        self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-dire1-buyback-*.png"))), 1)
+        def die(side, i, clocks, timer):
+            for clock in clocks:
+                frame["timer"] = timer - (clock - clocks[0])
+                frame["img"] = topbar({(side, i)}, {(side, i): frame["timer"]})
+                go(clock)
 
-        frame["img"] = topbar({("radiant", 0)}, {("radiant", 0): 9})   # 天辉第 1 个：倒计时走完正常复活
-        for clock, t in ((1511, 9), (1512, 9), (1513, 8)):
-            frame["timer"] = t
+        go(1500)
+        die("dire", 0, range(1501, 1505), 40)                    # 斧王死了，倒计时 40 → 37
+        self.assertEqual(self.live._bb_watch.slots[("dire", 0)].expected, 1541)
+        frame["img"] = feed_line(topbar(), icons["axe"])          # 1510 就活了，消息栏「大王师傅123 买活了」
+        frame["feed"] = feed_words("大王师傅123 [GOOER] 买活了")
+        self.assertIsNone(go(1510)["end"])                        # 彩色一帧还不算复活
+        self.assertIsNone(go(1511)["end"])                        # 复活了，消息栏第一帧对上
+        slot = go(1512)                                           # 第二帧也对上：记
+        self.assertAlmostEqual(slot["end"], 1510 + 480, delta=1)
+        self.assertIn("斧王买活了（消息栏认到的）", self.live.message)
+        self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-dire1-buyback-*.png"))), 1)
+        self.assertEqual(len(list((buybackscan.SAMPLES_DIR / "feed").glob("*-dire1-buyback-*.png"))), 1)
+
+        # 潮汐：倒计时说早复活了（以前会记），但消息栏的「买活了」是斧王的小图 → 不记
+        die("dire", 1, range(1520, 1524), 60)
+        frame["img"] = feed_line(topbar(), icons["axe"])
+        for clock in range(1530, 1530 + 1 + buybackscan.FEED_TRIES):
             go(clock)
+        self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][1]["end"])
+        self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-dire2-respawn-*.png"))), 1)
+
+        # 天辉第 1 个：倒计时走完正常复活，消息栏没东西
+        frame["feed"] = []
+        die("radiant", 0, (1540, 1541, 1542), 9)
         frame["img"] = topbar()
-        go(1521)
-        go(1522)
+        for clock in range(1550, 1551 + 1 + buybackscan.FEED_TRIES):
+            go(clock)
         self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["radiant"][0]["end"])
         self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-radiant1-respawn-*.png"))), 1)
 

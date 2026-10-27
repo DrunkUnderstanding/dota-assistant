@@ -1,8 +1,9 @@
 """买活计时：点一下开始 / 再点取消、冷却结束后亮一会儿「可买活」、自己的按 GSI 同步；
-截图自动记：顶栏头像变灰 → 认复活倒计时 → 提前变回彩色 = 买活（合成的顶栏图，OCR 换成假的）。"""
+截图自动记：顶栏头像变灰 → 认复活倒计时 → 复活后消息栏「买活了」+ 行首小图对上几帧才记（合成的图，OCR 换成假的）。"""
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 import cv2
 import numpy as np
@@ -35,6 +36,108 @@ def topbar(dead=(), timers=None, size=(1080, 1920), badge=False) -> np.ndarray:
                     cv2.putText(img, str(t), (cx - int(14 * s), int(61 * s)), cv2.FONT_HERSHEY_SIMPLEX, 0.6 * s,
                                 (255, 255, 255), max(1, int(2 * s)))
     return img
+
+
+def hero_icon(seed: int) -> np.ndarray:
+    """假的英雄小图标：32×32 带透明通道，4×4 的随机色块（每个 seed 不一样，互相比不像）"""
+    rng = np.random.default_rng(seed)
+    rgb = cv2.resize(rng.integers(0, 256, (4, 4, 3), dtype=np.uint8), (32, 32), interpolation=cv2.INTER_NEAREST)
+    alpha = np.full((32, 32, 1), 255, np.uint8)
+    alpha[:2] = 0                                # 上面两行透明（真图标边上也是透明的）
+    return np.dstack([rgb, alpha])
+
+
+def feed_line(img: np.ndarray, icon: np.ndarray, y: float = 626) -> np.ndarray:
+    """在消息栏 y 那一行（1080 高的坐标）行首贴上英雄小图（边长 22，和实战截图一样）"""
+    s = img.shape[0] / 1080
+    n = round(22 * s)
+    t = cv2.resize(icon, (n, n), interpolation=cv2.INTER_AREA).astype(np.float32)
+    x0, y0 = round(19 * s), round(y * s - n / 2)
+    roi = img[y0:y0 + n, x0:x0 + n].astype(np.float32)
+    a = t[..., 3:] / 255
+    img[y0:y0 + n, x0:x0 + n] = (t[..., :3] * a + roi * (1 - a)).astype(np.uint8)
+    return img
+
+
+def feed_words(text: str, y: float = 626, x: float = 45, s: float = 1.0, line: int = 0) -> list:
+    """假 OCR 给 read_feed 的字：坐标换成「消息栏那块、放大 FEED_SCALE 倍」里的"""
+    h = 16 * s * bs.FEED_SCALE
+    return [SimpleNamespace(line=line, text=text, x=(x - bs.FEED[0]) * s * bs.FEED_SCALE,
+                            y=(y - bs.FEED[1]) * s * bs.FEED_SCALE - h / 2, w=200 * s, h=h)]
+
+
+class FeedTest(unittest.TestCase):
+    """消息栏「<英雄小图> 玩家名 买活了」：找带「买活」的行，行首小图在这局英雄里认"""
+    icons = {"axe": hero_icon(1), "pudge": hero_icon(2), "lion": hero_icon(3)}
+
+    def test_icon_tells_who(self):
+        img = feed_line(topbar(), self.icons["axe"])
+        lines = bs.read_feed(img, lambda im: feed_words("大王师傅123 [GOOER] 买活了"), self.icons)
+        self.assertEqual([(ln.hero, round(ln.y)) for ln in lines], [("axe", 626)])
+        self.assertGreater(lines[0].score, 0.95)
+        img = feed_line(topbar(), self.icons["pudge"])
+        self.assertEqual(bs.read_feed(img, lambda im: feed_words("夭王师傅12新买活了"), self.icons)[0].hero, "pudge")
+
+    def test_4k(self):
+        img = feed_line(topbar(size=(2160, 3840)), self.icons["lion"], y=664)
+        lines = bs.read_feed(img, lambda im: feed_words("eins 买活了", y=664, s=2), self.icons)
+        self.assertEqual(lines[0].hero, "lion")
+
+    def test_no_icon_match_or_no_text(self):
+        img = topbar()                                         # 行首没有这局英雄的小图
+        self.assertIsNone(bs.read_feed(img, lambda im: feed_words("某人 买活了"), self.icons)[0].hero)
+        img = feed_line(topbar(), self.icons["axe"])
+        self.assertEqual(bs.read_feed(img, lambda im: feed_words("如同神一般被终结"), self.icons), [])
+
+    def test_chat_line_uses_name_not_icon(self):
+        """聊天行「eins（司夜刺客）买活了!」字从 x≈560 开始：行首那儿的小图是别的消息的，不认（实战里认成了獸）"""
+        img = feed_line(topbar(), self.icons["axe"], y=746)
+        lines = bs.read_feed(img, lambda im: feed_words("eins [k-on.]（司夜刺客）买活了！", y=746, x=566), self.icons)
+        self.assertEqual([ln.hero for ln in lines], [None])
+        c = bs.FeedCheck(self.rev(), "nyx_assassin", "司夜刺客")
+        c.add(lines, None)
+        self.assertEqual(c.hits, 1)                            # 靠英雄名对上
+
+    @staticmethod
+    def rev(buyback_by_timer: bool | None = True) -> bs.Revival:
+        expected = None if buyback_by_timer is None else (141 if buyback_by_timer else 115)
+        return bs.Revival("dire", 0, 115, 14, expected, 40, None, np.zeros((76, 62, 3), np.uint8))
+
+    def line(self, hero, text="xx 买活了"):
+        return bs.FeedLine(text, 626, hero)
+
+    def test_needs_two_frames(self):
+        c = bs.FeedCheck(self.rev(), "axe", "斧王")
+        c.add([self.line("axe")], None)
+        self.assertEqual(c.verdict, (None, ""))                # 一帧不够
+        c.add([], None)
+        c.add([self.line("axe")], None)
+        self.assertTrue(c.verdict[0])                          # 第二帧对上就定，不用等满 FEED_TRIES 帧
+        self.assertEqual(c.seen, 3)
+
+    def test_one_frame_or_other_hero_is_not_buyback(self):
+        c = bs.FeedCheck(self.rev(), "axe", "斧王")
+        c.add([self.line("axe")], None)
+        for _ in range(bs.FEED_TRIES - 1):
+            c.add([self.line("pudge")], None)                  # 消息栏是帕吉买活
+        self.assertIs(c.verdict[0], False)
+        self.assertIn("只有 1 帧", c.verdict[1])
+        c = bs.FeedCheck(self.rev(), "axe", "斧王")
+        for _ in range(bs.FEED_TRIES):
+            c.add([self.line("pudge")], None)
+        self.assertEqual(c.verdict, (False, "消息栏的买活是别的英雄的"))
+        c = bs.FeedCheck(self.rev(), "axe", "斧王")
+        for _ in range(bs.FEED_TRIES):
+            c.add([], None)
+        self.assertEqual(c.verdict, (False, "消息栏没有买活"))  # 倒计时说早复活了也不记：没有买活消息
+
+    def test_fallback_without_icon(self):
+        """他的小图标下不到：消息栏有「买活」行（认不出是谁）几帧 + 倒计时也说早复活了，才记"""
+        for timer, want in ((True, True), (False, False), (None, False)):
+            c = bs.FeedCheck(self.rev(timer), "axe", "斧王", has_icon=False)
+            for _ in range(bs.FEED_TRIES):
+                c.add([self.line(None)], None)
+            self.assertIs(c.verdict[0], want, timer)
 
 
 class TrackerTest(unittest.TestCase):
@@ -177,8 +280,9 @@ class WatcherTest(unittest.TestCase):
     def test_sample_saved(self):
         rev = self.run_life(115)
         d = Path(tempfile.mkdtemp(prefix="dota-bb-"))
-        path = bs.save_sample(rev, "buyback-40", d)
+        path = bs.save_sample(rev, "buyback-40", d, feed=np.zeros((460, 900, 3), np.uint8))
         self.assertTrue(path.name.endswith("-dire3-buyback-40.png") and path.exists())
+        self.assertTrue((d / "feed" / path.name).exists())        # 消息栏那块另存一张，核对用
 
 
 class TrackerStartTest(unittest.TestCase):

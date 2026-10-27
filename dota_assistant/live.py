@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, config, death, gameplan, grid, itembuild, jungle, lanestate, llm, roles, ultcd
+from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, roles, ultcd
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
@@ -196,7 +196,9 @@ class Live:
         self.ults = ultcd.Tracker()               # 对面大招冷却（买活小条下面那条）
         self._bb_watch = buybackscan.Watcher()    # 买活自动记：每秒看顶栏头像灰没灰
         self._bb_scan_err = False                 # 截图 / 认图出过错（这局只记一次日志）
-        self._ocr = ocr or roles.ocr              # 认复活倒计时（Windows OCR），测试换成假的
+        self._ocr = ocr or roles.ocr              # 认复活倒计时 / 消息栏「买活了」（Windows OCR），测试换成假的
+        self._bb_checks: list[buybackscan.FeedCheck] = []   # 刚复活、正在看消息栏确认是不是买活的格子
+        self._hero_icons: dict[str, object] = {}  # 英雄小图标（key → 图，下不到是 None），和消息栏行首的小图比
         self._kb_base = None                      # 知识库（查对面大招冷却用，第一次用到才读；读不到是 False）
         self._kb_ops: dict = {}                   # 大招神杖 / 魔晶冷却的写法（ultcd.load_ops）
 
@@ -847,6 +849,7 @@ class Live:
             self.buyback.reset()
             self.ults.reset()
             self._bb_watch.reset()
+            self._bb_checks.clear()
             self._bb_scan_err = False
         m = st.raw.get("map") or {}
         clock = m.get("clock_time")
@@ -894,6 +897,7 @@ class Live:
             threading.Thread(target=work, daemon=True, name="buyback").start()
         for rev in revs:
             self._revived(rev)
+        self._check_feed(img, match)
 
     def _timer_read(self, match, d, sec) -> None:
         if match == self._bb_match:
@@ -904,16 +908,67 @@ class Live:
         return self.slots[side][index] or f"{'天辉' if side == 'radiant' else '夜魇'}第 {index + 1} 个"
 
     def _revived(self, rev) -> None:
-        name, when, bb = self._slot_name(rev.side, rev.index), coach._mmss(rev.clock / 60), rev.buyback
-        log.info("买活自动记：%s %s 复活（灰了 %.0f 秒，倒计时 %s → 该在 %s 复活）→ %s", when, name, rev.dead_for, rev.seconds,
-                 coach._mmss(rev.expected / 60) if rev.expected is not None else "?",
-                 {True: "买活", False: "正常复活", None: "倒计时没认出来，不记"}[bb])
+        """复活了：接下来几帧看消息栏有没有「买活了」、行首小图是不是他（buybackscan.FeedCheck），够帧数了在 _feed_done 定"""
+        h = self._hero(self.slots[rev.side][rev.index])
+        self._bb_checks.append(buybackscan.FeedCheck(rev, h.key if h else None, h.name_cn if h else None))
+        log.info("买活自动记：%s %s 复活（灰了 %.0f 秒，倒计时 %s → 该在 %s 复活），看消息栏确认", coach._mmss(rev.clock / 60),
+                 self._slot_name(rev.side, rev.index), rev.dead_for, rev.seconds,
+                 coach._mmss(rev.expected / 60) if rev.expected is not None else "?")
+
+    def _hero_icon(self, key: str):
+        """英雄小图标（Valve CDN，第一次下、之后读 data/icons）；下不到是 None（这次运行不再试）。
+        第一次可能要联网下，只在后台线程里调"""
+        if key not in self._hero_icons:
+            self._hero_icons[key] = buybackscan.load_icon(data.fetch_icon(buybackscan.HERO_ICON.format(key)))
+        return self._hero_icons[key]
+
+    def _check_feed(self, img, match) -> None:
+        """每个还在确认的格子拿这一帧看一次消息栏（后台线程，OCR 一次约 0.5 秒；上一帧还没认完就跳过这帧）"""
+        todo = [c for c in self._bb_checks if not c.busy]
+        if not todo:
+            return
+        keys = {h.key for side in SIDES for t in self.slots[side] if (h := self._hero(t))}   # 行首小图只在这局 10 个英雄里认
+        for c in todo:
+            c.busy = True
+
+        def work():
+            icons = {k: ic for k in keys if (ic := self._hero_icon(k)) is not None}
+            for c in todo:
+                c.has_icon = c.hero in icons
+            try:
+                lines = buybackscan.read_feed(img, self._ocr, icons)
+            except Exception as e:               # 没有 OCR 之类
+                log.warning("买活自动记：消息栏没认（%s）", e)
+                lines = []
+            feed = buybackscan.feed_crop(img).copy()
+            self.submit(self._feed_read, match, todo, lines, feed)
+        threading.Thread(target=work, daemon=True, name="buyback").start()
+
+    def _feed_read(self, match, checks, lines, feed) -> None:
+        if match != self._bb_match:
+            return
+        if lines:
+            log.info("买活自动记：消息栏 %s", "；".join(f"「{ln.text}」小图 {ln.hero or '?'} {ln.score:.2f}" for ln in lines))
+        for c in checks:
+            if c not in self._bb_checks:
+                continue
+            c.add(lines, feed)
+            bb, why = c.verdict
+            if bb is not None:
+                self._bb_checks.remove(c)
+                self._feed_done(c, bb, why)
+
+    def _feed_done(self, c, bb: bool, why: str) -> None:
+        rev = c.rev
+        name, when = self._slot_name(rev.side, rev.index), coach._mmss(rev.clock / 60)
+        log.info("买活自动记：%s %s → %s（%s；倒计时那边：%s）", when, name, "买活" if bb else "不是买活", why,
+                 {True: "早复活了", False: "按时复活", None: "没认出倒计时"}[rev.buyback])
         try:
-            buybackscan.save_sample(rev, {True: "buyback", False: "respawn", None: "unknown"}[bb] + f"-{rev.seconds}")
+            buybackscan.save_sample(rev, ("buyback" if bb else "respawn") + f"-{rev.seconds}", feed=c.feed)
         except OSError:
             log.warning("买活样本没存下来", exc_info=True)
         if bb and self.buyback.start(rev.side, rev.index, rev.clock):
-            self.message = f"{when} {name}买活了（截图认的），冷却 8:00 开始倒计时；认错了点他头像下面的小条取消"
+            self.message = f"{when} {name}买活了（消息栏认到的），冷却 8:00 开始倒计时；认错了点他头像下面的小条取消"
 
     def _game_clock(self) -> float | None:
         if self._bb_paused is not None:
