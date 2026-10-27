@@ -303,8 +303,57 @@ def positions_path(cfg: Config) -> Path:
     return DATA_DIR / f"positions_r{cfg.rank_min}-{cfg.rank_max}.json"
 
 
+# ---------- 没填 STRATZ token 时的分位置数据：OpenDota 分路 + 定位标签 ----------
+
+# OpenDota /scenarios/laneRoles：每个英雄走优势路 / 中路 / 劣势路 / 打野的局数（已解析的对局，不分段位，每个英雄约 1000~2000 局）。
+# 只分路不分位置：优势路按定位标签（Engine.fits_by_roles）拆成一号位 / 五号位，劣势路拆成三号位 / 四号位，
+# 只有一边对得上标签的给它 ROLE_SPLIT，两边都对得上或都对不上就对半；打野对半算四 / 五号位。
+# 胜场一律记一半：只用来定「这个英雄打不打这个位置」（位置筛选、猜分路），不按位置修正胜率。
+# 1523 场样本外对局回测（HANDOFF 第 35 节）：猜对面单人位置 68.9%（STRATZ 77.8%，只看定位标签 35.2%），
+# 实际选的英雄过位置筛选 87.7%（STRATZ 94.3%，只看定位标签 73.7%），推荐区分度在噪声内没变
+OPENDOTA_POSITIONS = DATA_DIR / "positions_opendota.json"
+ROLE_SPLIT = 0.9
+
+
+def positions_from_lane_roles(db: HeroDB, lane_roles: dict[int, list[dict]]) -> dict[str, dict[str, list[int]]]:
+    from .engine import Engine
+    out = {}
+    for h in db:
+        lane = defaultdict(int)
+        for r in lane_roles.get(h.id) or []:
+            lane[int(r["lane_role"])] += int(r["games"])
+        if not sum(lane.values()):
+            continue
+        fit = {p: Engine.fits_by_roles(h, p) for p in range(1, 6)}
+        core = lambda a, b: ROLE_SPLIT if fit[a] and not fit[b] else 1 - ROLE_SPLIT if fit[b] and not fit[a] else 0.5
+        s1, s3 = core(1, 5), core(3, 4)
+        games = {1: lane[1] * s1, 2: lane[2], 3: lane[3] * s3,
+                 4: lane[3] * (1 - s3) + lane[4] / 2, 5: lane[1] * (1 - s1) + lane[4] / 2}
+        out[str(h.id)] = {str(p): [round(g), round(g) // 2] for p, g in games.items()}
+    return out
+
+
+def fetch_positions_opendota(db: HeroDB, log=_say) -> dict:
+    lane_roles = {}
+    for i, h in enumerate(db, 1):
+        lane_roles[h.id] = _get(f"{OPENDOTA}/scenarios/laneRoles", hero_id=h.id)
+        if i % 30 == 0:
+            log(f"  {i} 个英雄 …")
+        time.sleep(0.5)                    # OpenDota 免费接口每分钟 60 次
+    return {"fetched_at": int(time.time()), "source": "opendota_lane_roles",
+            "heroes": positions_from_lane_roles(db, lane_roles)}
+
+
+def positions_source(cfg: Config) -> str | None:
+    """分位置数据从哪来：'stratz' / 'opendota'（没 token 时凑的）/ None（都没有，推荐按定位标签粗筛位置）"""
+    return "stratz" if positions_path(cfg).exists() else "opendota" if OPENDOTA_POSITIONS.exists() else None
+
+
 def load_positions(cfg: Config) -> dict[int, dict[int, tuple[int, int]]] | None:
+    """有 STRATZ 的（填过 token，或打包版自带的）用它，没有再用 OpenDota 凑的"""
     p = positions_path(cfg)
+    if not p.exists():
+        p = OPENDOTA_POSITIONS
     if not p.exists():
         return None
     raw = json.loads(p.read_text(encoding="utf-8"))["heroes"]
@@ -450,6 +499,15 @@ def update(cfg: Config, log=_say) -> None:
             log(f"  {len(pos['heroes'])} 个英雄")
         else:   # 2026-10-26 STRATZ 偶尔返回空表，覆盖掉以后推荐退回按定位标签筛位置（赏金猎人进中单），所以保留旧的
             log("  STRATZ 返回了空数据，保留原来的分位置数据")
+    elif not positions_path(cfg).exists():      # 打包版自带 STRATZ 的分位置数据，有就不用凑
+        log("没填 STRATZ token：用 OpenDota 的分路数据凑分位置数据（约 2 分钟）…")
+        try:
+            pos = fetch_positions_opendota(load_heroes(), log)
+        except NETWORK_ERRORS as e:
+            log(f"  没拉到（{e}），{'沿用上次的' if OPENDOTA_POSITIONS.exists() else '推荐先按定位标签粗筛位置'}")
+        else:
+            OPENDOTA_POSITIONS.write_text(json.dumps(pos), encoding="utf-8")
+            log(f"  {len(pos['heroes'])} 个英雄")
     update_player(cfg, log)
     log(f"拉取最近 {cfg.days} 天天梯对局的克制 / 配合数据 …")
     stats = fetch_stats(cfg, log)

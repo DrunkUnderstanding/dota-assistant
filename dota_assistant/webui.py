@@ -37,6 +37,10 @@ elog = logging.getLogger("dota_assistant.electron")      # Electron 主进程 / 
 
 WEB_DIR = ROOT / "web"
 ELECTRON_DIR = ROOT / "electron"
+# Chromium（Electron）拒绝访问的端口（net/base/port_util.cc 的 kRestrictedPorts，1024 以上的部分）：
+# 随机端口分到这些，界面直接 ERR_UNSAFE_PORT 打不开。这台机器的动态端口从 1024 起，2026-10-27 实测分到过 6669
+UNSAFE_PORTS = {1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566, 6665, 6666, 6667, 6668, 6669, 6679,
+                6697, 10080}
 UI_DIR = ROOT / "ui"            # 打包版（packaging/build.py）：Electron 本体 + resources/app 里的 main.js，双击就能跑
 PORTRAIT_DIR = DATA_DIR / "portraits"
 ITEM_ICON_DIR = DATA_DIR / "items"
@@ -124,6 +128,9 @@ class WebServer:
                 pass
 
         self.server = HTTPServer(("127.0.0.1", port), Handler)
+        while not port and self.server.server_address[1] in UNSAFE_PORTS:   # 换一个，旧的关掉前先占着免得又分到它
+            old, self.server = self.server, HTTPServer(("127.0.0.1", 0), Handler)
+            old.server_close()
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True, name="webui")
 
     @property

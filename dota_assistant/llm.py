@@ -22,11 +22,31 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 PROVIDERS = {"claude_code": "Claude Code 订阅", "anthropic": "Anthropic API Key", "openai": "OpenAI 兼容接口"}
+NO_CLAUDE = "这台电脑没找到 Claude Code（没装，或者不在 PATH 里）"
+
+
+class Unavailable(RuntimeError):
+    """按现在的设置根本调不了 AI（没装 Claude Code / 没填 Key / 没填地址）：不算出错，AI 打法跳过，别的功能照常"""
 
 
 def options(cfg) -> dict:
     """从 Config 取出 ask_json 要的来源参数"""
     return {"provider": cfg.ai_provider, "api_key": cfg.ai_api_key, "base_url": cfg.ai_base_url}
+
+
+def unavailable(cfg) -> str:
+    """不发请求先看一眼：按 cfg 的 AI 来源，缺了什么就返回原因，齐了返回空串"""
+    if cfg.ai_provider == "anthropic":
+        if not cfg.ai_api_key:
+            return "没填 Anthropic API Key"
+        try:
+            import anthropic  # noqa: F401
+        except ImportError:
+            return "没装 anthropic 库：pip install anthropic"
+        return ""
+    if cfg.ai_provider == "openai":
+        return "" if cfg.ai_base_url else "OpenAI 兼容接口没填接口地址"
+    return "" if shutil.which("claude") else NO_CLAUDE
 
 
 def claude_exe() -> str:
@@ -79,6 +99,8 @@ def _ask_claude_code(prompt: str, system: str, schema: dict, model: str, timeout
             r = subprocess.run(cmd, input=prompt.encode("utf-8"), capture_output=True, timeout=timeout, cwd=cwd, env=env)
     except subprocess.TimeoutExpired:
         return None, 0.0, "超时"
+    except FileNotFoundError:
+        return None, 0.0, NO_CLAUDE
     except OSError as e:
         return None, 0.0, f"调不起 Claude Code：{e}"
     line = r.stdout.decode("utf-8", "replace").strip().splitlines()

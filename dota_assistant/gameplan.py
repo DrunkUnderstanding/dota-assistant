@@ -156,6 +156,9 @@ def generate(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int],
     path = PLAN_DIR / f"{key}.json"
     if path.exists():
         return Plan.from_json(json.loads(path.read_text(encoding="utf-8")))
+    reason = llm.unavailable(cfg)                 # 缓存里有的照样能看；没缓存又调不了 AI 就直接说缺什么
+    if reason:
+        raise llm.Unavailable(reason)
     t0 = time.time()
     res, cost, err = llm.ask_json(source, SYSTEM, SCHEMA, cfg.ai_model, timeout=240, **llm.options(cfg))
     if res is None:

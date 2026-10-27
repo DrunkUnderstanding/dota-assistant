@@ -231,7 +231,8 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
             hero, bench, curves = (v, bench, curves) if what == "hero" else (hero, v, curves) if what == "bench" \
                 else (hero, bench, v)
     else:
-        b.add("说明", [("dim", "config.toml 里没有 STRATZ token，只能给对面机制提醒")])
+        b.add("说明", [("dim", "没填 STRATZ token：没有对线胜负、起手装、强势期和同分段出装节奏，"
+                               "下面是按双方技能 / 物品机制给的提醒（「设置」里填了就有）")])
 
     # 1. 对线：三路分路 → 我这路的对手 / 队友 → 对线数据 → 硬规则提示
     lane = lanes.assign(enemy_ids, ally_ids, pos, side, data.load_positions(cfg), ally_pos)

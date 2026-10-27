@@ -21,6 +21,9 @@ AI 打法（选完人后写这局怎么打）有三种来源，在「设置」�
 - **Anthropic API Key**：填自己的 Key，按用量付费
 - **OpenAI 兼容接口**：DeepSeek、通义千问、Kimi 等，填接口地址、Key、模型名（不是 Claude，效果没验证过）
 
+STRATZ token 和 AI 的 Key 都不填也能用：选人推荐、对面分路、机制提醒、针对装、各种计时照常；
+少的是对线胜负、起手装、强势期、同分段出装节奏（要 STRATZ）和 AI 打法（打法页会写明缺什么）。
+
 自己打包：`pip install pyinstaller anthropic`，`electron/` 下 `npm install` 过一次，然后 `python packaging/build.py`，
 产物在 `build/`。打包不会带上本机的 `config.toml`（脚本最后会扫一遍确认密钥没混进去）。
 

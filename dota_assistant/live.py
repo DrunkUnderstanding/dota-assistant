@@ -89,6 +89,13 @@ def _view_text(db, view, kinds=("radiant", "dire", "bans")) -> list[str]:
     return [" ".join(_slot_text(db, s) for s in getattr(view, k)) or "-" for k in kinds]
 
 
+def plan_error(err: Exception) -> str:
+    """AI 打法页上的那行说明。调不了 AI（llm.Unavailable）不算出错：说缺什么、怎么办，数据页照常"""
+    if isinstance(err, llm.Unavailable):
+        return f"AI 打法用不了：{err}。数据页不受影响；控制面板右上角「设置」里换 AI 来源，或者关掉 AI 打法"
+    return f"AI 打法没做出来：{err}"
+
+
 SECRET_FIELDS = {"stratz_token": "STRATZ token", "ai_api_key": "API Key"}   # 不发给页面、不进日志
 # 热键：config 字段 → (完整说明, 面板窗口窄时的短说明)；按哪个键在「设置」里改
 HOTKEY_ACTIONS = {
@@ -1174,6 +1181,9 @@ class Live:
             try:
                 res, err = self._plan_build(self.cfg, *ids, b.lane_ids, b.text()), None
                 log.info("AI 打法做好了（%.1f 秒）", time.monotonic() - t0)
+            except llm.Unavailable as e:
+                log.info("AI 打法跳过：%s", e)
+                res, err = None, e
             except Exception as e:
                 log.exception("AI 打法没做出来")
                 res, err = None, e
@@ -1184,7 +1194,7 @@ class Live:
         if key != self.brief_match or not self.brief:
             return
         if err:
-            self.brief.plan_note = f"AI 打法没做出来：{err}"
+            self.brief.plan_note = plan_error(err)
         else:
             self.brief.plan = plan
             self.brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
@@ -1263,6 +1273,9 @@ class Live:
             try:
                 plan, perr = self._plan_build(self.cfg, *ids, res.lane_ids, res.text()), None
                 log.info("如果选它：AI 打法做好了（%.1f 秒）", time.monotonic() - t0)
+            except llm.Unavailable as e:
+                log.info("如果选它：AI 打法跳过：%s", e)
+                plan, perr = None, e
             except Exception as e:
                 log.exception("如果选它：AI 打法没做出来")
                 plan, perr = None, e
@@ -1273,7 +1286,7 @@ class Live:
         if key != self.pick_key or not self.pick_brief:
             return
         if err:
-            self.pick_brief.plan_note = f"AI 打法没做出来：{err}"
+            self.pick_brief.plan_note = plan_error(err)
             return
         self.pick_brief.plan = plan
         self.pick_brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"

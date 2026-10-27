@@ -946,6 +946,27 @@ class WebServerTest(unittest.TestCase):
         _, _, body = self.get("/api/config")
         self.assertIn("opacity", json.loads(body))
 
+    def test_skips_chromium_unsafe_port(self):
+        """随机端口分到 Chromium 拒绝的端口（例如 6669）就换一个，不然 Electron 界面打不开"""
+        from unittest import mock
+        from dota_assistant import webui
+        from dota_assistant.log import HTTPServer
+        probe = HTTPServer(("127.0.0.1", 0), None)
+        bad = probe.server_address[1]
+        probe.server_close()
+        calls = []
+
+        def first_bad(addr, handler):
+            calls.append(addr)
+            return HTTPServer(("127.0.0.1", bad) if len(calls) == 1 else addr, handler)
+        with mock.patch.object(webui, "UNSAFE_PORTS", {bad}), mock.patch.object(webui, "HTTPServer", first_bad):
+            srv = WebServer(self.live)
+        try:
+            self.assertEqual(len(calls), 2)
+            self.assertNotEqual(srv.server.server_address[1], bad)
+        finally:
+            srv.server.server_close()
+
     def test_no_path_traversal(self):
         for path in ("/../config.toml", "/%2e%2e/config.toml", "/portraits/../../config.toml", "/items/../../config.toml"):
             with self.assertRaises(urllib.error.HTTPError) as cm:

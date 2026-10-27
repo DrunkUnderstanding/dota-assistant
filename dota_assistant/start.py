@@ -137,6 +137,26 @@ def ensure_data(cfg: config.Config) -> None:
         print(f"数据更新失败（{e}），先用旧数据。")
 
 
+def no_key_note(cfg: config.Config) -> str:
+    """没填 STRATZ token / 调不了 AI 时，启动窗口里说一句哪些照常、少了哪些（不填也能用，只是提醒）"""
+    from . import llm
+    out = []
+    if not cfg.stratz_token:
+        out.append("没填 STRATZ token：选人推荐、机制提醒、出装针对装、各种计时照常用；"
+                   "少了对线胜负、起手装、强势期、同分段出装节奏")
+        src = data.positions_source(cfg)
+        if src == "opendota":
+            out.append("  分位置数据是用 OpenDota 分路凑的，猜位置比 STRATZ 的准确度低一些")
+        elif src is None:
+            out.append("  也没有分位置数据：推荐只能按定位标签粗筛位置，对面分路猜不了")
+    reason = llm.unavailable(cfg) if cfg.ai_plan else ""
+    if reason:
+        out.append(f"AI 打法用不了（{reason}），其余功能不受影响")
+    if out:
+        out.append("要补上就在控制面板右上角「设置」里填\n")
+    return "\n".join(out)
+
+
 def main() -> int:
     cfg = ensure_config()
     if not ensure_electron():
@@ -144,6 +164,9 @@ def main() -> int:
     ensure_gsi(cfg)
     ensure_data(cfg)
     ensure_grid_portraits()
+    note = no_key_note(cfg)
+    if note:
+        _say(note)
     _say("启动助手…（关掉控制面板窗口即退出）")
     from .webui import run
     return run(cfg)

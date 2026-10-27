@@ -119,6 +119,8 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
             why = match.get("error") or "录像里找不到你 / 还没解析"
             return live.submit(notice, "演示结束", "dim", f"局内部分演示不了：{why}")
         url = f"http://127.0.0.1:{cfg.gsi_port}/"
+        gsi = requests.Session()
+        gsi.trust_env = False                  # 系统设了 HTTP_PROXY 时，发本机 GSI 端口别走代理（会被代理吞掉，助手收不到）
         started = False
         # AI 打法写完后再多看 10 秒才出门
         done_at = []
@@ -134,7 +136,7 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
                 # 出门后切回自动：叠加层按局内规则显示（策略时间还算选人阶段，自动模式会去截屏识别，所以等到这时）
                 started = True
                 live.submit(lambda: setattr(live, "mode", "auto"))
-            requests.post(url, json=f, timeout=5)
+            gsi.post(url, json=f, timeout=5).raise_for_status()
             time.sleep(FRAME_SECONDS)
         live.submit(lambda: (setattr(live, "mode", "manual"), notice("演示结束", "dim", "关掉控制面板即可退出")))
 
