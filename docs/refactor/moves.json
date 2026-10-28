@@ -5498,9 +5498,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._close_card",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -5668,9 +5668,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._load_overlay_state",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -5798,9 +5798,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._save_overlay_state",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -5998,9 +5998,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.close_overlay",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6148,9 +6148,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.overlay_moved",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6158,9 +6158,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.overlay_style",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6168,9 +6168,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.overlay_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6178,9 +6178,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.overlay_visible",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6298,9 +6298,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.set_locked",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6308,9 +6308,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.set_overlay_style",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6458,9 +6458,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.toggle_lock",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
@@ -6468,9 +6468,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.toggle_overlay",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.overlay",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
    "tags": [
     "live_method"
    ]
