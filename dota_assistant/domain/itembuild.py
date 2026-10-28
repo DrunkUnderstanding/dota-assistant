@@ -21,8 +21,9 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import coach, kb
-from .sources import assets
+from . import coach
+from .. import kb
+from ..sources import assets
 
 # 以下阈值是实现假设（玩家未确认），看回放和反馈再调
 COMMON_SHARE = 0.15          # 同分段 15%~40% 的局会买的算「之后常见」
@@ -334,8 +335,8 @@ def death_sim(cfg, paths: list) -> str:
     位置用这个英雄在本分段最常打的位置（推送里没有）；同一场（matchid）的死亡按顺序累计次数"""
     import json
     from pathlib import Path
-    from .domain import death
-    from .sources import stats as stats_mod
+    from . import death
+    from ..sources import stats as stats_mod
     base = kb.KnowledgeBase.load()
     if base is None:
         return "还没有知识库，先运行 python -m dota_assistant kb update"

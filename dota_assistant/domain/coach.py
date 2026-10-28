@@ -18,9 +18,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import kb
-from .core.config import DATA_DIR, Config
-from .sources import assets, http
+from .. import kb
+from ..core.config import DATA_DIR, Config
+from ..sources import assets, http
 
 log = logging.getLogger(__name__)
 BENCH_DIR = DATA_DIR / "bench"

@@ -347,12 +347,12 @@ def main(argv: list[str] | None = None) -> int:
         print(ai_run(cfg, args.moments, args.model, args.workers))
         return 0
     if args.cmd == "coach-sim":
-        from .coach import simulate
+        from .domain.coach import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid), end=chr(10) * 2)
         return 0
     if args.cmd == "death-sim":
-        from .itembuild import death_sim
+        from .domain.itembuild import death_sim
         print(death_sim(cfg, args.files or sorted((config.ROOT / "shots" / "deaths").glob("*.json"))))
         return 0
     if args.cmd == "brief-sim":

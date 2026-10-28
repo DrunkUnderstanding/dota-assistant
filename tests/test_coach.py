@@ -1,7 +1,8 @@
 """局内缺口提醒：去重 / 装备合成 / 用真实知识库判断几个典型阵容。不联网。"""
 import unittest
 
-from dota_assistant import coach, kb
+from dota_assistant.domain import coach
+from dota_assistant import kb
 
 
 class LogicTest(unittest.TestCase):

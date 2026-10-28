@@ -31,7 +31,8 @@ import cv2
 import numpy as np
 
 from .domain import advisor as adv
-from . import brief, buyback, buybackscan, coach, grid, itembuild, jungle, lanestate, mates, roles, ultcd
+from . import brief, buyback, buybackscan, grid, jungle, lanestate, mates, roles, ultcd
+from .domain import coach, itembuild
 from .domain import death
 from .ai import gameplan, llm
 from .core import config
