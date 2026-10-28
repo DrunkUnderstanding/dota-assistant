@@ -1,4 +1,4 @@
-# 真鼠标测试用的本地服务：选人阶段（叠加层「?」）→ 局内（顶栏「?」），帮认 / 队友战绩都写到这个临时目录
+# 真鼠标测试用的本地服务：选人阶段（叠加层「?」）→ 局内（顶栏「?」），帮认 / 队友战绩（mates.html：mates.json、matches/、benchmarks/）都写到这个临时目录
 # 用法：python serve.py <端口> <临时目录> [截图目录]
 #   代码和 config.toml 用这个脚本所在的仓库（docs/refactor/uitest 往上三层，worktree 里跑就是 worktree 的代码）；
 #   截图目录默认 <仓库>/shots，要用 20261023-014333.png / 014347.png 两张选人截图（worktree 里没有就传 D:/dota/shots，只读）
@@ -7,7 +7,6 @@ from pathlib import Path
 from types import SimpleNamespace
 REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
-from dota_assistant.app import live as live_mod
 from dota_assistant.domain import mates
 from dota_assistant.core.config import load
 from dota_assistant.game.gsi import GameState
@@ -20,7 +19,10 @@ cfg = load()
 cfg.ai_plan = False; cfg.buyback_auto = False; cfg.voice = False; cfg.jungle_cues = False
 live = Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, overlay_file=tmp / "overlay.json")
 live.fix_file = tmp / "fixes.jsonl"
-live.mates = mates.Mates(tmp / "mates.json")
+# 队友战绩页（mates.html）走 WebServer 自己的 mates.Service：查过的人、整局缓存、英雄基准都写到临时目录
+mates.MATCH_DIR = tmp / "matches"
+mates.BENCH_DIR = tmp / "benchmarks"
+mates_svc = mates.Service(cfg, path=tmp / "mates.json", db=live.db)
 live.mode = "manual"
 live.gsi = SimpleNamespace(state=GameState(), stop=lambda: None)
 st = live.gsi.state
@@ -74,7 +76,7 @@ def ctl():                               # game = 切到局内，并把阵容填
         elif cmd.startswith("eval "):
             fut = live.submit(lambda: print("EVAL", json.dumps(eval(cmd[5:]), ensure_ascii=False, default=str), flush=True))
 threading.Thread(target=ctl, daemon=True).start()
-srv = WebServer(live, port).start()
+srv = WebServer(live, port, mates_service=mates_svc).start()
 live.start()
 live.submit(live.refresh)
 print("ready", srv.url, flush=True)
