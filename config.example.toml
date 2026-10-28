@@ -38,7 +38,7 @@ ai_api_key = ""       # anthropic / openai 要填（控制面板「设置」里�
 ai_base_url = ""      # openai 要填，例如 https://api.deepseek.com/v1
 overlay_x = 0.80      # 叠加层左上角位置，占屏幕宽 / 高的比例（拖动过以后以 data/overlay.json 为准）
 overlay_y = 0.22
-overlay_width = 420     # 叠加层宽度；解锁后按住卡片右边缘的拉手也能拖宽（以 data/overlay.json 为准），≥640 时内容分左右两栏
+overlay_width = 420     # 叠加层宽度；解锁后拉右边 / 下边 / 右下角的拉手改宽高、按住拖到别的屏（以 data/overlay.json 为准），≥640 时内容分左右两栏
 overlay_opacity = 0.95  # 叠加层底色不透明度 0.3~1（1 = 完全不透明）；控制面板「叠加层」下面能直接拖着调
 overlay_color = "#0a0d12" # 叠加层底色；文字是浅色，底色选深一点
 hotkey_toggle = "F8"  # 显示 / 隐藏叠加层

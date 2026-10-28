@@ -8,10 +8,11 @@
 <style>
   /* 窗口本身全透明，只有卡片有底色；鼠标穿透由 Electron 设置 */
   html, body { background: transparent; overflow: hidden; }
+  html, body { height: 100%; }                    /* 解锁时整个窗口都能按住拖，空白处也要落在 body 上 */
   body { padding: 2px; }
   /* ?preview=1：在浏览器里预览时垫一张像游戏画面的背景，方便看透明效果 */
   body.preview {
-    min-height: 100vh; padding: 40px;
+    height: auto; min-height: 100vh; padding: 40px;
     background: radial-gradient(circle at 30% 20%, #3b4a3a, #1b2418 45%, #0d110c);
   }
   body.preview .ov-wrap { width: 420px; }
@@ -35,17 +36,29 @@
   body.unlocked .ov-lock .icon-open { display: block; }
   body.unlocked .ov-lock { color: #1a1408; border-color: var(--gold); background: linear-gradient(180deg, #ecc06a, #c39037); }
   .ov.is-hidden ~ .ov-tools { display: none; }
-  body.unlocked .ov-wrap { cursor: grab; user-select: none; }
-  body.unlocked.dragging .ov-wrap { cursor: grabbing; }
-  body.unlocked .ov { outline: 2px dashed var(--gold); outline-offset: -2px; }
-  /* 解锁时右边缘有个拉手：按住左右拖改宽度（宽到 640px 以上内容分两栏） */
-  .ov-resize { display: none; position: absolute; top: 0; right: 0; bottom: 0; width: 14px; cursor: ew-resize; }
-  .ov-resize::after {
-    content: ""; position: absolute; top: 50%; right: 4px; width: 4px; height: 44px; margin-top: -22px;
-    border-radius: 2px; background: var(--gold); opacity: 0.8;
+  body.unlocked { cursor: grab; user-select: none; }
+  body.unlocked.dragging { cursor: grabbing; }
+  /* 解锁时整个窗口画成金色虚线框：框就是叠加层占的地方，卡片放不下会在框里整体缩小。框里任意处按住都能拖 */
+  .ov-frame {
+    display: none; position: fixed; inset: 0; pointer-events: none;
+    border: 2px dashed var(--gold); border-radius: 8px; background: rgba(236, 192, 106, 0.06);
   }
+  body.unlocked .ov-frame { display: block; }
+  /* 拉手：右边改宽（宽到 640px 以上内容分两栏）、下边改高、右下角一起改 */
+  .ov-resize { display: none; position: fixed; z-index: 2; }
+  .ov-resize::after { content: ""; position: absolute; border-radius: 2px; background: var(--gold); opacity: 0.85; }
+  .ov-resize-w { top: 0; right: 0; bottom: 20px; width: 14px; cursor: ew-resize; }
+  .ov-resize-w::after { top: 50%; right: 4px; width: 4px; height: 44px; margin-top: -22px; }
+  .ov-resize-h { left: 0; right: 20px; bottom: 0; height: 14px; cursor: ns-resize; }
+  .ov-resize-h::after { left: 50%; bottom: 4px; width: 44px; height: 4px; margin-left: -22px; }
+  .ov-resize-wh { right: 0; bottom: 0; width: 20px; height: 20px; cursor: nwse-resize; }
+  .ov-resize-wh::after { right: 4px; bottom: 4px; width: 12px; height: 12px; background: none;
+    border-right: 4px solid var(--gold); border-bottom: 4px solid var(--gold); border-radius: 0 0 3px 0; }
   body.unlocked .ov-resize { display: block; }
-  body.resizing, body.resizing .ov-wrap { cursor: ew-resize; }
+  body.preview .ov-frame, body.preview .ov-resize { display: none; }
+  body.resizing-w, body.resizing-w * { cursor: ew-resize !important; }
+  body.resizing-h, body.resizing-h * { cursor: ns-resize !important; }
+  body.resizing-wh, body.resizing-wh * { cursor: nwse-resize !important; }
 </style>
 </head>
 <body>
@@ -64,8 +77,11 @@
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
     </button>
   </div>
-  <div class="ov-resize" id="resize" title="按住左右拖：改叠加层宽度"></div>
 </div>
+<div class="ov-frame"></div>
+<div class="ov-resize ov-resize-w" data-mode="w" title="按住左右拖：改叠加层宽度"></div>
+<div class="ov-resize ov-resize-h" data-mode="h" title="按住上下拖：改叠加层高度（卡片放不下会整体缩小）"></div>
+<div class="ov-resize ov-resize-wh" data-mode="wh" title="按住拖：宽度和高度一起改"></div>
 <script type="module">
 import { act, connect } from './api.js';
 import { applyOverlayStyle, bindOverlayClicks, renderOverlay } from './view.js';
@@ -86,7 +102,7 @@ connect((s) => {
   locked = s.overlay.locked;
   document.body.classList.toggle('unlocked', !locked);
   const key = s.overlay.lock_key ? `（${s.overlay.lock_key}）` : '';
-  lockBtn.title = locked ? `位置已固定 · 点一下解锁${key}，解锁后按住卡片拖动` : `可以拖动 · 放好后点一下固定位置${key}`;
+  lockBtn.title = locked ? `位置已固定 · 点一下解锁${key}，解锁后按住拖动、拉边改大小` : `可以拖动 / 改大小 · 放好后点一下固定${key}`;
   const tkey = s.overlay.toggle_key ? `（${s.overlay.toggle_key}）` : '';
   closeBtn.title = s.overlay.view?.closable ? `关闭这条提醒${tkey}` : `关闭叠加层 · 按 ${s.overlay.toggle_key || '热键'} 或控制面板重新打开`;
   shell?.setLocked(locked);
@@ -96,16 +112,18 @@ connect((s) => {
   if (!ok) renderOverlay(root, { kind: 'notice', title: '选人助手', lines: [{ kind: 'dim', text: '和助手断开了，正在重连…' }] });
 });
 
-// ---------- 可点区域：固定时只有右上角的锁和 ×，解锁时整张卡片；Electron 据此切换鼠标穿透 ----------
+// ---------- 可点区域：固定时只有右上角的锁和 × 等，解锁时整个窗口（虚线框）；Electron 据此切换鼠标穿透 ----------
 let lastRects = '';
 function reportHitRects() {
   // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」）+ 要点卡片的翻页标签 / 展开收起
   // + 剩余位置的空位置（点了切位置）/ 展开收起 + 顶栏对照的格子（点了帮认）和打开的「这格是谁」；其余地方照样点穿
   const hits = ['.pick[data-id]', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold',
     '.slot[data-slot]', '.slot-picker'];
-  const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [wrap];
-  const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
-    .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }));
+  const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [];
+  const rects = locked
+    ? els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
+      .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }))
+    : [{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }];
   const key = JSON.stringify(rects);
   if (key === lastRects) return;
   lastRects = key;
@@ -130,46 +148,48 @@ function fitHeight() {
     if (zoom <= MIN_ZOOM || wrap.getBoundingClientRect().height <= avail) break;
   }
 }
-window.addEventListener('resize', fitHeight);
+window.addEventListener('resize', () => { fitHeight(); reportHitRects(); });
 root.addEventListener('transitionend', reportHitRects);   // 显示 / 隐藏的过渡结束后按钮位置才稳定
 
-// ---------- 解锁后拖动 ----------
-const resizeEl = document.getElementById('resize');
-let resizing = false;
-resizeEl.addEventListener('pointerdown', (e) => {
-  if (locked || e.button !== 0) return;
-  e.stopPropagation();                             // 不要同时触发拖动
-  resizeEl.setPointerCapture(e.pointerId);
-  resizing = true;
-  document.body.classList.add('resizing');
-  shell?.resizeStart();
-});
-const endResize = () => {
-  if (!resizing) return;
-  resizing = false;
-  document.body.classList.remove('resizing');
-  shell?.resizeEnd();
-};
-resizeEl.addEventListener('pointerup', endResize);
-resizeEl.addEventListener('pointercancel', endResize);
-resizeEl.addEventListener('lostpointercapture', endResize);
+// ---------- 解锁后拖动 / 改大小（窗口怎么动由 Electron 跟着系统光标算，这里只报开始和结束） ----------
+let resizing = null;                               // 正在拉的拉手的 mode：'w' / 'h' / 'wh'
+for (const el of document.querySelectorAll('.ov-resize')) {
+  el.addEventListener('pointerdown', (e) => {
+    if (locked || e.button !== 0) return;
+    e.stopPropagation();                           // 不要同时触发拖动
+    el.setPointerCapture(e.pointerId);
+    resizing = el.dataset.mode;
+    document.body.classList.add(`resizing-${resizing}`);
+    shell?.resizeStart(resizing);
+  });
+  const endResize = () => {
+    if (!resizing) return;
+    document.body.classList.remove(`resizing-${resizing}`);
+    resizing = null;
+    shell?.resizeEnd();
+  };
+  el.addEventListener('pointerup', endResize);
+  el.addEventListener('pointercancel', endResize);
+  el.addEventListener('lostpointercapture', endResize);
+}
 
-wrap.addEventListener('pointerdown', (e) => {
-  if (locked || e.button !== 0 || e.target.closest('button')) return;
-  wrap.setPointerCapture(e.pointerId);
+const body = document.body;                        // 解锁时框里任意处（包括卡片下面的空白）按住都能拖
+body.addEventListener('pointerdown', (e) => {
+  if (locked || e.button !== 0 || e.target.closest('button, .ov-resize')) return;
+  body.setPointerCapture(e.pointerId);
   dragging = true;
-  document.body.classList.add('dragging');
+  body.classList.add('dragging');
   shell?.dragStart();
 });
 const endDrag = () => {
   if (!dragging) return;
   dragging = false;
-  document.body.classList.remove('dragging');
+  body.classList.remove('dragging');
   shell?.dragEnd();
 };
-wrap.addEventListener('pointerup', endDrag);
-wrap.addEventListener('pointercancel', endDrag);
-wrap.addEventListener('lostpointercapture', endDrag);
+body.addEventListener('pointerup', endDrag);
+body.addEventListener('pointercancel', endDrag);
+body.addEventListener('lostpointercapture', endDrag);
 lockBtn.addEventListener('click', () => act('set', { key: 'overlay_locked', value: !locked }));
 closeBtn.addEventListener('click', () => act('close_overlay'));
 root.addEventListener('click', (e) => { if (!locked) e.stopImmediatePropagation(); }, true);   // 解锁时是在拖动，不算点

@@ -285,7 +285,7 @@
  },
  "overlay_moved": {
   "kind": "method",
-  "signature": "(self, x: 'float', y: 'float', width: 'int | None' = None) -> 'None'"
+  "signature": "(self, x: 'float', y: 'float', width: 'int | None' = None, height: 'int | None' = None, screen: 'dict | None' = None) -> 'None'"
  },
  "overlay_style": {
   "kind": "method",

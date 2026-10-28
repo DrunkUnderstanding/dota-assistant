@@ -12,6 +12,13 @@ from . import consts
 log = logging.getLogger(__name__)
 
 
+def _screen_ok(screen) -> bool:
+    """叠加层所在屏的左上角：两个整数（多屏时副屏可以在主屏左边 / 上边，是负数）"""
+    return (isinstance(screen, dict)
+            and all(isinstance(screen.get(k), int) and not isinstance(screen.get(k), bool) and abs(screen[k]) <= 100000
+                    for k in ("x", "y")))
+
+
 class OverlayMixin:
     def set_overlay_style(self, key: str, value, save: bool = True) -> None:
         """叠加层底色 / 不透明度。面板上拖滑块时 save=False 只改内存（叠加层马上跟着变），松手再写进 config.toml"""
@@ -74,18 +81,33 @@ class OverlayMixin:
 
     def set_locked(self, locked: bool) -> None:
         self.overlay_locked = locked
-        self.message = "叠加层位置已固定" if locked else f"叠加层已解锁：按住卡片拖动，放好后点右上角的锁（或按 {self.cfg.hotkey_lock}）固定"
+        self.message = "叠加层位置已固定" if locked else f"叠加层已解锁：按住拖动（能拖到别的屏），拉右边 / 下边 / 右下角改大小，放好后点右上角的锁（或按 {self.cfg.hotkey_lock}）固定"
         self._save_overlay_state()
 
-    def overlay_moved(self, x: float, y: float, width: int | None = None) -> None:
+    def overlay_moved(self, x: float, y: float, width: int | None = None, height: int | None = None,
+                      screen: dict | None = None) -> None:
+        """x / y 是占 screen 那块屏的比例；screen 是那块屏左上角的坐标（Electron 逻辑像素），拖到副屏后下次启动靠它找回来。
+        width / height / screen 没给就沿用上次的（只拖位置不丢大小；没拉过高度 = 到屏幕底）"""
         if not (-1 <= x <= 2 and -1 <= y <= 2):
             raise ValueError("叠加层位置不对")
-        width = width if width is not None else (self.overlay_pos or {}).get("width")
-        self.overlay_pos = {"x": round(x, 4), "y": round(y, 4)}
+        old = self.overlay_pos or {}
+        width = width if width is not None else old.get("width")
+        height = height if height is not None else old.get("height")
+        screen = screen if screen is not None else old.get("screen")
+        pos = {"x": round(x, 4), "y": round(y, 4)}
         if width is not None:
             if not consts.OVERLAY_WIDTH[0] <= int(width) <= consts.OVERLAY_WIDTH[1]:
                 raise ValueError("叠加层宽度不对")
-            self.overlay_pos["width"] = int(width)
+            pos["width"] = int(width)
+        if height is not None:
+            if not consts.OVERLAY_HEIGHT[0] <= int(height) <= consts.OVERLAY_HEIGHT[1]:
+                raise ValueError("叠加层高度不对")
+            pos["height"] = int(height)
+        if screen is not None:
+            if not _screen_ok(screen):
+                raise ValueError("叠加层所在屏幕不对")
+            pos["screen"] = {"x": int(screen["x"]), "y": int(screen["y"])}
+        self.overlay_pos = pos
         self._save_overlay_state()
 
     def _load_overlay_state(self) -> None:
@@ -98,6 +120,10 @@ class OverlayMixin:
             self.overlay_pos = {"x": raw["x"], "y": raw["y"]}
             if isinstance(raw.get("width"), int) and consts.OVERLAY_WIDTH[0] <= raw["width"] <= consts.OVERLAY_WIDTH[1]:
                 self.overlay_pos["width"] = raw["width"]
+            if isinstance(raw.get("height"), int) and consts.OVERLAY_HEIGHT[0] <= raw["height"] <= consts.OVERLAY_HEIGHT[1]:
+                self.overlay_pos["height"] = raw["height"]
+            if _screen_ok(raw.get("screen")):
+                self.overlay_pos["screen"] = {"x": raw["screen"]["x"], "y": raw["screen"]["y"]}
 
     def _save_overlay_state(self) -> None:
         self.overlay_file.parent.mkdir(parents=True, exist_ok=True)

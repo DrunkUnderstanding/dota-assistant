@@ -339,7 +339,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         elif t == "close_overlay":
             self.close_overlay()
         elif t == "overlay_moved":
-            self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"))
+            self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"), a.get("height"), a.get("screen"))
         elif t == "save_settings":
             self.save_settings(a)
         elif t == "open_logs":

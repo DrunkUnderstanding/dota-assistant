@@ -53,10 +53,13 @@ JSON_TYPE = "application/json; charset=utf-8"
 
 
 def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
-    """pos：用户拖过的位置（比例）和拉过的宽度，优先于 config.toml 里的 overlay_x / overlay_y / overlay_width"""
+    """pos：用户拖过的位置（比例）和拉过的宽度，优先于 config.toml 里的 overlay_x / overlay_y / overlay_width；
+    拉过高度才有 height（没有 = 到屏幕底），拖到过别的屏才有 screen（那块屏左上角，没有 = monitor 那块）"""
     pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
-    return {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
-            "opacity": cfg.overlay_opacity, "buyback_timer": cfg.buyback_timer, "ult_timer": cfg.ult_timer}
+    out = {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
+           "opacity": cfg.overlay_opacity, "buyback_timer": cfg.buyback_timer, "ult_timer": cfg.ult_timer}
+    out.update({k: pos[k] for k in ("height", "screen") if k in pos})
+    return out
 
 
 class WebServer:

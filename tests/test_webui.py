@@ -329,6 +329,21 @@ class LiveTest(unittest.TestCase):
             finally:
                 third.close()
             self.assertEqual(overlay_config(again.cfg)["width"], again.cfg.overlay_width)
+            self.assertNotIn("height", overlay_config(again.cfg, again.overlay_pos))   # 没拉过高度 = 到屏幕底
+            # 拉过高度、拖到副屏（副屏在主屏左边，左上角是负数）：都记下来，之后只拖位置不丢
+            again.action({"type": "overlay_moved", "x": 0.2, "y": 0.3, "height": 500, "screen": {"x": -1920, "y": 0}})
+            again.action({"type": "overlay_moved", "x": 0.25, "y": 0.3})
+            cfg = overlay_config(again.cfg, again.overlay_pos)
+            self.assertEqual((cfg["width"], cfg["height"], cfg["screen"]), (720, 500, {"x": -1920, "y": 0}))
+            for bad in ({"height": 50}, {"screen": {"x": 1.5, "y": 0}}, {"screen": {"x": True, "y": 0}}, {"screen": [0, 0]}):
+                with self.assertRaises(ValueError):
+                    again.action({"type": "overlay_moved", "x": 0.2, "y": 0.3, **bad})
+            fourth = make_live(self.live.overlay_file)
+            try:
+                self.assertEqual(fourth.overlay_pos, {"x": 0.25, "y": 0.3, "width": 720, "height": 500,
+                                                      "screen": {"x": -1920, "y": 0}})
+            finally:
+                fourth.close()
         finally:
             again.close()
 
