@@ -244,7 +244,13 @@ python -m dota_assistant brief-sim 9054096051  # 拿一局录像看选完人时�
 
 ```
 python -m unittest        # 引擎、识别（拿官方头像合成的假截图）、GSI、播报文案，都不联网不出声
+ruff check dota_assistant tests tools packaging   # 未使用 import / 未定义名字 / 语法类（pip install ruff）
+python tools/check_isolation.py                   # 跑一遍单测，确认没碰真实的 data/ shots/ logs/ 等目录
 ```
+
+代码按层分在 `dota_assistant/` 的子包里（`core` `sources` `kb` `ai` `domain` `vision` `game` `research` `app` `cli`），
+每个文件管什么见 [HANDOFF 第 4 节](docs/HANDOFF.md#4-模块地图)；开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+也可以 `pip install -e .` 装成命令 `dota-assistant`（等同 `python -m dota_assistant`）。
 
 ## 交流 / 参与开发
 

@@ -51,6 +51,7 @@
 | 不填 key 也能用（没 STRATZ token / 调不了 AI，第 35 节） | ✅ 完成 | 单元测试（`tests/test_nokey.py`）；全新目录、没 token、AI 来源选 API Key 却没填，从零 `update` 再跑 `suggest` 和 `demo`（无头浏览器看叠加层）：推荐、分路、本局要点、局内提醒都出来，AI 打法那页写明用不了，日志没有警告；分位置数据改用 OpenDota 分路凑，1523 场回测见第 35 节 |
 | 队友战绩（`mates.py`，控制面板左下「队友战绩」，第 38 节） | 🟡 代码完成 | 单元测试（`tests/test_mates.py`：好友代码解析、假接口整理结果、记住查过的人、Live 里查 / 刷新 / 删 / 出错）；开发机真联网查自己 + 最常一起打的队友 + 一个不存在的代码，约 1.5 秒一个人；无头 Chrome 截过 1400 / 900 宽的真实控制面板；2026-10-28 Electron 控制面板里真鼠标点输入框 / 查询 / 刷新 / × 都生效（见第 38 节末） |
 | 局内打法 | ❌ 未开始 | 本局要点 + 缺口提醒算是雏形；敌方装备识别、热键提问待做（第 15 节末尾） |
+| 工程化重构（2026-10-28，分支 `refactor/structure`，计划 [refactor/PLAN.md](refactor/PLAN.md)） | 🟡 代码完成，未合并 main | 平铺的 40 个模块按层分进 `core / sources / kb / ai / domain / vision / game / research / app / cli` 子包，`live.py` 用 mixin 拆成 `app/live/`（新路径见第 4 节）；加了 `pyproject.toml`、`requirements.lock`、ruff。只搬家不改行为：门禁全过（编译 + ruff、单测、行为快照逐字节一致、单测不碰真实目录、冒烟 + 搬家清单、慢快照、无头浏览器打开三个页面无控制台报错）；临时 venv 里 `pip install -e .` 后 `dota-assistant --help` 正常。**真鼠标验收、打包版、实战待验**（第 7 节） |
 
 **游戏电脑上第一件事就是把「未实测」的几项跑一遍**，见第 6 节。
 
@@ -110,7 +111,7 @@
 ## 3. 架构
 
 ```
-            ┌────────────── update（每天一次，联网）───────────────┐
+            ┌─────── app.update（每天一次，联网，经 sources.*）──────┐
             │ OpenDota explorer → 克制 / 配合矩阵  data/stats_*.json │
             │ STRATZ heroStats → 英雄分位置胜率    data/positions_*  │
             │ STRATZ player   → 你每局的英雄 / 位置 data/player.json │
@@ -118,63 +119,137 @@
             └───────────────────────────────────────────────────────┘
 
 run（实时）：
-  live.Live 工作线程每 scan_interval 秒（网页操作 / 热键也排进同一个线程的队列）
+  app.live.Live 工作线程每 scan_interval 秒（网页操作 / 热键也排进同一个线程的队列）
     └ should_scan？（自动识别模式 + 已校准 + GSI 说在选人阶段 / 没 GSI 时勾了持续识别）
-        └ capture.Screen.grab()（优先只截 Dota 窗口，找不到再 mss 截整屏）
-          └ vision.recognize()：按 calibration.json 裁 10 个格子 → 和模板比相似度
+        └ vision.capture.Screen.grab()（优先只截 Dota 窗口，找不到再 mss 截整屏）
+          └ vision.recognize.recognize()：按 calibration.json 裁 10 个格子 → 和模板比相似度
             └ 连续两次结果一致才采用（躲开选人动画）→ 填进 Live.slots（控制面板的 10 个格子）
-  格子（识别或手动）+ GSI（阵营、我选的英雄）
-    └ advisor.Advisor.advise() → engine.Engine.suggest()
-      ├ advisor.render_view() → 状态快照 → webui 本地服务 SSE → 叠加层 / 控制面板网页
-      └ advisor.speech()：对面新选了谁 → Speaker.say()
-  界面：webui 起 127.0.0.1 随机端口 → 启动 electron/ 外壳开两个窗口加载 web/ 下的页面
+  格子（识别或手动）+ game.gsi（阵营、我选的英雄）
+    └ domain.advisor.Advisor.advise() → domain.engine.Engine.suggest()
+      ├ domain.advisor.render_view() → 状态快照 → app.webui 本地服务 SSE → 叠加层 / 控制面板网页
+      └ domain.advisor.speech()：对面新选了谁 → game.speech.Speaker.say()
+  界面：app.webui 起 127.0.0.1 随机端口 → 启动 electron/ 外壳开两个窗口加载 web/ 下的页面
 ```
 
 **控制面板的 10 个格子是唯一的「当前局面」**：识别和手动输入都只是往里写，推荐只从格子读。
 这样纠正识别错误、手动兜底、学习模板都是同一个入口。
 
+**分层（2026-10-28 工程化重构后，`tests/test_layers.py` 强制）**：从低到高 `core` → `sources` → `kb` → `ai` → `domain` →
+`vision` / `game`（平级）→ `research` → `app` → `cli`，只能 import 同层或更低层，`__main__` 只 import `cli`。
+不留转发旧路径的空壳模块；跨模块共享的函数用 `模块.函数` 形式调用（例如 `http._get(...)`），测试只 patch 一处。
+计划和每个名字的去处见 [refactor/PLAN.md](refactor/PLAN.md)、[refactor/moves.json](refactor/moves.json)、[refactor/layering.md](refactor/layering.md)。
+
 ## 4. 模块地图
+
+2026-10-28 工程化重构把平铺的模块按层分进子包（只搬家，不改行为）。**本文第 5 节以后的历史记录里的旧文件名对照见此表**（历史记录不逐处改）：
+
+| 旧文件 | 新位置 |
+|---|---|
+| `config.py` `log.py` `heroes.py` | `core/config.py` `core/log.py` `core/heroes.py` |
+| `gsi.py` | 找 Dota 目录 → `core/dota_install.py`；`buyback_left`、阶段常量等纯函数 → `core/gsi_fields.py`；GSI 服务 / cfg 安装 → `game/gsi.py` |
+| `gamefiles.py` | VPK 读取 → `core/vpk.py`；DXT 解码、导出网格头像 → `vision/gamefiles.py` |
+| `data.py` | 联网基础 → `sources/http.py`；英雄表 / 头像 / 图标 / 装备常量 → `sources/assets.py`；克制 / 分位置 → `sources/stats.py`；个人数据 → `sources/player.py`；`update()` `fetch_icons()` 等编排 → `app/update.py` |
+| `coach.py` 的 `ITEMS_CONST` `items_const` | `sources/assets.py`（`coach.py` 其余 → `domain/coach.py`） |
+| `kb.py` | `kb/__init__.py`（整体搬，`python -m dota_assistant kb ...` 不变） |
+| `ultcd.py` | 游戏文件 / 镜像读减冷却写法、`pick` `cooldowns` `MIN_CD` → `kb/cd_ops.py`；其余（`cooldown` `mods` `Tracker` …）→ `domain/ultcd.py` |
+| `llm.py` `gameplan.py` | `ai/` |
+| `engine.py` `advisor.py` `lanes.py` `explain.py` `teamfight.py` `itembuild.py` `coach.py` `brief.py` `death.py` `jungle.py` `buyback.py` `mates.py` | `domain/`（同名） |
+| `lanestate.py` | `live` 记对线用的 `LOG_FILE` `LOG_MINUTES` `log_moment` → `domain/lanelog.py`；回测、`lane-test` / `lane-review` → `research/lanestate.py` |
+| `vision.py` | `vision/recognize.py` |
+| `capture.py` `grid.py` `roles.py` `buybackscan.py` `calibrate.py` | `vision/`（同名） |
+| `hotkeys.py` `speech.py` | `game/` |
+| `backtest.py` `aibacktest.py` | `research/` |
+| `live.py` | `app/live/`：类本体 `core.py`，模块级常量 / 小函数 `consts.py`，方法按功能分进 `draft` `ingame` `timers` `cards` `overlay` `settings` `mates` 七个 mixin |
+| `webui.py` `start.py` `demo.py` | `app/` |
+| `cli.py` | `cli/__init__.py`（`dota_assistant.cli.main` 路径不变） |
+
+下表路径都相对 `dota_assistant/`，按层从低到高排：
 
 | 文件 | 职责 |
 |---|---|
-| `dota_assistant/config.py` | `config.toml` → `Config` 数据类（字段说明在 `config.example.toml`） |
-| `data.py` | 所有联网：OpenDota / STRATZ / Valve；缓存到 `data/`；`player_history()` 把个人记录按位置归类 |
-| `heroes.py` | 英雄表 + 名字查找（中文名 / 英文名 / 简称 `ALIASES` / 唯一子串） |
-| `engine.py` | 打分：自身强度、克制、配合、熟练度、个人表现、位置筛选。常数都在文件头，带推导注释 |
-| `lanes.py` | 对面分路：猜对面谁打几号位（带把握）、三路排法、同路队友；「你这路怎么打」的硬规则提示（每条带官方原文）；`evaluate()` 回测（第 22 节） |
-| `explain.py` | 推荐理由里的机制对位（克敌机先 ↔ 闪避、显形 ↔ 隐身…），每条带官方原句 |
-| `advisor.py` | 局面 `Draft` → 建议 `Advice`；播报文案 `speech()`；显示行 `render_lines()`。不依赖界面 |
-| `vision.py` | 校准数据 `Calibration`、模板库 `TemplateBank`、`recognize()` |
-| `grid.py` | 选人网格认禁用：找格子、认格子是谁（`GridMap`，按布局存 `data/grid_map.json`）、红斜线 = 禁用；`BanWatcher` 选人时一直看（第 19 节） |
-| `roles.py` | 自动认位置：Windows OCR 认顶栏名字下面的「优势路 / 中路 / 劣势路 / 辅助 / 纯辅助」，按玩家名（GSI）找自己那格（第 20 节） |
-| `gamefiles.py` | 从 Dota 安装目录的资源包（`pak01_dir.vpk`）导出选人网格用的英雄图到 `data/portraits_grid/`（PNG / YCoCg-DXT5 解码） |
-| `capture.py` | 截屏：优先 PrintWindow 只截 Dota 窗口（叠加层、直播弹幕等盖在上面的窗口不会截进去），找不到窗口 / 全黑再退回 mss 整屏 |
-| `gsi.py` | GSI 本地 HTTP 服务 + cfg 安装；对局中的时间 / 装备 / 正补 / 死亡次数 |
-| `gameplan.py` | AI 打法（本局要点第二页）：资料 = 本局数据 + 自己和对面五人的官方技能全文；每条带原文出处，程序核对出处；缓存 `data/plans/` |
-| `llm.py` | 无头调用 Claude Code（订阅额度），选人盲测和 AI 打法共用 |
-| `brief.py` | 本局要点：对线（laneOutcome）、起手装、强势期（按比赛时长的胜率）、出装、对面要防；`simulate()` 录像回放 |
-| `itembuild.py` | 出装推荐：核心装 + 针对装排成顺序，「下一件」和还差多少钱（第 25 节） |
-| `buyback.py` | 买活计时：双方 10 人的买活冷却（自己按 GSI，别人截图自动记 / 玩家点），界面是 `web/topbar.html`（第 31 节） |
-| `buybackscan.py` | 买活自动记：每秒截图看顶栏头像变灰 / 变回彩色，OCR 认复活倒计时，提前复活 = 买活（第 31.1 节） |
-| `ultcd.py` | 对面大招冷却：每个对面英雄挑一个大招、按等级 + 勾的减冷却（天赋 / 神杖 / 魔晶 / 玲珑心）算冷却，玩家看到放了点一下计时（第 32 节） |
-| `mates.py` | 队友战绩：好友代码 → OpenDota 资料 / 最近 100 局 / 同队记录 + STRATZ 天梯位置；查过的人记在 `data/mates.json`（第 38 节） |
-| `death.py` | 死亡复盘：死前 20 秒的 GSI 推送 → 「怎么死的」几句话；原始推送存 `shots/deaths/` |
-| `coach.py` | 局内缺口提醒：`plan()` 开局定缺口，`Coach.tick()` 去重；`prepare()` 给实时版，`simulate()` 录像重放 |
-| `demo.py` | 演示：按真实对局逐个选人，再当「假 Dota」把录像按 GSI 格式推给本地端口 |
-| `speech.py` | 常驻 PowerShell 进程调 System.Speech，新句子打断旧句子 |
-| `hotkeys.py` | RegisterHotKey 全局热键（不装键盘钩子） |
-| `live.py` | 实时主控 `Live`（不依赖界面库）：局面格子、识别、推荐、语音、GSI、热键；状态整理成 JSON 快照 |
-| `webui.py` | 本机 HTTP 服务（静态页面、头像、SSE 推快照、POST 操作）+ 启动 Electron，Electron 的输出转进日志 |
-| `log.py` | 日志：每次启动一个 `logs/<时间>-<命令>.log`，留最近 30 个；token 打码；未捕获异常带堆栈 |
+| `__main__.py` | `python -m dota_assistant` 入口，只调 `cli.main` |
+| **core/** | 最底层，不依赖别的层 |
+| `core/config.py` | `config.toml` → `Config` 数据类（字段说明在 `config.example.toml`）；运行目录 `ROOT`（环境变量 `DOTA_ASSISTANT_HOME` 可指定，打包版是 exe 所在目录） |
+| `core/log.py` | 日志：每次启动一个 `logs/<时间>-<命令>.log`，留最近 30 个；token 打码；未捕获异常带堆栈 |
+| `core/heroes.py` | 英雄表 + 名字查找（中文名 / 英文名 / 简称 `ALIASES` / 唯一子串） |
+| `core/dota_install.py` | 找 Dota 2 安装目录：`config.toml` 的 `dota_dir`，或者到本机各个 Steam 库里找（只读注册表 / 磁盘，不碰游戏进程）（原 `gsi.py` 的一部分） |
+| `core/gsi_fields.py` | GSI 推送里的字段：游戏阶段常量和从推送内容算出来的值（`buyback_left` 等纯函数，不带 IO）（原 `gsi.py` 的一部分） |
+| `core/vpk.py` | 最小的 VPK v2 读取：Dota 资源包 `pak01_dir.vpk`，只读磁盘上的静态文件（原 `gamefiles.py` 的一部分） |
+| **sources/** | 联网拉数据（原 `data.py`：所有联网：OpenDota / STRATZ / Valve；缓存到 `data/`；`player_history()` 把个人记录按位置归类） |
+| `sources/http.py` | 联网基础：OpenDota / STRATZ 地址、带重试的会话、`_get` / `_stratz` / `_sql`、出错类型。别的模块一律 `http._get(...)` 形式调用 |
+| `sources/assets.py` | 英雄表、头像、顶栏图标、装备常量 / 图标（含原 `coach.ITEMS_CONST` / `items_const`）：下载并缓存在 `data/` 里的死数据 |
+| `sources/stats.py` | 克制 / 配合统计（OpenDota explorer）、英雄分位置场次 / 胜率（STRATZ，或没 token 时 OpenDota 分路凑的）：拉取、缓存路径、读取 |
+| `sources/player.py` | 个人数据：段位、最近天梯每个英雄在每个位置的局数 / 胜场；`player_history()` 把个人记录按位置归类 |
+| **kb/** | 知识库 |
+| `kb/__init__.py` | 当前版本知识库：Valve 官方技能 / 天赋 / 物品原文、机制标签、玩家规则 |
+| `kb/cd_ops.py` | 大招冷却用到的知识库条目：游戏文件 / 镜像里的减冷却写法（`update_ops` / `load_ops`）、每个英雄要计时的大招（`pick`）、各级冷却（`cooldowns`） |
+| **ai/** | 调大模型 |
+| `ai/llm.py` | 无头调用 Claude Code（订阅额度），选人盲测和 AI 打法共用 |
+| `ai/gameplan.py` | AI 打法（本局要点第二页）：资料 = 本局数据 + 自己和对面五人的官方技能全文；每条带原文出处，程序核对出处；缓存 `data/plans/` |
+| **domain/** | 领域逻辑，不依赖界面 |
+| `domain/engine.py` | 打分：自身强度、克制、配合、熟练度、个人表现、位置筛选。常数都在文件头，带推导注释 |
+| `domain/advisor.py` | 局面 `Draft` → 建议 `Advice`；播报文案 `speech()`；显示行 `render_lines()`。不依赖界面 |
+| `domain/lanes.py` | 对面分路：猜对面谁打几号位（带把握）、三路排法、同路队友；「你这路怎么打」的硬规则提示（每条带官方原文）；`evaluate()` 回测（第 22 节） |
+| `domain/explain.py` | 推荐理由里的机制对位（克敌机先 ↔ 闪避、显形 ↔ 隐身…），每条带官方原句 |
+| `domain/teamfight.py` | 后期团战：对面哪几个大招要等、谁的持续施法要留打断、控制留给对面谁、谁能保人、指向技能别往哪丢（第 30 节） |
+| `domain/itembuild.py` | 出装推荐：核心装 + 针对装排成顺序，「下一件」和还差多少钱（第 25 节） |
+| `domain/coach.py` | 局内缺口提醒：`plan()` 开局定缺口，`Coach.tick()` 去重；`prepare()` 给实时版，`simulate()` 录像重放 |
+| `domain/brief.py` | 本局要点：对线（laneOutcome）、起手装、强势期（按比赛时长的胜率）、出装、对面要防；`simulate()` 录像回放 |
+| `domain/death.py` | 死亡复盘：死前 20 秒的 GSI 推送 → 「怎么死的」几句话；原始推送存 `shots/deaths/` |
+| `domain/jungle.py` | 野区计时提醒：封野、拉野（双拉）、屯野、抢莲花，到点前几秒在叠加层顶上弹一行，过了自己收起（第 27 节） |
+| `domain/buyback.py` | 买活计时：双方 10 人的买活冷却（自己按 GSI，别人截图自动记 / 玩家点），界面是 `web/topbar.html`（第 31 节） |
+| `domain/ultcd.py` | 对面大招冷却：每个对面英雄挑一个大招、按等级 + 勾的减冷却（天赋 / 神杖 / 魔晶 / 玲珑心）算冷却，玩家看到放了点一下计时（第 32 节）；挑大招 / 各级冷却在 `kb/cd_ops.py` |
+| `domain/lanelog.py` | 对线实战记录：`live` 在 3:00 / 6:00 / 10:00 把自己的 GSI 数据记进 `data/lane_log.jsonl`，赛后 `lane-review` 对照（原 `lanestate.py` 的一部分） |
+| `domain/mates.py` | 队友战绩：好友代码 → OpenDota 资料 / 最近 100 局 / 同队记录 + STRATZ 天梯位置；查过的人记在 `data/mates.json`（第 38 节） |
+| **vision/** | 看屏幕（和 game 平级） |
+| `vision/capture.py` | 截屏：优先 PrintWindow 只截 Dota 窗口（叠加层、直播弹幕等盖在上面的窗口不会截进去），找不到窗口 / 全黑再退回 mss 整屏 |
+| `vision/recognize.py` | 校准数据 `Calibration`、模板库 `TemplateBank`、`recognize()`（原 `vision.py`） |
+| `vision/grid.py` | 选人网格认禁用：找格子、认格子是谁（`GridMap`，按布局存 `data/grid_map.json`）、红斜线 = 禁用；`BanWatcher` 选人时一直看（第 19 节） |
+| `vision/gamefiles.py` | 从 Dota 安装目录的资源包（`pak01_dir.vpk`）导出选人网格用的英雄图到 `data/portraits_grid/`（PNG / YCoCg-DXT5 解码） |
+| `vision/roles.py` | 自动认位置：Windows OCR 认顶栏名字下面的「优势路 / 中路 / 劣势路 / 辅助 / 纯辅助」，按玩家名（GSI）找自己那格（第 20 节） |
+| `vision/buybackscan.py` | 买活自动记：每秒截图看顶栏头像变灰 / 变回彩色，OCR 认复活倒计时，提前复活 = 买活（第 31.1 节） |
+| `vision/calibrate.py` | 校准窗口 |
+| **game/** | 和游戏 / 系统打交道（和 vision 平级） |
+| `game/gsi.py` | GSI 本地 HTTP 服务 + cfg 安装；对局中的时间 / 装备 / 正补 / 死亡次数 |
+| `game/hotkeys.py` | RegisterHotKey 全局热键（不装键盘钩子） |
+| `game/speech.py` | 常驻 PowerShell 进程调 System.Speech，新句子打断旧句子 |
+| **research/** | 研究 / 回测脚本 |
+| `research/backtest.py` | 样本外回测、调参 |
+| `research/aibacktest.py` | AI 选人盲测（`backtest-ai`）：拿统计数据之后的新对局，在选人进行到一半时让大模型推荐，再和真实胜负对答案（第 10 节） |
+| `research/lanestate.py` | 对线优劣回测（`lane-test`）和实战记录复盘（`lane-review`）（第 28 节） |
+| **app/** | 把下面各层串起来的编排 |
+| `app/live/__init__.py` | 只导出 `Live` |
+| `app/live/core.py` | 实时主控 `Live`（不依赖界面库）：局面格子、识别、推荐、语音、GSI、热键；状态整理成 JSON 快照。这里是类本体（`__init__`、工作线程、订阅 / 推送、`action` 分发），其余方法在下面七个 mixin 里 |
+| `app/live/consts.py` | `Live` 用的模块级常量和小函数（`FIX_FILE` `DEATH_MIN_SHOW` …），各 mixin 一律写 `consts.NAME`，测试只替换这里 |
+| `app/live/draft.py` | 选人：格子 / 局面 / 推荐、定时识别（顶栏、网格禁用、自动认位置）、帮认和记模板 |
+| `app/live/ingame.py` | 局内：缺口提醒、分阶段弹本局要点、野区提醒、对线记录、死亡复盘和死亡截图 |
+| `app/live/timers.py` | 买活 / 大招计时：顶栏小条、买活自动记（顶栏头像 + 复活倒计时 + 消息栏）、对面大招冷却 |
+| `app/live/cards.py` | 本局要点 / 如果选它：做要点卡片（数据页 + AI 打法页）、翻页 |
+| `app/live/overlay.py` | 叠加层：显隐、固定 / 解锁、拖动后的位置、底色样式 |
+| `app/live/settings.py` | 设置：账号设置保存、Dota 目录、热键注册 |
+| `app/live/mates.py` | 队友战绩：控制面板填好友代码查 |
+| `app/webui.py` | 本机 HTTP 服务（静态页面、头像、SSE 推快照、POST 操作）+ 启动 Electron，Electron 的输出转进日志 |
+| `app/start.py` | 一键启动：双击「启动助手.bat」走这里，能自动做的准备工作都自动做，只在缺东西时问一句（第 13 节） |
+| `app/demo.py` | 演示：按真实对局逐个选人，再当「假 Dota」把录像按 GSI 格式推给本地端口 |
+| `app/update.py` | 全量更新数据（`update` 命令 / 启动时数据过期）：英雄表、头像、装备、知识库、顶栏图标、分位置数据、个人数据、克制矩阵，按顺序拉一遍（原 `data.py` 的编排部分） |
+| **cli/** | 最上层 |
+| `cli/__init__.py` | 所有命令入口（`main`；按命令延迟 import） |
+
+仓库里其它目录 / 文件：
+
+| 文件 | 职责 |
+|---|---|
 | `web/` | 界面页面：`overlay.html` 叠加层、`topbar.html` 买活 / 大招计时条、`panel.html` 控制面板、`view.js` 推荐卡片（两边共用）、`base.css` 配色 |
 | `electron/` | 界面外壳：只开窗口（叠加层透明 / 置顶 / 穿透，控制面板普通窗口），无逻辑。`npm install` 装 Electron |
-| `calibrate.py` | 校准窗口 |
-| `kb.py` | 当前版本知识库：Valve 官方技能 / 天赋 / 物品原文、机制标签、玩家规则 |
 | `knowledge/rules.toml` | 玩家确认过的经验规则（进 git） |
 | `knowledge/mistakes.toml` | AI 常见误判：说错过、查原文纠正的说法（进 git，`kb mistake` 记录） |
-| `backtest.py` | 样本外回测、调参 |
-| `cli.py` | 所有命令入口 |
-| `tests/` | `python -m unittest`：引擎、识别（合成截图）、GSI、播报文案 |
+| `tests/` | `python -m unittest`：引擎、识别（合成截图）、GSI、播报文案；另有守门测试 `test_layers`（分层）、`test_patch_targets`（patch 不打空）、`test_moves`（搬家清单）、`test_smoke`（每个模块能 import、每个子命令 `--help`）、`test_hygiene`（编码 / 换行）、`test_project`（pyproject 和 requirements 一致） |
+| `tools/golden/` | 行为快照（门禁 G3）：CLI 输出 + 一整局 Live 回放逐字节比对；快照和个人数据在仓库外 `D:\dota-golden\`，用法见 [tools/golden/README.md](../tools/golden/README.md) |
+| `tools/check_isolation.py` | 门禁 G4：跑单测前后比对 `data/` `shots/` `logs/` `templates/` `config.toml` `calibration.json` 有没有被改 |
+| `tools/browser_check.py` | 阶段验收 G6：在临时运行目录起界面服务（同 `run --browser` 的 WebServer + Live），无头 Edge / Chrome 打开控制面板、叠加层、顶栏收控制台报错 |
+| `tools/lock_deps.py` | 重新生成 `requirements.lock`（只锁 `requirements.txt` 里的包及传递依赖） |
+| `packaging/` | 免安装打包：`build.py`（PyInstaller + Electron），`launcher.py`（exe 入口，调 `dota_assistant.cli.main`） |
+| `pyproject.toml` | 项目元数据、命令入口 `dota-assistant`、ruff 配置；依赖和 `requirements.txt` 一致 |
 
 运行时生成、和机器相关的文件：`calibration.json`（校准）、`templates/`（学习模板，值得保留和拷走）、`shots/`（截图，不进 git）、`data/`（可重新拉，不进 git）。
 
@@ -230,6 +305,12 @@ run（实时）：
 如果顶栏格子在选人阶段根本不显示头像，就要换识别区域（比如选人界面中央的阵容展示），`Calibration` 结构不用改，重新框就行。
 
 ## 7. 下一步（建议顺序）
+
+-1. **工程化重构收尾**（第 2 节、[refactor/PLAN.md](refactor/PLAN.md) P6）：代码和门禁都完成了，还差 ① PLAN 第 5 节真鼠标清单（叠加层 / 顶栏 / 控制面板）在重构后的代码上点一遍；
+   ② `python packaging/build.py` 打包，拿 exe 跑 `suggest`、`kb hero 小黑`、`start`；③ `demo` 完整跑一遍；④ 玩家用重构后的版本打一局天梯（GSI、截图识别、买活自动记只能这样验）。都过了再合并 main、推送（要玩家点头）。
+   **唯一可见差异：日志里模块名前缀变了**（例如 `live` → `app.live.draft`、`data` → `sources.http`），按模块名搜日志的习惯要跟着改。
+   以后每次改完多跑三个门禁：`python tools/golden/run.py check`（行为快照；行为本来就该变时，先确认差异是该有的再 `update-snapshot`）、`python tools/check_isolation.py`、`ruff check dota_assistant tests tools packaging`。
+   可选（问玩家）：GitHub Actions 在 `windows-latest` 上跑编译 + ruff + 单测（行为快照依赖本机个人数据，CI 跑不了）。
 
 0. **免安装版**（第 21 节）：拿 zip 到一台没装 Python / Node 的电脑上解压试跑；有人用 API Key / DeepSeek 的话，看一局 AI 打法出处核对丢掉了多少条（日志「已丢掉」）。
 
@@ -301,6 +382,11 @@ run（实时）：
 
 ```
 python -m unittest                                  # 回归
+python -X utf8 -m compileall -q dota_assistant tests packaging tools   # 门禁 G1：编译（再加下一行 ruff）
+ruff check dota_assistant tests tools packaging     # 门禁 G1：未使用 import / 未定义名字 / 语法类（不要 ruff format）
+python tools/golden/run.py check                    # 门禁 G3：行为快照逐字节一致，约 25 秒（--slow 再加回测类，阶段验收 G6）
+python tools/check_isolation.py                     # 门禁 G4：单测不碰 data/ shots/ logs/ 等真实目录
+python tools/browser_check.py                       # 阶段验收 G6：无头浏览器开三个页面，看控制台报错
 python -m dota_assistant update [--player]          # 拉数据
 python -m dota_assistant suggest --enemy ... --pos 3
 python -m dota_assistant run
