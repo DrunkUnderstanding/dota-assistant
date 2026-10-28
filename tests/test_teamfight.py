@@ -1,7 +1,8 @@
 """后期团战提示（teamfight.py）：要等的大招、留打断、留控给对面核心、保人、反弹。不联网；有本地知识库时再抽查真实阵容。"""
 import unittest
 
-from dota_assistant import kb, teamfight
+from dota_assistant import kb
+from dota_assistant.domain import teamfight
 
 
 def hero(name: str, *abilities: kb.Entry) -> kb.HeroKB:

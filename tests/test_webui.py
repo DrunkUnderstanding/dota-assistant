@@ -112,7 +112,7 @@ class RenderViewTest(unittest.TestCase):
 
     def test_lanes_view(self):
         from dota_assistant.domain import explain
-        from dota_assistant import lanes
+        from dota_assistant.domain import lanes
         positions = {AXE.id: {3: (900, 0)}, CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}}
         ln = lanes.assign([AXE.id, PL.id], [CM.id], 1, None, positions)
         tip = explain.Why("bad", "小心斧王", "斧王·狂战士之吼：…")

@@ -4,7 +4,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from .domain import explain
-from . import kb, lanes
+from . import kb
+from .domain import lanes
 from .core.config import Config
 from .domain.engine import POSITION_NAMES, Engine, Suggestion, pct
 from .core.heroes import Hero, HeroDB

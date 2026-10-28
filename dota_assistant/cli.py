@@ -325,7 +325,8 @@ def main(argv: list[str] | None = None) -> int:
         print(backtest(cfg, args.matches, do_tune=args.tune))
         return 0
     if args.cmd == "lanes-test":
-        from . import backtest, lanes
+        from . import backtest
+        from .domain import lanes
         stats = stats_mod.load_stats(cfg)
         if not (stats.get("hi_id") and cfg.stratz_token):
             print("需要统计数据（update）和 STRATZ token")

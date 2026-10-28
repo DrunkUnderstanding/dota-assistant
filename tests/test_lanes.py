@@ -1,7 +1,8 @@
 """对面分路（lanes.py）：猜位置 + 把握、三路排法、对线提示。不联网。"""
 import unittest
 
-from dota_assistant import kb, lanes
+from dota_assistant import kb
+from dota_assistant.domain import lanes
 
 
 def hero(name: str, *abilities: kb.Entry, attack: str = "远程", rng: int = 600) -> kb.HeroKB:
