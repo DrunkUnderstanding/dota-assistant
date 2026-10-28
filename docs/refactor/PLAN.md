@@ -41,6 +41,7 @@
 - `tests/test_hygiene.py` 的 `python_files()` 只 glob `dota_assistant/*.py`，**不递归**：建了子包以后子包里的文件就不查了，必须先改成递归。
 - `packaging/build.py` 用 `--collect-submodules dota_assistant`（子包会自动带上）；`packaging/launcher.py` 用 `from dota_assistant.cli import main`（这个路径要保住）。
 - 网页调用的 Live 动作（`Live.action` 的 `t`）：`set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page buyback ult name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings mate_query mate_remove open_logs`。
+  （d1bfef6 起 `mate_query` / `mate_remove` 没了：队友战绩改走 webui 的 `/api/mates`、`/api/match`，不经过 `Live.action`，剩 22 个。）
 
 ## 2. 目标结构
 
@@ -59,6 +60,7 @@ dota_assistant/
   game/       gsi.py  hotkeys.py  speech.py
   research/   backtest.py  aibacktest.py  lanestate.py
   app/        live/（__init__.py  core.py  consts.py  draft.py  ingame.py  timers.py  cards.py  overlay.py  settings.py  mates.py）
+              （d1bfef6 合并后 app/live/mates.py 删掉了，见 P4 表）
               webui.py  start.py  demo.py  update.py
   cli/        __init__.py（原 cli.py，保留 main）
 ```
@@ -145,7 +147,7 @@ dota_assistant/
   - `recognize <每张选人截图>`
   - `brief-sim 9055590694`、`coach-sim 9054096051`、`death-sim`（全部存下的死亡推送）、`lane-review`（走 cassette）
   - 每个子命令 `--help`
-- **Live 回放快照**：`tools/golden/replay_live.py`，参照 `tests/test_webui.py` 的做法造 `Live(use_gsi=False, use_hotkeys=False, screen_factory=假屏幕, coach_prepare=…)`，在工作线程里按顺序推：选人阶段（截图帧 → 识别、网格禁用、自动认位置）→ 帮认 `name_slot` / `pick_candidates` → 策略时间本局要点 → 号角 → 10:00 / 30:00 分阶段弹 → 局内提醒 → 死亡推送序列（`shots/deaths/*.json`）→ 复活 → 买活（自己 GSI、`mark_buyback`、消息栏帧）→ 大招 `ult` / `ult_set` → 叠加层 `toggle_overlay` / `toggle_lock` / `close_overlay` / `overlay_moved` / `set` 样式 → `save_settings`（写临时 config）→ `mate_query`（cassette）。**第 1 节列的每个网页动作至少走一次**。每步后记 `snapshot()`，`json.dumps(sort_keys=True)`。
+- **Live 回放快照**：`tools/golden/replay_live.py`，参照 `tests/test_webui.py` 的做法造 `Live(use_gsi=False, use_hotkeys=False, screen_factory=假屏幕, coach_prepare=…)`，在工作线程里按顺序推：选人阶段（截图帧 → 识别、网格禁用、自动认位置）→ 帮认 `name_slot` / `pick_candidates` → 策略时间本局要点 → 号角 → 10:00 / 30:00 分阶段弹 → 局内提醒 → 死亡推送序列（`shots/deaths/*.json`）→ 复活 → 买活（自己 GSI、`mark_buyback`、消息栏帧）→ 大招 `ult` / `ult_set` → 叠加层 `toggle_overlay` / `toggle_lock` / `close_overlay` / `overlay_moved` / `set` 样式 → `save_settings`（写临时 config）→ `mate_query`（cassette；d1bfef6 起这个动作没了，回放改成直接走 `mates.Service` 和 webui 的 `/api/mates`、`/api/match`）。**第 1 节列的每个网页动作至少走一次**。每步后记 `snapshot()`，`json.dumps(sort_keys=True)`。
   - 时间相关字段（本机时间锚点、「几分钟前」、日志时间）用正则归一化；后台线程等它完成再记，保证顺序固定。
 - **确定性检查**（P0 的退出标准之一）：`record` 一次，`check` 连跑两次都一致；隔一天再 `check` 一次也一致。
 - 慢快照（`--slow`）：`backtest --matches 300`、`lanes-test --matches 300`、`lane-test --matches 300`（用 `data/backtest_matches.json` 缓存；`--matches` 小了会不会重新抽样要先看代码，会的话用默认值）。
@@ -192,7 +194,7 @@ dota_assistant/
 
    | 文件 | 放什么（按 `live.py` 现在的方法分组） |
    |---|---|
-   | `core.py` | `Live` 类本体：`__init__`、工作线程（`start` `submit` `_loop` `_run`）、订阅 / 推送（`subscribe` `publish` `current_snapshot` `snapshot` `status`）、`action` 分发、`close`；`class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin, MatesMixin)` |
+   | `core.py` | `Live` 类本体：`__init__`、工作线程（`start` `submit` `_loop` `_run`）、订阅 / 推送（`subscribe` `publish` `current_snapshot` `snapshot` `status`）、`action` 分发、`close`；`class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin, MatesMixin)`（d1bfef6 合并后去掉 `MatesMixin`，剩六个） |
    | `consts.py` | 模块级常量（`OVERLAY_FILE` `FIX_FILE` `DEATH_MIN_SHOW` `HOTKEY_ACTIONS` …）和模块级小函数（`_side_cn` `_names` `_mask` `plan_error` …）。各 mixin 用 `consts.NAME` 访问，**不要 `from .consts import NAME`**，测试统一 patch `consts` |
    | `draft.py` | 选人：`current_draft` `refresh` `draft_view` `slots_view` `scan*` `tick` `grab` `fill_slots` `learn*` `name_slot` `pick_candidates` `_confirm_with_grid` `_role_ready` `_grid_ready` … |
    | `ingame.py` | `coach_tick` `_stage_tick` `_jungle_tick` `_lane_log` `_death_recap` `_take_death_shots` `_start_coach` `_coach_ready` `mute_cue` `_show_coach` |
@@ -200,7 +202,7 @@ dota_assistant/
    | `cards.py` | 本局要点 / 如果选它：`_start_brief` `_brief_ready` `_start_plan` `_plan_ready` `show_brief` `explain_pick` `_pick_*` `set_brief_page` `pick_view` |
    | `overlay.py` | `toggle_overlay` `close_overlay` `toggle_lock` `set_locked` `overlay_moved` `_load/_save_overlay_state` `overlay_visible` `overlay_view` `set_overlay_style` `overlay_style` |
    | `settings.py` | `save_settings` `settings_view` `_apply_dota_dir` `_start_hotkeys` `_check_hotkeys` `_check_dota_dir` |
-   | `mates.py` | `query_mate` `_mate_ready` |
+   | `mates.py` | `query_mate` `_mate_ready`（d1bfef6 把这两个方法删了，合并后这个文件也删了） |
 
    方法体一个字不改，只是挪文件；`__init__.py` 只 `from .core import Live`（外加测试要用的名字）。分组以实际调用关系为准，挪不顺就留在 `core.py`。
 3. `cli.py` → `cli/__init__.py`，延迟 import 的路径全部改新路径。按命令拆文件可选，拆了每个子命令都要在快照里。
@@ -230,7 +232,7 @@ dota_assistant/
 ## 5. 真鼠标验收清单（P4 末、P6 各一次）
 
 工具：[uitest/](uitest/)（2026-10-28 提交前真跑过的脚本，基本可用，有几处写死要改：`serve.py` 里的 `D:/dota` 路径、它 import 的是**重构前**的模块路径，P4 以后要跟着改；开发机单屏 1920×1080、缩放 1）。
-- `serve.py <端口> <临时目录>`：起一个 Live（选人阶段假 GSI + 10-23 截图裁图，帮认 / 队友战绩写临时目录），往 `<临时目录>/ctl.txt` 追加 `game` 切到局内并空出夜魇第 3 格。
+- `serve.py <端口> <临时目录>`：起一个 Live（选人阶段假 GSI + 10-23 截图裁图，帮认 / 队友战绩（`mates.json`、`matches/`、`benchmarks/`）写临时目录；第三个参数可传截图目录），往 `<临时目录>/ctl.txt` 追加 `game` 切到局内并空出夜魇第 3 格。
 - 起 Electron：`electron/node_modules/electron/dist/electron.exe electron --server=<地址> --remote-debugging-port=9334`。**VS Code 终端里有 `ELECTRON_RUN_AS_NODE=1`，要先去掉**（否则主进程报 `ipcMain` 是 undefined）。
 - `cdp.mjs <页面关键字> <表达式>`：只读页面状态 / 元素位置。`mouse.py click X Y`：SendInput 真鼠标，按下前确认那一点是 `electron.exe` 的窗口（不是就不点）。`mouse.py type`：用 KEYEVENTF_UNICODE 打字（普通虚拟键码会被中文输入法吃掉）。
 - `flow.mjs`：顶栏帮认整条（读位置和点击在一个进程里做：菜单 10 秒没人点会自己收起，分开跑太慢会碰上）。
@@ -247,7 +249,7 @@ dota_assistant/
 | 顶栏买活小条 | 左键开始 / 再点取消，右键「认错了」菜单 | 倒计时 / 取消 / 菜单都对 |
 | 顶栏大招小条 | 左键计时、右键等级 / 减冷却菜单 | 同上 |
 | 顶栏帮认 | 「?」→ 力量 → 最后一行英雄 | 菜单底边 < 窗口高 410，填上、「?」消失、收起后点穿 |
-| 控制面板队友战绩 | 输入框打字 → 查询 → 刷新 → × | 卡片出现 → 「查询中…」→「刚刚查的」→ 删掉 |
+| 队友战绩页（d1bfef6 起是独立页 `mates.html`） | 控制面板点「队友战绩」→ 新窗口输入框打字 → 查询 → 点一局 → 刷新 → 左侧 × | 新窗口打开；左侧「查过的人」出现这人、显示「查询中…」后出概况和最近对局；点一局出整局（每人 KDA / 表现分，有 token 时带 STRATZ 评分）；刷新后「刚刚查的」；× 删掉；`mates.json` / `matches/` / `benchmarks/` 只写在临时目录 |
 | 控制面板格子 / 位置 / 清空 / 设置保存 | 点 | 和改之前一样（设置保存先把 `config.toml` 备份，测完还原） |
 
 每一项写进报告：点了什么、看到什么；做不到的写「没验证」和原因。
