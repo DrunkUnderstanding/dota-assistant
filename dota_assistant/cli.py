@@ -77,7 +77,7 @@ def cmd_suggest(cfg: config.Config, args) -> int:
 
 def cmd_recognize(cfg: config.Config, path: Path) -> int:
     import cv2
-    from .vision import SURE_GAP, SURE_SCORE, Calibration, TemplateBank, read_image, recognize, write_image
+    from .vision.recognize import SURE_GAP, SURE_SCORE, Calibration, TemplateBank, read_image, recognize, write_image
     cal = Calibration.load()
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
@@ -108,7 +108,7 @@ def cmd_recognize(cfg: config.Config, path: Path) -> int:
 
 
 def cmd_label(cfg: config.Config, paths: list[Path]) -> int:
-    from .vision import EMPTY, Calibration, TemplateBank, read_image, recognize
+    from .vision.recognize import EMPTY, Calibration, TemplateBank, read_image, recognize
     cal = Calibration.load()
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")

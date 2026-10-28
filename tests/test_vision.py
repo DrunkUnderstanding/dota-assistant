@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 
 from dota_assistant.core.config import DATA_DIR
-from dota_assistant.vision import Calibration, TemplateBank, crop, interpolate, read_image, recognize
+from dota_assistant.vision.recognize import Calibration, TemplateBank, crop, interpolate, read_image, recognize
 
 PORTRAITS = DATA_DIR / "portraits"
 W, H = 1920, 1080

@@ -50,7 +50,7 @@ from .hotkeys import Hotkeys, vk_code
 from .kb import cd_ops
 from .sources import assets, http
 from .speech import Speaker
-from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
+from .vision.recognize import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
 
 SHOTS_DIR = ROOT / "shots"
 OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
@@ -178,7 +178,7 @@ class Live:
         self.bank = bank or TemplateBank()
         self.screen = None
         if screen_factory is None:
-            from .capture import Screen
+            from .vision.capture import Screen
             screen_factory = lambda: Screen(cfg.monitor)
         self._screen_factory = screen_factory
         self.gsi = None

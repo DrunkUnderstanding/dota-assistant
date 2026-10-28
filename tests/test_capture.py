@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from dota_assistant.capture import Screen, WindowGrabber
+from dota_assistant.vision.capture import Screen, WindowGrabber
 
 
 class FakeWindow:

@@ -28,7 +28,7 @@ from dota_assistant.gsi import GameState
 from pathlib import Path
 from dota_assistant.core.heroes import HeroDB
 from dota_assistant.live import Live
-from dota_assistant.vision import Calibration
+from dota_assistant.vision.recognize import Calibration
 from dota_assistant.webui import WebServer, overlay_config
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
 
@@ -512,7 +512,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_top_bar_confirmed_by_grid(self):
         # 顶栏分数没过阈值，但网格里这个英雄已被选走：算认出
-        from dota_assistant.vision import DraftView, Slot
+        from dota_assistant.vision.recognize import DraftView, Slot
         view = DraftView([Slot(None, 0.63, PL.id), Slot(None, 0.63, TIDE.id)] + [Slot(None, 0.2, 0)] * 3,
                          [Slot(None, 0.2, 0)] * 5, [])
         self.live.grid.taken = {PL.id}
@@ -521,7 +521,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_no_top_bar_scan_after_draft(self):
         # 2026-10-28 实战：局内按 F9 按选人界面的格子裁顶栏，认出一套乱的，把对面英雄冲掉了
-        from dota_assistant.vision import DraftView, Slot
+        from dota_assistant.vision.recognize import DraftView, Slot
         junk = DraftView([Slot(WK.id, 0.73, WK.id)] + [Slot(None, 0.3, 0)] * 4,
                          [Slot(None, 0.3, 0), Slot(CM.id, 0.71, CM.id)] + [Slot(None, 0.3, 0)] * 3, [])
         orig, live_mod.recognize = live_mod.recognize, lambda *a, **kw: junk
@@ -549,7 +549,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_name_slot_learns_crop(self):
         # 选人时没认出来的格子，玩家在顶栏挑了是谁：填进格子 + 把那格头像记成模板；那格根本没出头像（和开局一样）的不记
-        from dota_assistant.vision import TemplateBank, write_image
+        from dota_assistant.vision.recognize import TemplateBank, write_image
         rng = np.random.default_rng(7)
         def rand_pic():                                                   # 色块图：缩放以后还认得出（纯噪声一缩就糊了）
             return cv2.resize(rng.integers(0, 255, (6, 8, 3), dtype=np.uint8), (64, 36), interpolation=cv2.INTER_NEAREST)
@@ -609,7 +609,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_slots_view_marks_unrecognized(self):
         # 选人界面叠加层的「顶栏对照」：没认出的格子要让玩家看得出来（金色 ?），帮填的格子选人时识别也不冲掉
-        from dota_assistant.vision import DraftView, Slot
+        from dota_assistant.vision.recognize import DraftView, Slot
         grey = np.full((36, 64, 3), 60, np.uint8)                         # 空位 / 队友预选：灰的
         hover = grey.copy()
         hover[5:25, 10:50] = 140                                           # 半透明的预选头像：变了样子但还是灰的
