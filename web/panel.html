@@ -10,6 +10,14 @@
 <body>
 <header class="topbar">
   <div class="brand"><span class="brand-mark"></span>Dota 选人助手</div>
+  <button class="btn btn-mates" id="btn-mates" title="单独开一个窗口：填好友代码看队友最近的战绩，点一局看那一整局">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="9" cy="8" r="3.2"/>
+      <path d="M3 19.5c0-3.3 2.7-5.6 6-5.6s6 2.3 6 5.6"/>
+      <path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2"/>
+      <path d="M17.6 14.2c2 .7 3.4 2.6 3.4 5.3"/>
+    </svg>队友战绩
+  </button>
   <div class="status" id="status"></div>
   <button class="btn btn-icon" id="btn-settings" title="设置：好友代码、STRATZ token、AI 打法用哪家" aria-label="设置">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -45,7 +53,6 @@
 </section>
 
 <main class="main">
-  <div class="col">
   <section class="card board">
     <div class="card-head">
       <h2>当前局面</h2>
@@ -73,19 +80,6 @@
       <button class="btn btn-ghost" data-act="clear">清空</button>
     </div>
   </section>
-
-  <section class="card mates">
-    <div class="card-head">
-      <h2>队友战绩</h2>
-      <span class="card-hint">填好友代码查最近战绩、常玩英雄和位置（OpenDota / STRATZ 的公开数据，对方没公开比赛数据就查不到）</span>
-    </div>
-    <form class="mate-form" id="mate-form" autocomplete="off">
-      <input id="mate-code" inputmode="numeric" spellcheck="false" placeholder="好友代码（也能粘 Steam ID 或个人页链接）" title="好友代码；也认 Steam 64 位 ID、OpenDota / STRATZ / Dotabuff 个人页链接">
-      <button class="btn btn-primary" type="submit">查询</button>
-    </form>
-    <div class="mate-list" id="mates"></div>
-  </section>
-  </div>
 
   <aside class="card preview">
     <div class="card-head">

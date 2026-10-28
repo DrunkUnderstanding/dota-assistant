@@ -7,7 +7,9 @@
         ├ /items/<key>.png              装备图标（data/items）
         ├ /icons/abilities/<key>.png    技能图标 / 金币图标（icons/gold.png）：第一次从 Valve CDN 下，存 data/icons
         ├ /api/events                   SSE：状态一变就推一份完整快照
-        └ /api/action                   POST：控制面板的操作
+        ├ /api/action                   POST：控制面板的操作
+        ├ /api/mates                    GET 查过的队友 / POST 查一个人、删一个人（队友战绩页 mates.html）
+        └ /api/match/<比赛编号>?p=<好友代码>  GET 那一整局 10 个人的数据（p = 从谁的战绩点进来的，高亮他）
     └ Electron（electron/main.js）：开三个窗口加载上面的页面
         ├ 叠加层：透明、置顶、鼠标穿透、不抢焦点（普通窗口，不注入游戏）；解锁后可以拖动，固定后恢复穿透
         ├ 买活 / 大招计时条：同样透明置顶，盖在游戏顶栏上，每个英雄头像下面一个买活小条、对面的再加一个大招小条（topbar.html）
@@ -22,14 +24,17 @@ import logging
 import mimetypes
 import os
 import queue
+import re
 import subprocess
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
+from . import mates
 from .config import DATA_DIR, ROOT, Config
+from .data import NETWORK_ERRORS
 from .log import HTTPServer
 
 log = logging.getLogger(__name__)
@@ -57,8 +62,10 @@ def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
 class WebServer:
     """live 需要有 current_snapshot / subscribe / unsubscribe / submit / action / heroes / cfg（测试里可以换成假的）"""
 
-    def __init__(self, live, port: int = 0):
+    def __init__(self, live, port: int = 0, mates_service: mates.Service | None = None):
         self.live = live
+        # 队友战绩（独立页 mates.html）不走 Live 的工作线程：要联网好几秒，请求线程里直接做（服务是多线程的）
+        self.mates = mates_service or mates.Service(live.cfg, db=getattr(live, "db", None))
         server = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -76,6 +83,18 @@ class WebServer:
                     self._json(200, server.live.heroes())
                 elif path == "/api/config":
                     self._json(200, overlay_config(server.live.cfg, server.live.overlay_pos))
+                elif path == "/api/mates":
+                    self._json(200, {"ok": True, "mates": server.mates.list()})
+                elif m := re.fullmatch(r"/api/match/(\d+)", path):
+                    focus = parse_qs(urlparse(self.path).query).get("p", [""])[0]
+                    try:
+                        view = server.mates.match(int(m[1]), int(focus) if focus.isdigit() else None)
+                        self._json(200, {"ok": True, "match": view})
+                    except LookupError as e:
+                        self._json(404, {"ok": False, "message": str(e)})
+                    except NETWORK_ERRORS as e:
+                        log.warning("比赛 %s 没查到：%s", m[1], e)
+                        self._json(502, {"ok": False, "message": f"联网失败：{e}"})
                 elif path.startswith("/portraits/"):
                     self._file(PORTRAIT_DIR, path.removeprefix("/portraits/"))
                 elif path.startswith("/items/"):
@@ -91,7 +110,10 @@ class WebServer:
                     self._file(WEB_DIR, path.lstrip("/"))
 
             def do_POST(self):
-                if urlparse(self.path).path != "/api/action":
+                path = urlparse(self.path).path
+                if path == "/api/mates":
+                    return self._mates_op()
+                if path != "/api/action":
                     return self._json(404, {"ok": False, "message": "没有这个接口"})
                 try:
                     body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
@@ -101,6 +123,22 @@ class WebServer:
                     log.warning("网页操作 20 秒没做完：%s", body)
                     self._json(400, {"ok": False, "message": "助手忙不过来，操作超时（详情见日志）"})
                 except Exception as e:                              # 操作本身的错误 Live 已经记过日志
+                    self._json(400, {"ok": False, "message": str(e)})
+
+            def _mates_op(self):
+                """队友战绩页的操作：{op: query, code, force} 查一个人（阻塞到查完）/ {op: remove, account_id}；回完整列表"""
+                try:
+                    body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+                    log.info("队友战绩操作 %s", body)
+                    aid, msg = None, ""
+                    if body.get("op") == "query":
+                        aid, msg = server.mates.query(body.get("code"), bool(body.get("force")))
+                    elif body.get("op") == "remove":
+                        server.mates.remove(int(body["account_id"]))
+                    else:
+                        raise ValueError(f"不认识的操作 {body.get('op')!r}")
+                    self._json(200, {"ok": not msg, "message": msg, "account_id": aid, "mates": server.mates.list()})
+                except (ValueError, KeyError) as e:
                     self._json(400, {"ok": False, "message": str(e)})
 
             def _file(self, base: Path, rel: str):

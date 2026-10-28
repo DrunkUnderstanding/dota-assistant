@@ -10,7 +10,7 @@
   web/ knowledge/ data/          页面、知识库规则、数据缓存（英雄表、头像、克制统计、知识库）
   config.example.toml            第一次启动复制成 config.toml；账号和 AI 在控制面板「设置」里填
 
-不打进去的：config.toml（个人 token / key）、logs/、shots/、data 里的个人数据（player.json、overlay.json、lane_log.jsonl、mates.json）
+不打进去的：config.toml（个人 token / key）、logs/、shots/、data 里的个人数据（player.json、overlay.json、lane_log.jsonl、队友战绩的 mates.json / matches/ / benchmarks/）
 和开发用的回测数据。打包前先把头像、装备常量 / 图标、顶栏图标这些死数据补全（要联网），用的人第一次启动不用再下。
 最后会扫一遍产物，确认本机 config.toml 里的密钥没混进去。
 
@@ -32,7 +32,9 @@ NAME = "Dota选人助手"
 OUT = BUILD / NAME
 ELECTRON_DIST = ROOT / "electron" / "node_modules" / "electron" / "dist"
 KEEP_LOCALES = {"zh-CN.pak", "en-US.pak"}                 # 其余 50 多种语言包 ~45MB，用不到
-DATA_SKIP = {"player.json", "overlay.json", ".gsi_hint_shown", "lane_log.jsonl", "mates.json",   # 个人数据（lane_log / mates 里有 Steam ID / 名字）
+DATA_SKIP = {"player.json", "overlay.json", ".gsi_hint_shown", "lane_log.jsonl",   # 个人数据（里面有 Steam ID / 名字）
+             "mates.json", "matches",                                                # 队友战绩：查过的人、看过的整局
+             "benchmarks",                                                           # 队友战绩的英雄分位缓存，用到再拉
              "bench", "backtest_matches.json"}                                       # 开发用的回测数据
 SECRET_KEYS = ("stratz_token", "ai_api_key")
 

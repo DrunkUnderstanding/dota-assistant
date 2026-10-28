@@ -1,6 +1,6 @@
 // 控制面板：把 Python 推来的快照画出来，把操作发回去。局面以 Python 那边为准，这里不存状态。
 import { act, connect, getJSON } from './api.js';
-import { applyOverlayStyle, bindOverlayClicks, esc, portrait, renderOverlay } from './view.js';
+import { applyOverlayStyle, bindOverlayClicks, portrait, renderOverlay } from './view.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -69,80 +69,6 @@ function paintSlots(s) {
   }
   if (document.activeElement !== bans) bans.value = bans._sent = s.bans_text;
 }
-
-// ---------- 队友战绩 ----------
-
-$('#mate-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = $('#mate-code');
-  if (!input.value.trim()) return input.focus();
-  await run('mate_query', { code: input.value });
-  input.value = '';
-});
-$('#mates').addEventListener('click', (e) => {
-  const b = e.target.closest('[data-mate]');
-  if (!b) return;
-  const id = Number(b.dataset.mate);
-  if (b.dataset.do === 'remove') run('mate_remove', { account_id: id });
-  else run('mate_query', { code: String(id), force: true });
-});
-
-const pct = (w, g) => (g ? Math.round((w / g) * 100) : 0);
-// 胜率上色：样本太少不上色
-const rateCls = (w, g) => (g < 5 ? '' : pct(w, g) >= 55 ? 'is-good' : pct(w, g) <= 45 ? 'is-bad' : '');
-const rate = (w, g) => `<span class="mate-rate ${rateCls(w, g)}">${pct(w, g)}%</span>`;
-
-function ago(t) {
-  const m = Math.floor((Date.now() / 1000 - t) / 60);
-  if (m < 1) return '刚刚';
-  if (m < 60) return `${m} 分钟前`;
-  if (m < 60 * 24) return `${Math.floor(m / 60)} 小时前`;
-  return `${Math.floor(m / 60 / 24)} 天前`;
-}
-
-function mateCard(m) {
-  const btns = `
-    <button class="btn btn-small" data-mate="${m.account_id}" ${m.busy ? 'disabled' : ''}>${m.busy ? '查询中…' : '刷新'}</button>
-    <button class="btn btn-small btn-ghost" data-mate="${m.account_id}" data-do="remove" title="不再记这个人">×</button>`;
-  const name = esc(m.name || `好友代码 ${m.account_id}`);
-  const when = m.fetched_at ? `<span class="mate-time" title="数据是这时候查的">${ago(m.fetched_at)}查的</span>` : '';
-  const err = m.error ? `<div class="mate-err">${esc(m.error)}</div>` : '';
-  if (!m.loaded) {
-    return `<div class="mate"><div class="mate-head"><b class="mate-name">${name}</b><span class="spacer"></span>${btns}</div>
-      ${err || (m.busy ? '<div class="mate-note">正在查…</div>' : '')}</div>`;
-  }
-  const withMe = m.with_me?.[0]
-    ? `<span class="mate-with" title="OpenDota 记录里你们在同一边的全部对局">和你一起 ${m.with_me[0]} 局 · ${rate(m.with_me[1], m.with_me[0])}</span>` : '';
-  const head = `<div class="mate-head"><b class="mate-name" title="好友代码 ${m.account_id}">${name}</b>
-    <span class="mate-rank">${esc(m.rank)}</span>${withMe}<span class="spacer"></span>${when}${btns}</div>`;
-  if (m.private) {
-    return `<div class="mate">${head}${err}<div class="mate-note">查不到比赛记录：对方没在游戏里公开比赛数据，或者还没打过</div></div>`;
-  }
-  const w = m.matches.filter((x) => x.win).length;
-  const recent = m.matches.map((x) => `<span class="mate-game ${x.win ? 'is-win' : 'is-lose'}"
-      title="${esc(x.name)} · ${x.win ? '胜' : '负'} · ${x.kda.join('/')} · ${x.ranked ? '天梯 · ' : ''}${ago(x.t)}"><img src="${portrait(x.hero_id)}" alt="" onerror="this.remove()"></span>`).join('');
-  const heroes = m.heroes.map((h) => `<span class="mate-hero" title="${esc(h.name)}：${h.games} 局 ${h.wins} 胜">
-      <img src="${portrait(h.id)}" alt="" onerror="this.remove()"><span>${h.games} 局 ${rate(h.wins, h.games)}</span></span>`).join('');
-  const posGames = (m.positions || []).reduce((n, [, g]) => n + g, 0);   // 占比按分出了位置的局算
-  const pos = m.positions?.length
-    ? m.positions.map(([p, g, wins]) => `<span class="mate-pos" title="${g} 局 ${wins} 胜"><b>${p} 号位</b> ${pct(g, posGames)}% · 胜 ${rate(wins, g)}</span>`).join('')
-    : `<span class="mate-note">${esc(m.positions_note || '没有位置数据')}</span>`;
-  return `<div class="mate">${head}${err}
-    <div class="mate-row"><span class="mate-label">最近 ${m.matches.length} 局<b class="mate-wl">${w} 胜 ${m.matches.length - w} 负</b></span><div class="mate-recent">${recent}</div></div>
-    <div class="mate-row"><span class="mate-label" title="最近 ${m.sample} 局里玩得最多的">常玩</span><div class="mate-heroes">${heroes}</div></div>
-    <div class="mate-row"><span class="mate-label" title="最近 ${m.positions_sample || 100} 局天梯（STRATZ），其中 ${posGames} 局分出了位置">位置</span><div class="mate-poss">${pos}</div></div>
-  </div>`;
-}
-
-function paintMates(list) {
-  const box = $('#mates');
-  const key = JSON.stringify(list) + Math.floor(Date.now() / 60000);   // 每分钟更新一次「几分钟前」
-  if (box.dataset.key === key) return;
-  box.dataset.key = key;
-  box.innerHTML = list.length ? list.map(mateCard).join('')
-    : '<div class="mate-empty">还没查过谁。好友代码在 Steam 好友列表「添加好友」那页、或者他的 Dota 个人资料里能看到</div>';
-}
-setInterval(() => { if (state) paintMates(state.mates); }, 60000);
 
 // ---------- 设置 ----------
 
@@ -274,6 +200,12 @@ form.addEventListener('submit', async (e) => {
 
 $('#settings-cancel').addEventListener('click', () => dlg.close());
 $('#btn-settings').addEventListener('click', openSettings);
+// 队友战绩是独立页：Electron 里开成新窗口（main.js 的 setWindowOpenHandler），浏览器里开新标签；已经开着就切过去
+let matesWin = null;
+$('#btn-mates').addEventListener('click', () => {
+  if (matesWin && !matesWin.closed) matesWin.focus();
+  else matesWin = window.open('/mates.html', 'mates');
+});
 // 点顶栏的快捷键直接跳到设置里的热键
 $('#status').addEventListener('click', (e) => {
   if (e.target.closest('.chip-dota')) {         // 没找到 Dota 目录：点状态直接去填
@@ -492,7 +424,6 @@ connect((s) => {
   maybeFirstRun(s.config);
   paintSettings(s.settings);
   paintSlots(s);
-  paintMates(s.mates);
   paintStatus(s);
   renderOverlay($('#preview'), s.overlay.view);
   $('#preview').classList.toggle('is-hidden', !s.overlay.visible);

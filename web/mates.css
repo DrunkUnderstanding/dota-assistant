@@ -1,0 +1,138 @@
+/* 队友战绩（独立页）：顶栏、卡片、按钮沿用 panel.css */
+.mt-form { flex: 1; display: flex; gap: 8px; max-width: 640px; margin-left: auto; }
+.mt-form input {
+  flex: 1; min-width: 0; height: 32px; padding: 0 11px; border-radius: 8px; font: inherit; font-size: 13px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--text); outline: 0;
+}
+.mt-form input::placeholder { color: var(--text-faint); }
+.mt-form input:focus { border-color: rgba(216, 167, 78, 0.6); box-shadow: 0 0 0 3px var(--gold-soft); }
+
+.mt-main {
+  flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; padding: 16px 20px 14px;
+}
+.mt-side { overflow: auto; }
+.is-match .mt-main { grid-template-columns: minmax(0, 1fr); }
+.is-match .mt-side { display: none; }
+.mt-people { display: flex; flex-direction: column; gap: 4px; }
+.mt-person {
+  display: flex; align-items: center; gap: 6px; padding: 8px 8px 8px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent;
+}
+.mt-person:hover { background: var(--surface-2); }
+.mt-person.on { background: var(--surface-3); border-color: rgba(216, 167, 78, 0.35); }
+.mt-person-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.mt-person-text b, .mt-person-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-person-text small { color: var(--text-faint); font-size: 11.5px; }
+.mt-person.on b { color: var(--gold); }
+.mt-x {
+  flex: none; width: 22px; height: 22px; border: 0; border-radius: 6px; background: none; cursor: pointer;
+  color: var(--text-faint); opacity: 0; transition: opacity 0.15s;
+}
+.mt-person:hover .mt-x { opacity: 1; }
+.mt-x:hover { color: var(--bad); background: rgba(229, 103, 92, 0.1); }
+
+.mt-view { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 16px; }
+.mt-view > .card { flex: none; }
+.mt-blank { margin: auto; color: var(--text-faint); }
+.mt-faint { color: var(--text-faint); font-size: 12px; }
+.mt-err { color: var(--bad); font-size: 12px; margin-top: 6px; }
+.mt-center { text-align: center; }
+
+.mt-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mt-head h1 { margin: 0; font-size: 18px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-rank { color: var(--gold); }
+.mt-tag { color: var(--text-dim); font-size: 12.5px; }
+
+.mt-stats { display: flex; gap: 28px; margin: 16px 0 14px; }
+.mt-stats > div { display: grid; gap: 2px; }
+.mt-stats small { color: var(--text-dim); font-size: 12px; }
+.mt-stats b { font: 700 18px var(--num); }
+.mt-stats span { font-size: 12px; }
+.mt-line { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; align-items: center; margin-top: 8px; }
+.mt-label { color: var(--text-dim); font-size: 12px; }
+.mt-heroes, .mt-poss { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.mt-hero { display: inline-flex; align-items: center; gap: 6px; padding-right: 8px; border-radius: 6px; background: var(--surface-3); font-size: 12px; white-space: nowrap; }
+.mt-hero img { width: 44px; height: 25px; object-fit: cover; border-radius: 6px 0 0 6px; }
+.mt-pos { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.mt-pos b { color: var(--text); font-weight: 600; }
+.mt-pos + .mt-pos::before { content: "·"; margin-right: 8px; color: var(--text-faint); }
+.mt-rate { font-family: var(--num); font-weight: 600; }
+.is-good { color: var(--good); }
+.is-bad { color: var(--bad); }
+
+/* 表格（最近的局 / 整局） */
+.mt-matches .card-head { margin-bottom: 8px; }
+.mt-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mt-table th {
+  text-align: left; font-weight: 400; color: var(--text-faint); font-size: 11.5px; white-space: nowrap;
+  padding: 6px 7px; border-bottom: 1px solid var(--line);
+}
+.mt-table td { padding: 6px 7px; border-bottom: 1px solid var(--line); white-space: nowrap; vertical-align: middle; }
+.mt-table tbody tr:last-child td { border-bottom: 0; }
+.mt-row { cursor: pointer; }
+.mt-row:hover td { background: var(--surface-2); }
+.mt-row td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+.mt-row.is-win td:first-child { box-shadow: inset 3px 0 0 var(--good); }
+.mt-herocell { display: flex; align-items: center; gap: 8px; }
+.mt-herocell img { width: 48px; height: 27px; object-fit: cover; border-radius: 4px; }
+.mt-res { font-weight: 700; }
+.mt-row.is-win .mt-res { color: var(--good); }
+.mt-row.is-lose .mt-res { color: var(--bad); }
+.mt-res small { margin-left: 4px; font-weight: 400; color: var(--risk); }
+.mt-kda { font-family: var(--num); color: var(--text-faint); }
+.mt-kda b { color: var(--text); font-weight: 600; }
+.mt-kda b.mt-d { color: var(--bad); }
+.mt-numcell { font-family: var(--num); font-variant-numeric: tabular-nums; color: var(--text-dim); }
+.mt-gold { color: var(--gold); }
+.mt-mode { color: var(--text-dim); }
+.mt-mode small { color: var(--syn); }
+.mt-perf { display: inline-flex; align-items: center; gap: 6px; cursor: help; }
+.mt-perf b { width: 22px; text-align: right; font: 700 13px var(--num); }
+.mt-perf i { width: 46px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, currentColor var(--w), var(--surface-3) var(--w)); opacity: 0.8; }
+.mt-perf:not(.is-good):not(.is-bad) { color: var(--text-dim); }
+.mt-perf:not(.is-good):not(.is-bad) b { color: var(--text); }
+.mt-sz { display: inline-block; min-width: 28px; text-align: right; font: 700 13px var(--num); color: var(--text); cursor: help; }
+.mt-sz.is-good { color: var(--good); }
+.mt-sz.is-bad { color: var(--bad); }
+.mt-award { margin-left: 6px; font-size: 10.5px; padding: 1px 5px; border-radius: 4px; background: var(--gold-soft); color: var(--gold); }
+
+/* 整局 */
+.mt-score { display: flex; align-items: center; justify-content: center; gap: 18px; margin: 14px 0 8px; }
+.mt-score b { font: 700 30px var(--num); }
+.mt-dur { color: var(--text-dim); font-family: var(--num); }
+.mt-side-radiant, .mt-side-dire { font-weight: 700; font-size: 15px; opacity: 0.6; }
+.mt-side-radiant { color: var(--radiant); }
+.mt-side-dire { color: var(--dire); }
+.mt-side-radiant.is-won, .mt-side-dire.is-won { opacity: 1; }
+.mt-side-radiant.is-won::after, .mt-side-dire.is-won::before { content: "胜利"; margin: 0 8px; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--gold-soft); color: var(--gold); }
+.mt-team { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px 8px 4px; flex: none; overflow-x: auto; }
+.mt-team-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 6px; }
+.mt-team-radiant .mt-team-head b { color: var(--radiant); }
+.mt-team-dire .mt-team-head b { color: var(--dire); }
+.mt-won { font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--gold-soft); color: var(--gold); }
+.mt-table-match tr.is-focus td, .mt-table-match tr.is-me td { background: rgba(216, 167, 78, 0.06); }
+.mt-playercell { display: flex; align-items: center; gap: 8px; min-width: 190px; }
+.mt-playercell img { width: 52px; height: 29px; object-fit: cover; border-radius: 4px; flex: none; }
+.mt-playercell small { color: var(--text-faint); font-size: 11.5px; }
+.mt-pname { display: flex; align-items: center; gap: 6px; }
+.mt-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; color: var(--text); font-weight: 600; }
+a.mt-name { cursor: pointer; }
+a.mt-name:hover { color: var(--gold); text-decoration: underline; }
+.mt-you { font-size: 10.5px; padding: 0 5px; border-radius: 4px; background: rgba(173, 159, 240, 0.2); color: var(--me); }
+.mt-you.is-focus { background: var(--gold-soft); color: var(--gold); }
+.mt-party { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.mt-party-1 { background: var(--syn); }
+.mt-party-2 { background: var(--risk); }
+.mt-party-3 { background: var(--me); }
+.mt-party-0 { background: var(--good); }
+.mt-items { display: flex; align-items: center; gap: 2px; }
+.mt-item {
+  width: 33px; height: 24px; border-radius: 3px; overflow: hidden; background: var(--surface-3);
+  display: inline-grid; place-items: center; font-size: 10px; color: var(--text-dim);
+}
+.mt-item img { width: 100%; height: 100%; object-fit: cover; }
+.mt-item-empty { opacity: 0.4; }
+.mt-neutral { width: 24px; border-radius: 50%; margin-left: 4px; }
+.mt-small { width: 22px; height: 16px; opacity: 0.7; }
+.mt-backpack { display: flex; gap: 2px; margin-top: 2px; }
+.mt-buff { font-size: 10px; padding: 0 4px; margin-left: 2px; border-radius: 3px; background: rgba(94, 174, 234, 0.18); color: var(--syn); }

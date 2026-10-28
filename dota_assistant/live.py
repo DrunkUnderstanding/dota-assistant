@@ -31,7 +31,7 @@ import cv2
 import numpy as np
 
 from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, mates, roles, ultcd
+from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, roles, ultcd
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
@@ -156,7 +156,7 @@ class Live:
                  overlay_file: Path | None = None, coach_prepare: Callable | None = None,
                  brief_build: Callable | None = None, plan_build: Callable | None = None,
                  ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None,
-                 ocr: Callable | None = None, mate_fetch: Callable | None = None):
+                 ocr: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.config_file: Path | None = None    # 账号设置写到哪；None = 项目根目录的 config.toml，测试里换成临时文件
@@ -243,10 +243,6 @@ class Live:
         self.pick_brief: brief.Brief | None = None
         self.pick_page = "lane"
         self.pick_note = ""                      # 还没做好 / 出错时显示什么
-
-        # ---- 队友战绩：控制面板填好友代码查（mates.py）----
-        self.mates = mates.Mates()
-        self._mate_fetch = mate_fetch or mates.fetch
 
         self.last_view: DraftView | None = None
         self.pending_key = None
@@ -460,10 +456,6 @@ class Live:
             self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"))
         elif t == "save_settings":
             self.save_settings(a)
-        elif t == "mate_query":
-            self.query_mate(a.get("code"), bool(a.get("force")))
-        elif t == "mate_remove":
-            self.mates.remove(int(a["account_id"]))
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
@@ -1589,39 +1581,6 @@ class Live:
 
     # ---------- 选人时「如果选它」 ----------
 
-    def query_mate(self, code, force: bool = False) -> None:
-        """查队友战绩：后台线程联网，查完排进工作线程写回。20 分钟内查过的不重查（force = 面板上点了「刷新」）"""
-        aid = mates.parse_code(code)
-        e = self.mates.touch(aid)
-        if e["busy"]:
-            return
-        if not force and mates.Mates.fresh(e):
-            self.mates.save()
-            self.message = f"{e['data']['name']} 刚查过，要重查点「刷新」"
-            return
-        e["busy"], e["error"] = True, ""
-        self.message = f"正在查好友代码 {aid} 的战绩…"
-
-        def work():
-            t0 = time.monotonic()
-            try:
-                res, err = self._mate_fetch(self.cfg, aid), ""
-                log.info("队友战绩 %s 查好了（%.1f 秒）", aid, time.monotonic() - t0)
-            except LookupError as ex:
-                res, err = None, str(ex)
-            except data.NETWORK_ERRORS as ex:     # 断网 / 限速：一行就够，不记堆栈
-                log.warning("队友战绩 %s 没查到：%s", aid, ex)
-                res, err = None, f"联网失败：{ex}"
-            except Exception as ex:
-                log.exception("队友战绩 %s 出错", aid)
-                res, err = None, f"出错：{ex}（详情见日志）"
-            self.submit(self._mate_ready, aid, res, err)
-        threading.Thread(target=work, daemon=True, name="mate").start()
-
-    def _mate_ready(self, aid: int, res: dict | None, err: str) -> None:
-        self.mates.done(aid, res, err)
-        self.message = err or (f"{res['name']} 的战绩查好了" if res else "")
-
     def explain_pick(self, hero_id: int) -> None:
         """点了某个推荐英雄：按当前局面做「如果选它」的要点（联网，后台），做好再让 AI 写打法"""
         h = self.db.by_id.get(hero_id)
@@ -1843,7 +1802,6 @@ class Live:
             "slots": slots,
             "bans_text": self.bans_text,
             "buyback": self.buyback_view(),
-            "mates": self.mates.view(self.db),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

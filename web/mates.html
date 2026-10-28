@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dota 选人助手 · 队友战绩</title>
+<link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="panel.css">
+<link rel="stylesheet" href="mates.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark"></span>队友战绩</div>
+  <form class="mt-form" id="form" autocomplete="off">
+    <input id="code" inputmode="numeric" spellcheck="false" placeholder="好友代码（也能粘 Steam ID 或 OpenDota / STRATZ / Dotabuff 个人页链接）">
+    <button class="btn btn-primary" type="submit">查询</button>
+  </form>
+</header>
+
+<main class="mt-main">
+  <aside class="card mt-side">
+    <div class="card-head"><h2>查过的人</h2><span class="card-hint">最多记 8 个</span></div>
+    <div class="mt-people" id="people"></div>
+  </aside>
+  <section class="mt-view" id="view"></section>
+</main>
+
+<footer class="footer" id="footer">数据来自 OpenDota；常打位置和 STRATZ 评分来自 STRATZ（要在设置里填 token，没填就不显示）。和游戏里看他的比赛记录一样，对方没公开比赛数据就查不到。</footer>
+<script type="module" src="mates.js"></script>
+</body>
+</html>
