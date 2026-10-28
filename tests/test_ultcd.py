@@ -154,11 +154,11 @@ class RealKBTest(unittest.TestCase):
 
 
 class PrefetchTest(unittest.TestCase):
-    """顶栏图标一次下全（data.fetch_icons）：金币 + 每个英雄小图标 + 会给小条的大招；已有的不下；断网不写标记"""
+    """顶栏图标一次下全（update.fetch_icons）：金币 + 每个英雄小图标 + 会给小条的大招；已有的不下；断网不写标记"""
 
     def run_fetch(self, d: Path, fetch):
         from unittest import mock
-        from dota_assistant import data
+        from dota_assistant.app import update
         from dota_assistant.core.heroes import Hero, HeroDB
         from dota_assistant.sources import assets
         db = HeroDB([Hero(1, "doom_bringer", "末日使者", "Doom", (), "str"), Hero(2, "pudge", "帕吉", "Pudge", (), "str")])
@@ -172,7 +172,7 @@ class PrefetchTest(unittest.TestCase):
         with (mock.patch.object(assets, "ICON_DIR", d), mock.patch.object(assets, "ICONS_DONE", d / "done.txt"),
               mock.patch.object(assets, "load_heroes", return_value=db), mock.patch.object(assets, "fetch_icon", fake),
               mock.patch.object(kb.KnowledgeBase, "load", return_value=base)):
-            data.fetch_icons(log=lambda *_: None)
+            update.fetch_icons(log=lambda *_: None)
         return asked
 
     def test_fetch_all_skip_existing(self):

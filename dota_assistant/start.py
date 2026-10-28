@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import data
+from .app import update
 from .core import config
 from .core.config import DATA_DIR, ROOT
 from .sources import assets, player
@@ -110,13 +110,13 @@ def ensure_data(cfg: config.Config) -> None:
     try:
         if _age_hours(stats) > FULL_UPDATE_DAYS * 24 or not (DATA_DIR / "heroes.json").exists():
             _say("更新数据（3 天一次，约 5 分钟）…")
-            data.update(cfg)
+            update.update(cfg)
         elif cfg.account_id and _age_hours(DATA_DIR / "player.json") > PLAYER_UPDATE_HOURS:
             player.update_player(cfg)
         if not assets.ITEM_ICON_DIR.exists():      # 装备图标是 2026-10-26 加的：老数据不用等全量更新
             assets.fetch_item_icons()
         if not assets.ICONS_DONE.exists():         # 顶栏图标 2026-10-27 起预下：老数据第一次启动补一遍
-            data.fetch_icons()
+            update.fetch_icons()
     except Exception as e:                       # 没网时用旧数据照样能开
         if not stats.exists():
             raise

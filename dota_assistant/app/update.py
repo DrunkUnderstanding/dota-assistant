@@ -1,4 +1,6 @@
-"""拉取并缓存英雄表、克制矩阵、配合矩阵。
+"""全量更新数据（update 命令 / 启动时数据过期）：英雄表、头像、装备、知识库、顶栏图标、分位置数据、个人数据、克制矩阵，按顺序拉一遍。
+
+要用知识库挑大招（kb、ultcd）、按定位标签拆分路（engine），所以放在应用层，具体怎么拉在 sources/ 里。
 
 数据源：
 - 中文英雄名：Valve 官方 datafeed
@@ -12,17 +14,17 @@ import json
 import time
 from collections import defaultdict
 
-from .core.config import DATA_DIR, Config
-from .core.heroes import HeroDB
-from .sources import assets, http, player
-from .sources import stats as stats_mod
+from ..core.config import DATA_DIR, Config
+from ..core.heroes import HeroDB
+from ..sources import assets, http, player
+from ..sources import stats as stats_mod
 
 
 def fetch_icons(log=http._say) -> None:
     """顶栏 / 买活自动记要的图标一次下全，局内不用临时下：金币、每个英雄的小图标、每个对面会给小条的大招图标。
     已有的跳过；第一张就下不到（断网）就不试剩下的、不写标记，下次再补；个别 CDN 没有的照样写标记（运行时按需再试）"""
     from concurrent.futures import ThreadPoolExecutor
-    from . import kb, ultcd
+    from .. import kb, ultcd
     base = kb.KnowledgeBase.load()
     rels = ["icons/gold.png"] + [f"heroes/icons/{h.key}.png" for h in assets.load_heroes().by_id.values()]
     rels += [f"abilities/{ab.key}.png" for h in (base.heroes.values() if base else ()) if (ab := ultcd.pick(h))]
@@ -49,7 +51,7 @@ ROLE_SPLIT = 0.9
 
 
 def positions_from_lane_roles(db: HeroDB, lane_roles: dict[int, list[dict]]) -> dict[str, dict[str, list[int]]]:
-    from .engine import Engine
+    from ..engine import Engine
     out = {}
     for h in db:
         lane = defaultdict(int)
@@ -89,7 +91,7 @@ def update(cfg: Config, log=http._say) -> None:
     assets.fetch_items_const(log)
     assets.fetch_item_icons(log)
     log("知识库（Valve 官方技能 / 物品说明）…")
-    from . import kb
+    from .. import kb
     kb.update([h["id"] for h in heroes], log)
     fetch_icons(log)                       # 要知识库挑大招，放在它后面
     if cfg.stratz_token:

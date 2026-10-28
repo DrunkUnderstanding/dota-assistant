@@ -56,14 +56,16 @@ def prefetch() -> None:
     """死数据打包前补全：只补缺的，已有的不重下（装备常量重下一份，跟上版本）"""
     say("== 补全头像、装备、顶栏图标 …")
     sys.path.insert(0, str(ROOT))
-    from dota_assistant import data, kb
+    from dota_assistant import kb
+    from dota_assistant.app import update
+    from dota_assistant.core.config import DATA_DIR
     from dota_assistant.sources import assets
-    if kb.KnowledgeBase.load() is None or not (data.DATA_DIR / "heroes.json").exists():
+    if kb.KnowledgeBase.load() is None or not (DATA_DIR / "heroes.json").exists():
         sys.exit("还没有英雄表 / 知识库：先运行 python -m dota_assistant update")
     assets.fetch_portraits(say)
     assets.fetch_items_const(say)
     assets.fetch_item_icons(say)
-    data.fetch_icons(say)
+    update.fetch_icons(say)
     if not assets.ICONS_DONE.exists():
         sys.exit("顶栏图标没下到（断网？），停止")
 

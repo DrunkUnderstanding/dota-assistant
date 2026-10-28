@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dota_assistant import brief, coach, data, gameplan, kb, live, llm, start
+from dota_assistant import brief, coach, gameplan, kb, live, llm, start
+from dota_assistant.app import update
 from dota_assistant.core.config import Config
 from dota_assistant.sources import assets, http, stats
 
@@ -97,7 +98,7 @@ class OpenDotaPositionsTest(unittest.TestCase):
         from tests.test_engine import AXE, CM, HEROES, PL
         from dota_assistant.core.heroes import HeroDB
         rows = lambda *lg: [{"lane_role": r, "time": 900, "games": str(g), "wins": "0"} for r, g in lg]
-        pos = data.positions_from_lane_roles(HeroDB(HEROES), {
+        pos = update.positions_from_lane_roles(HeroDB(HEROES), {
             PL.id: rows((1, 900), (2, 100)),           # 幻影长矛手：一号位标签，优势路几乎都算一号位
             CM.id: rows((1, 800), (3, 200)),           # 水晶室女：辅助标签，优势路算五号位、劣势路算四号位
             AXE.id: rows((3, 1000), (4, 10))})         # 斧王：三 / 四号位标签都对得上，劣势路对半
@@ -186,7 +187,7 @@ class RealKBTest(unittest.TestCase):
         lane = lambda r: [{"lane_role": r, "games": "1000", "wins": "500"}]
         lane_roles = {self.ids["幻影刺客"]: lane(1), self.ids["斧王"]: lane(3), self.ids["水晶室女"]: lane(1),
                       self.ids["潮汐猎人"]: lane(3)}
-        raw = data.positions_from_lane_roles(assets.load_heroes(), lane_roles)
+        raw = update.positions_from_lane_roles(assets.load_heroes(), lane_roles)
         b, titles = self.build({int(h): {int(p): tuple(gw) for p, gw in v.items()} for h, v in raw.items()})
         self.assertIn("对线", titles)
         self.assertIn("你这路对面：斧王", b.text())

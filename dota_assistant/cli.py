@@ -33,7 +33,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import data
+from .app import update
 from .core import config
 from .core import log as logs
 from .sources import assets, player
@@ -290,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
                or (args.cmd == "kb" and args.action == "update"))
 
     if args.cmd == "update":
-        (player.update_player if args.player else data.update)(cfg)
+        (player.update_player if args.player else update.update)(cfg)
         return 0
     if args.cmd == "suggest":
         return cmd_suggest(cfg, args)
