@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dota_assistant import brief, coach, gameplan, kb, live, llm, start
+from dota_assistant import brief, coach, kb, live, start
+from dota_assistant.ai import gameplan, llm
 from dota_assistant.app import update
 from dota_assistant.core.config import Config
 from dota_assistant.sources import assets, http, stats

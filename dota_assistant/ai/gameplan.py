@@ -15,8 +15,9 @@ import re
 import time
 from dataclasses import dataclass, field
 
-from . import kb, llm
-from .core.config import DATA_DIR, Config
+from .. import kb
+from . import llm
+from ..core.config import DATA_DIR, Config
 
 PLAN_DIR = DATA_DIR / "plans"
 PHASES = ("对线期（0~10 分钟）", "中期（10~30 分钟）", "后期（30 分钟后）", "对线劣势时", "后期团战")

@@ -13,7 +13,8 @@ import numpy as np
 
 from dota_assistant import advisor as adv, grid
 from dota_assistant.core import config
-from dota_assistant import brief, buybackscan, coach, death, gameplan, lanestate
+from dota_assistant import brief, buybackscan, coach, death, lanestate
+from dota_assistant.ai import gameplan
 from dota_assistant import live as live_mod
 from dota_assistant import mates as mates_mod
 from dota_assistant.core.config import Config

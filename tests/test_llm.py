@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dota_assistant import llm
+from dota_assistant.ai import llm
 from dota_assistant.core import config
 
 

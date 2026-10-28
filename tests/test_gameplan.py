@@ -1,7 +1,8 @@
 """AI 打法：出处核对、整理顺序、缓存格式。不调大模型。"""
 import unittest
 
-from dota_assistant import gameplan, kb
+from dota_assistant.ai import gameplan
+from dota_assistant import kb
 
 SOURCE = """# 敌方 风行者（官方原文）
 【束缚击】（冷却 16/14/12/10）

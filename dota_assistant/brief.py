@@ -18,7 +18,8 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, gameplan, itembuild, kb, lanes, teamfight
+from . import coach, itembuild, kb, lanes, teamfight
+from .ai import gameplan
 from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 from .sources import http
@@ -348,7 +349,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None, ai: bool
         opp = [h for h in enemies if actual.get(h) in LANE_VS.get(pos, ())]
         L.append("实际同路：" + "、".join(f"{base.heroes[h].name}（{actual[h]}号位）" for h in opp))
     if ai:
-        from . import gameplan
+        from .ai import gameplan
         plan = gameplan.generate(cfg, me["hero_id"], allies, enemies, b.lane_ids, b.text())
         L += ["", f"AI 打法（{plan.seconds:.0f} 秒，折合 API ${plan.cost:.2f}；缓存命中时为 0）", plan.text()]
     return "\n".join(L)

@@ -126,7 +126,7 @@ def ensure_data(cfg: config.Config) -> None:
 
 def no_key_note(cfg: config.Config) -> str:
     """没填 STRATZ token / 调不了 AI 时，启动窗口里说一句哪些照常、少了哪些（不填也能用，只是提醒）"""
-    from . import llm
+    from .ai import llm
     out = []
     if not cfg.stratz_token:
         out.append("没填 STRATZ token：选人推荐、机制提醒、出装针对装、各种计时照常用；"
