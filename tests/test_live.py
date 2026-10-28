@@ -8,6 +8,7 @@ import urllib.request
 from pathlib import Path
 
 from dota_assistant import advisor as adv, gsi
+from dota_assistant.core import dota_install
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GSIServer
 from dota_assistant.core.heroes import HeroDB
@@ -62,14 +63,14 @@ class DotaDirTest(unittest.TestCase):
         self.libs = [self.tmp / "steam", self.tmp / "lib2"]
 
     def test_skips_shell(self):
-        self.assertFalse(gsi.is_dota_dir(self.shell))
-        self.assertEqual(gsi.find_dota("", self.libs), self.real)
-        self.assertIsNone(gsi.find_dota("", self.libs[:1]))
+        self.assertFalse(dota_install.is_dota_dir(self.shell))
+        self.assertEqual(dota_install.find_dota("", self.libs), self.real)
+        self.assertIsNone(dota_install.find_dota("", self.libs[:1]))
 
     def test_configured_dir_first(self):
         other = make_dota(self.tmp / "lib3")
-        self.assertEqual(gsi.find_dota(str(other), self.libs), other)
-        self.assertEqual(gsi.find_dota(str(self.shell), self.libs), self.real)   # 填错了照样自动找
+        self.assertEqual(dota_install.find_dota(str(other), self.libs), other)
+        self.assertEqual(dota_install.find_dota(str(self.shell), self.libs), self.real)   # 填错了照样自动找
 
     def test_cfg_only_into_real_install(self):
         with self.assertRaises(FileNotFoundError):

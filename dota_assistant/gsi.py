@@ -10,19 +10,14 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import threading
 import time
 from collections import deque
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
+from .core import dota_install, gsi_fields
 from .core.log import HTTPServer
-
-STRATEGY_STATE = "DOTA_GAMERULES_STATE_STRATEGY_TIME"   # 选完人到出门之间
-SELECTION_STATE = "DOTA_GAMERULES_STATE_HERO_SELECTION"
-DRAFT_STATES = {SELECTION_STATE, STRATEGY_STATE}
-MATCH_STATES = {"DOTA_GAMERULES_STATE_PRE_GAME", "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS"}
 
 HISTORY_SECONDS = 60         # 对局中留最近多久的推送（死亡复盘往回看 20 秒，多留点余量）
 log = logging.getLogger(__name__)
@@ -50,55 +45,13 @@ CFG_TEMPLATE = """"Dota Assistant"
 """
 
 
-def is_dota_dir(d: Path) -> bool:
-    """真装了 Dota 的目录（...\\steamapps\\common\\dota 2 beta）：要有主资源包 game\\dota\\pak01_dir.vpk。
-    只看 game\\dota 文件夹在不在不够：挪过 Steam 库 / 卸载过会留下只剩 cfg 的空壳。2026-10-27 朋友的电脑上
-    e:\\steam 下的空壳被当成了 Dota，GSI 配置写进去游戏根本不读，阵营一直按默认的天辉算"""
-    return (d / "game" / "dota" / "pak01_dir.vpk").is_file()
-
-
-def steam_libraries() -> list[Path]:
-    """本机所有 Steam 库：注册表里的 Steam 目录 + libraryfolders.vdf 里登记的其他库"""
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
-            steam = Path(winreg.QueryValueEx(k, "SteamPath")[0])
-    except OSError:
-        return []
-    libs = [steam]
-    vdf = steam / "steamapps" / "libraryfolders.vdf"
-    if vdf.exists():
-        text = vdf.read_text(encoding="utf-8", errors="ignore")
-        libs += [Path(p.replace("\\\\", "\\")) for p in re.findall(r'"path"\s+"([^"]+)"', text)]
-    return libs
-
-
-def find_dota(configured: str | None = None, libraries: list[Path] | None = None) -> Path | None:
-    """Dota 安装目录：先用 config.toml 的 dota_dir（configured=None 就读 config.toml），不对再到各个 Steam 库里找。
-    libraries 给测试用，默认 steam_libraries()"""
-    if configured is None:
-        from .core import config
-        configured = config.load().dota_dir
-    if configured:
-        if is_dota_dir(Path(configured)):
-            return Path(configured)
-        log.warning("设置里的 Dota 目录 %s 不对（没有 game\\dota\\pak01_dir.vpk），改成自动找", configured)
-    for lib in steam_libraries() if libraries is None else libraries:
-        d = lib / "steamapps" / "common" / "dota 2 beta"
-        if is_dota_dir(d):
-            return d
-        if (d / "game" / "dota").exists():
-            log.info("跳过 %s：有 game\\dota 文件夹但没有 pak01_dir.vpk，不是完整的 Dota（多半是挪库 / 卸载留下的）", d)
-    return None
-
-
 def cfg_path(dota_dir: Path) -> Path:
     return dota_dir / "game" / "dota" / "cfg" / "gamestate_integration" / CFG_NAME
 
 
 def install_cfg(dota_dir: Path, port: int) -> Path:
     """dota_dir = ...\\steamapps\\common\\dota 2 beta"""
-    if not is_dota_dir(dota_dir):
+    if not dota_install.is_dota_dir(dota_dir):
         raise FileNotFoundError(f"{dota_dir} 不像 Dota 2 安装目录（找不到 game\\dota\\pak01_dir.vpk）")
     path = cfg_path(dota_dir)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -113,16 +66,6 @@ def ensure_cfg(dota_dir: Path, port: int) -> Path | None:
     if path.exists() and path.read_text(encoding="utf-8") == CFG_TEMPLATE.format(port=port):
         return None
     return install_cfg(dota_dir, port)
-
-
-def buyback_left(raw: dict) -> float:
-    """买活冷却还剩几秒。hero.buyback_cooldown **不是「还剩几秒」**，是冷却结束那一刻的 map.game_time（不是 clock_time）：
-    2026-10-26 实战，34:20 死、约 34:51 买活，之后每次推送都是 2817 不变 = 买活时 game_time 2337 + 480；没买过活是 0。
-    冷却过了这个数还留着，所以要和当前 game_time 比；没有 game_time 就当它是 0（不在冷却）"""
-    def num(v) -> float:
-        return float(v) if isinstance(v, (int, float)) else 0.0
-    end, now = num((raw.get("hero") or {}).get("buyback_cooldown")), (raw.get("map") or {}).get("game_time")
-    return max(0.0, end - now) if end and isinstance(now, (int, float)) else 0.0
 
 
 class GameState:
@@ -177,12 +120,12 @@ class GameState:
 
     @property
     def in_draft(self) -> bool:
-        return self.game_state in DRAFT_STATES
+        return self.game_state in gsi_fields.DRAFT_STATES
 
     @property
     def in_match(self) -> bool:
         """出门（号角前）到比赛结束"""
-        return self.game_state in MATCH_STATES
+        return self.game_state in gsi_fields.MATCH_STATES
 
     @property
     def match_id(self) -> str:
@@ -244,7 +187,7 @@ class GameState:
         h = self.raw.get("hero") or {}
         if h.get("buyback_cost") is None:
             return None
-        return int(h["buyback_cost"]), buyback_left(self.raw)
+        return int(h["buyback_cost"]), gsi_fields.buyback_left(self.raw)
 
     @property
     def team(self) -> str | None:

@@ -34,8 +34,8 @@ import sys
 from pathlib import Path
 
 from . import data
-from .core import log as logs
 from .core import config
+from .core import log as logs
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",

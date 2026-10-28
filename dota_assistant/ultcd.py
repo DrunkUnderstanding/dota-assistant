@@ -165,11 +165,11 @@ def cd_ops(kv_text: str, ability: str) -> dict[str, str]:
 
 def _reader():
     """(来源说明, 读一个英雄文件的函数)：本机装了 Dota 读资源包，没装读 GitHub 上的同步"""
-    from .gsi import find_dota
+    from .core.dota_install import find_dota
     dota = find_dota()
     vpk_path = dota / "game" / "dota" / "pak01_dir.vpk" if dota else None
     if vpk_path and vpk_path.exists():
-        from .gamefiles import VPK
+        from .core.vpk import VPK
         vpk = VPK(vpk_path)
         return f"本机游戏文件 {vpk_path}", lambda key: vpk.read(HERO_FILE.format(key)).decode("utf-8", "replace")
 
