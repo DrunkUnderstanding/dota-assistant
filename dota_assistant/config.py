@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import tomllib
@@ -9,8 +10,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # 打包成 exe（PyInstaller，见 packaging/）后，config.toml、data/、web/ 等都放在 exe 旁边
+# 环境变量 DOTA_ASSISTANT_HOME 有值时用它当运行目录（行为快照 / 测试用一份冻结的目录，不碰真实的）
 FROZEN = getattr(sys, "frozen", False)
-ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+_HOME = os.environ.get("DOTA_ASSISTANT_HOME")
+if _HOME:
+    ROOT = Path(_HOME).resolve()
+else:
+    ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
 
 
