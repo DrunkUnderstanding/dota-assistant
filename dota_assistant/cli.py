@@ -335,11 +335,11 @@ def main(argv: list[str] | None = None) -> int:
         print(lanes.evaluate(matches, stats_mod.load_positions(cfg)))
         return 0
     if args.cmd == "lane-test":
-        from .lanestate import run as lane_test
+        from .research.lanestate import run as lane_test
         print(lane_test(cfg, args.matches))
         return 0
     if args.cmd == "lane-review":
-        from .lanestate import review
+        from .research.lanestate import review
         print(review(cfg))
         return 0
     if args.cmd == "backtest-ai":

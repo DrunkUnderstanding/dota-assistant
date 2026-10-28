@@ -7,7 +7,7 @@ from unittest import mock
 
 import numpy as np
 
-from dota_assistant import lanestate as ls
+from dota_assistant.research import lanestate as ls
 from dota_assistant.core.config import Config
 from dota_assistant.domain import lanelog
 from dota_assistant.sources import http
