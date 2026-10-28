@@ -18,7 +18,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .core.config import DATA_DIR
+from ..core.config import DATA_DIR
 from .gamefiles import GRID_PORTRAIT_DIR
 
 GRID_PATH = DATA_DIR / "grid_map.json"

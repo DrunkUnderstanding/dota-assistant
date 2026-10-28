@@ -86,7 +86,7 @@ def ensure_gsi(cfg: config.Config) -> None:
 
 def ensure_grid_portraits(cfg: config.Config) -> None:
     """选人网格认禁用要用游戏自己的英雄图（gamefiles.py）；游戏更新了才重新导出"""
-    from . import gamefiles
+    from .vision import gamefiles
     from .core.dota_install import find_dota
     dota = find_dota(cfg.dota_dir)
     heroes_file = DATA_DIR / "heroes.json"

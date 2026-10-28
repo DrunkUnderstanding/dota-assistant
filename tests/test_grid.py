@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dota_assistant import gamefiles, grid
+from dota_assistant.vision import gamefiles, grid
 
 TMP = Path(tempfile.mkdtemp())
 RNG = np.random.default_rng(7)

@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from dota_assistant.domain import advisor as adv
-from dota_assistant import grid
+from dota_assistant.vision import grid
 from dota_assistant.core import config
 from dota_assistant.domain import brief
 from dota_assistant import buybackscan
