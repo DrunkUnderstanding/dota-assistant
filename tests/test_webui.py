@@ -15,7 +15,7 @@ from dota_assistant.domain import advisor as adv
 from dota_assistant.vision import grid
 from dota_assistant.core import config
 from dota_assistant.domain import brief
-from dota_assistant import buybackscan
+from dota_assistant.vision import buybackscan
 from dota_assistant.domain import lanelog
 from dota_assistant.domain import coach
 from dota_assistant.domain import death

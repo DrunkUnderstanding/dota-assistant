@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from dota_assistant.domain import buyback
-from dota_assistant import buybackscan as bs
+from dota_assistant.vision import buybackscan as bs
 from dota_assistant.domain.buyback import COOLDOWN, READY_SHOW, Tracker
 
 

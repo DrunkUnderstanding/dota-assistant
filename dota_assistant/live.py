@@ -33,7 +33,7 @@ import numpy as np
 from .domain import advisor as adv
 from .domain import brief, jungle
 from .domain import buyback, lanelog, ultcd
-from . import buybackscan
+from .vision import buybackscan
 from .vision import roles
 from .vision import grid
 from .domain import mates

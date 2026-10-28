@@ -47,7 +47,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .core.config import ROOT
+from ..core.config import ROOT
 
 SAMPLES_DIR = ROOT / "shots" / "buyback"
 SAMPLES_KEEP = 200
@@ -244,7 +244,7 @@ def read_timer(d: Death, ocr) -> int | None:
 def save_sample(rev: Revival, label: str, out_dir: Path | None = None, feed: np.ndarray | None = None) -> Path:
     """刚死时那一格 + 复活那一格左右拼一张存下来，文件名带判断结果；只留最近 SAMPLES_KEEP 张。
     feed：判断时看的那一帧消息栏，同名存到 feed/ 子目录（核对「买活了」那行认得对不对）"""
-    from .vision.recognize import write_image
+    from .recognize import write_image
     out_dir = out_dir or SAMPLES_DIR
     parts = [a for a in (rev.before, rev.after) if a is not None and a.size]
     h = max(a.shape[0] for a in parts)
