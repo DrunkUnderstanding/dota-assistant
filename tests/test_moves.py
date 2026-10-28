@@ -32,7 +32,7 @@ MOVES_FILE = ROOT / "docs" / "refactor" / "moves.json"
 EXPORT_SCRIPT = ROOT / "tools" / "refactor" / "export_names.py"
 LIVE_DIR = "dota_assistant/app/live"
 LIVE_CONSTS = "dota_assistant.app.live.consts"
-ALL_MOVED = False           # P4 结束时改 True
+ALL_MOVED = True            # P4 结束：旧模块全删了
 
 # 基线（b1113e8）生成的 770 条：只能在后面追加，不许删、不许挪顺序
 BASELINE_COUNT = 770

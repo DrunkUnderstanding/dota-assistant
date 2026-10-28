@@ -288,6 +288,39 @@ class LayersTest(unittest.TestCase):
         low = sorted(m for m, lg in legacy.items() if lg.low < LAYERS["app"])
         self.assertFalse(low, f"这些平铺模块还有名字要去 app 以下的层：{low}")
 
+    def test_all_layers_covered(self):
+        """P4 起：包根目录只剩 __init__ / __main__，没有平铺旧模块；每个模块都认得出层，九层（含 app、cli）都有模块；
+        app 的 mixin import、cli 按命令的延迟 import、__main__ → cli 都扫到了"""
+        pkg_dir = REPO / PKG
+        self.assertEqual(sorted(p.name for p in pkg_dir.glob("*.py")), ["__init__.py", "__main__.py"],
+                         "包根目录下还有平铺的模块")
+        modules = module_files(pkg_dir, PKG)
+        legacy = legacy_layers(load_entries(), modules, PKG)
+        self.assertEqual(legacy, {}, "还有按 moves.json 算层的平铺旧模块")
+        seen, unknown = set(), []
+        for mod in modules:
+            lay = layer_of(mod, PKG, legacy, modules)
+            if mod == PKG or lay == MAIN:
+                continue
+            if not isinstance(lay, int):
+                unknown.append(mod)
+                continue
+            seen.add(mod.split(".")[1])
+        self.assertEqual(unknown, [], "认不出层的模块")
+        self.assertEqual(seen, set(LAYERS), "有的层一个模块都没有")
+        for mod, layer in (("app.live.core", "app"), ("app.live.draft", "app"), ("app.live.consts", "app"),
+                           ("app.webui", "app"), ("app.start", "app"), ("app.demo", "app"), ("app.update", "app"),
+                           ("cli", "cli")):
+            self.assertEqual(layer_of(f"{PKG}.{mod}", PKG, legacy, modules), LAYERS[layer], mod)
+
+        def dst(mod):
+            return {e.dst for e in edges_of(mod, modules[mod], modules, PKG)}
+        self.assertIn(f"{PKG}.app.live.draft", dst(f"{PKG}.app.live.core"))           # class Live 的 mixin 基类
+        self.assertIn(f"{PKG}.app.live.consts", dst(f"{PKG}.app.live.draft"))         # mixin 里 consts.NAME
+        self.assertIn(f"{PKG}.app.start", dst(f"{PKG}.cli"))                          # cli 按命令的延迟 import
+        self.assertIn(f"{PKG}.research.backtest", dst(f"{PKG}.cli"))
+        self.assertEqual(dst(f"{PKG}.{MAIN}"), {f"{PKG}.cli"})
+
 
 class SelfCheckTest(unittest.TestCase):
     """变异自检：在临时目录造一个小包，故意写错的必须报出来，写对的不能误报"""
@@ -338,6 +371,9 @@ class SelfCheckTest(unittest.TestCase):
         self.assertEqual(len(self.bad("core/config.py", "def f():\n    from lfake.app import upd\n")), 1)   # 延迟 import
         self.assertEqual(len(self.bad("core/config.py", "import lfake.kb.ops\n")), 1)
         self.assertEqual(len(self.bad("core/config.py", "from .. import app\n")), 1)                          # 子包
+
+    def test_app_to_cli_caught(self):
+        self.assertEqual(len(self.bad("app/upd.py", "def f():\n    from .. import cli\n")), 1)               # app 往上到 cli
 
     def test_main_only_cli(self):
         self.assertEqual(len(self.bad("__main__.py", "from .cli import main\nfrom .core import config\n")), 1)
