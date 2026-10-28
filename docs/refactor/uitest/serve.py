@@ -3,11 +3,12 @@ import sys, time, threading, json
 from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, "D:/dota")
-from dota_assistant import live as live_mod, mates
+from dota_assistant import live as live_mod
+from dota_assistant.domain import mates
 from dota_assistant.core.config import load
-from dota_assistant.gsi import GameState
+from dota_assistant.game.gsi import GameState
 from dota_assistant.live import Live
-from dota_assistant.vision import recognize, read_image
+from dota_assistant.vision.recognize import recognize, read_image
 from dota_assistant.webui import WebServer
 port, tmp = int(sys.argv[1]), Path(sys.argv[2])
 cfg = load()
