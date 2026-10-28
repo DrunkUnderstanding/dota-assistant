@@ -51,7 +51,7 @@
 | 不填 key 也能用（没 STRATZ token / 调不了 AI，第 35 节） | ✅ 完成 | 单元测试（`tests/test_nokey.py`）；全新目录、没 token、AI 来源选 API Key 却没填，从零 `update` 再跑 `suggest` 和 `demo`（无头浏览器看叠加层）：推荐、分路、本局要点、局内提醒都出来，AI 打法那页写明用不了，日志没有警告；分位置数据改用 OpenDota 分路凑，1523 场回测见第 35 节 |
 | 队友战绩（`mates.py` + 独立页 `web/mates.html`，控制面板顶栏「队友战绩」按钮开，第 38 / 38.1 / 38.2 节） | 🟡 代码完成 | **2026-10-28 改成独立页 + 点一局看整局 + 每局 KDA / 表现分（第 38.1 节），加上可选的 STRATZ 评分（第 38.2 节）：单元测试 + 真联网 + 无头 Chrome 截过简况 / 整局；Electron 里真鼠标走通整条（第 38.2 节末）**；第一版：单元测试（`tests/test_mates.py`：好友代码解析、假接口整理结果、记住查过的人、Live 里查 / 刷新 / 删 / 出错）；开发机真联网查自己 + 最常一起打的队友 + 一个不存在的代码，约 1.5 秒一个人；无头 Chrome 截过 1400 / 900 宽的真实控制面板；2026-10-28 Electron 控制面板里真鼠标点输入框 / 查询 / 刷新 / × 都生效（见第 38 节末） |
 | 局内打法 | ❌ 未开始 | 本局要点 + 缺口提醒算是雏形；敌方装备识别、热键提问待做（第 15 节末尾） |
-| 工程化重构（2026-10-28，分支 `refactor/structure`，计划 [refactor/PLAN.md](refactor/PLAN.md)） | 🟡 代码完成，未合并 main | 平铺的 40 个模块按层分进 `core / sources / kb / ai / domain / vision / game / research / app / cli` 子包，`live.py` 用 mixin 拆成 `app/live/`（新路径见第 4 节）；加了 `pyproject.toml`、`requirements.lock`、ruff。只搬家不改行为：门禁全过（编译 + ruff、单测、行为快照逐字节一致、单测不碰真实目录、冒烟 + 搬家清单、慢快照、无头浏览器打开三个页面无控制台报错）；临时 venv 里 `pip install -e .` 后 `dota-assistant --help` 正常。重构期间 main 多出的 d1bfef6（队友战绩独立页）已合并进分支、按新结构移植（`domain/mates.py`、`app/webui.py`；`Live` 里的队友战绩方法删了，没有 `app/live/mates.py`），行为快照按 d1bfef6 重建后逐字节一致。**真鼠标验收、打包版、实战待验**（第 7 节） |
+| 工程化重构（2026-10-28，分支 `refactor/structure`，计划 [refactor/PLAN.md](refactor/PLAN.md)） | 🟡 代码完成，未合并 main | 平铺的 40 个模块按层分进 `core / sources / kb / ai / domain / vision / game / research / app / cli` 子包，`live.py` 用 mixin 拆成 `app/live/`（新路径见第 4 节）；加了 `pyproject.toml`、`requirements.lock`、ruff。只搬家不改行为：门禁全过（编译 + ruff、单测、行为快照逐字节一致、单测不碰真实目录、冒烟 + 搬家清单、慢快照、无头浏览器打开三个页面无控制台报错）；临时 venv 里 `pip install -e .` 后 `dota-assistant --help` 正常。重构期间 main 多出的 d1bfef6（队友战绩独立页）已合并进分支、按新结构移植（`domain/mates.py`、`app/webui.py`；`Live` 里的队友战绩方法删了，没有 `app/live/mates.py`），行为快照按 d1bfef6 重建后逐字节一致。2026-10-28 晚 P6：真鼠标清单在重构后的代码上点过（叠加层帮认 / 锁 / 拖动 / 拉宽 / × / 翻页 / 展开、顶栏买活 / 大招 / 帮认、队友战绩独立页查询 / 进整局 / 点名字查人 / 刷新 / 删人、面板位置 / 清空 / 设置保存都对；F8 热键没测，测试服务关了热键）；打包版 exe 跑过 `suggest`、`kb hero 小黑`、`start`（三个窗口、日志无警告、关面板正常退出）、`demo`（选人 → 本局要点 → 局内提醒 → 结束，日志无警告）。**还差玩家用重构后的版本打一局天梯**（第 7 节） |
 
 **游戏电脑上第一件事就是把「未实测」的几项跑一遍**，见第 6 节。
 
@@ -305,8 +305,9 @@ run（实时）：
 
 ## 7. 下一步（建议顺序）
 
--1. **工程化重构收尾**（第 2 节、[refactor/PLAN.md](refactor/PLAN.md) P6）：代码和门禁都完成了，还差 ① PLAN 第 5 节真鼠标清单（叠加层 / 顶栏 / 控制面板）在重构后的代码上点一遍（「控制面板队友战绩」那项按 d1bfef6 改成独立页 `mates.html`：开窗口、查询、进整局、返回、点名字查人、删人、刷新，同第 38.2 节末）；
+-1. **工程化重构收尾**（第 2 节、[refactor/PLAN.md](refactor/PLAN.md) P6）：代码、门禁、真鼠标清单、打包版都过了（第 2 节），**只差 ④**。原清单：① PLAN 第 5 节真鼠标清单（叠加层 / 顶栏 / 控制面板）在重构后的代码上点一遍（「控制面板队友战绩」那项按 d1bfef6 改成独立页 `mates.html`：开窗口、查询、进整局、返回、点名字查人、删人、刷新，同第 38.2 节末）；
    ② `python packaging/build.py` 打包，拿 exe 跑 `suggest`、`kb hero 小黑`、`start`；③ `demo` 完整跑一遍；④ 玩家用重构后的版本打一局天梯（GSI、截图识别、买活自动记只能这样验）。都过了再合并 main、推送（要玩家点头）。
+   真鼠标时发现的**原有问题（重构前就有，`D:\dota` 的 main 上一样，没修）**：控制面板「当前局面」10 个格子点不进输入框——叠加层用的 `web/base.css` 里 `.slot { width: 52px; height: 29px … }` 也套在了面板的格子上，面板格子被压成 52×29、输入框被挤没了；手动填阵容只能靠叠加层「?」帮认。
    **唯一可见差异：日志里模块名前缀变了**（例如 `live` → `app.live.draft`、`data` → `sources.http`），按模块名搜日志的习惯要跟着改。
    以后每次改完多跑三个门禁：`python tools/golden/run.py check`（行为快照；行为本来就该变时，先确认差异是该有的再 `update-snapshot`）、`python tools/check_isolation.py`、`ruff check dota_assistant tests tools packaging`。
    可选（问玩家）：GitHub Actions 在 `windows-latest` 上跑编译 + ruff + 单测（行为快照依赖本机个人数据，CI 跑不了）。
