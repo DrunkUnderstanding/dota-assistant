@@ -304,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
         from .demo import run as demo
         return demo(cfg, args.step, browser=args.browser, game_speed=args.speed)
     if args.cmd == "calibrate":
-        from .calibrate import calibrate
+        from .vision.calibrate import calibrate
         return 0 if calibrate(args.image) else 1
     if args.cmd == "recognize":
         return cmd_recognize(cfg, args.image)

@@ -17,7 +17,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .vision.recognize import Calibration
+from .recognize import Calibration
 
 # 「纯辅助」要排在「辅助」前面先匹配
 ROLE_WORDS = (("纯辅助", 5), ("优势路", 1), ("劣势路", 3), ("中路", 2), ("辅助", 4),

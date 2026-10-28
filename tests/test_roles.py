@@ -3,7 +3,7 @@ import unittest
 
 import numpy as np
 
-from dota_assistant import roles
+from dota_assistant.vision import roles
 from dota_assistant.vision.recognize import Calibration
 
 W = roles.Word

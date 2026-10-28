@@ -12,7 +12,7 @@ from PySide6.QtCore import QPoint, QRect, Qt
 from PySide6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QInputDialog, QWidget
 
-from .vision.recognize import CALIBRATION_PATH, Calibration, Rect, interpolate, read_image
+from .recognize import CALIBRATION_PATH, Calibration, Rect, interpolate, read_image
 
 STEPS = [
     ("radiant", "天辉第 1 个英雄头像（最左）"),
