@@ -35,6 +35,9 @@ python tools/golden/run.py scan-token            :: 确认 D:\dota-golden 下没
 | `D:\dota-golden\snapshots\{cli,replay,update,slow}.txt` | 快照 |
 | `D:\dota-golden\record-output\` | 最近一次 record 时（真联网那遍）的输出，排查用 |
 | `D:\dota-golden\last-diff\` | 最近一次 check 不一致的完整 diff 和新输出 |
+| `D:\dota-golden\backup-b1113e8\` | 换基线前 b1113e8 那套 cassette + 快照（留底，check 不用它） |
+
+**现在这套快照的来历（2026-10-28 合并 d1bfef6 时换的基线）**：不是在重构分支上 record 的，是在 `D:\dota-base`（`d1bfef6` 的代码 + P0.2 的 `config.py` 小补丁 + 和重构分支一样的 golden 工具）里真联网 `record` 出来的（`meta.json` 的 `recorded` 18:12，slow 组 cassette 18:20），重构分支只 `check`、没有 `record` / `update-snapshot`。所以「重构分支没 record」只说明分支自己没动快照；快照代表的是 d1bfef6 的行为，在 `D:\dota-base` 里重跑 `check --slow` 四组逐字节一致。和 `backup-b1113e8` 比：`cli.txt` 逐字节一样；`replay.txt` 不一样（d1bfef6 改了队友战绩，回放流程跟着变）；`update.txt`、`slow.txt` 不一样是重录时 OpenDota 回的数据换新了，不是代码行为变了。冻结目录 `home.zip` 和冻结时刻没换。
 
 冻结目录内容（`g_home.py`）：从 `D:\dota` 只读复制 `config.toml`（处理过，见下）、`config.example.toml`、`knowledge/`、`data/`、
 `calibration.json`、`shots/` 里 14 张选人截图（`g_cases.DRAFT_SHOTS`）、`shots/deaths/*.json` 全部、`shots/buyback/feed/` 全部、
