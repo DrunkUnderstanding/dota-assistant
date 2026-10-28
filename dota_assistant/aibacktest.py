@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from . import backtest as bt, data, llm
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES, Engine
 
 OUT = DATA_DIR / "ai_backtest.jsonl"

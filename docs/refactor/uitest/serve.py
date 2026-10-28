@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, "D:/dota")
 from dota_assistant import live as live_mod, mates
-from dota_assistant.config import load
+from dota_assistant.core.config import load
 from dota_assistant.gsi import GameState
 from dota_assistant.live import Live
 from dota_assistant.vision import recognize, read_image

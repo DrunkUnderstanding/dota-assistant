@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest import mock
 
 from dota_assistant import brief, coach, data, gameplan, kb, live, llm, start
-from dota_assistant.config import Config
+from dota_assistant.core.config import Config
 
 NO_KEY = dict(stratz_token="", ai_api_key="", ai_base_url="")
 SOURCE = "敌方斧王：反击螺旋，被攻击时有几率旋转"

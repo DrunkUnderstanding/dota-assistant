@@ -77,7 +77,7 @@ def find_dota(configured: str | None = None, libraries: list[Path] | None = None
     """Dota 安装目录：先用 config.toml 的 dota_dir（configured=None 就读 config.toml），不对再到各个 Steam 库里找。
     libraries 给测试用，默认 steam_libraries()"""
     if configured is None:
-        from . import config
+        from .core import config
         configured = config.load().dota_dir
     if configured:
         if is_dota_dir(Path(configured)):
@@ -158,7 +158,7 @@ class GameState:
         if text == self._last_logged:
             return
         self._last_logged = text
-        from .config import ROOT
+        from .core.config import ROOT
         d = ROOT / "shots" / "gsi"
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{time.strftime('%Y%m%d-%H%M%S')}-{int(time.time() * 1000) % 1000:03d}.json").write_text(

@@ -17,7 +17,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .config import DATA_DIR, ROOT
+from .core.config import DATA_DIR, ROOT
 
 CALIBRATION_PATH = ROOT / "calibration.json"
 TEMPLATE_DIR = ROOT / "templates"

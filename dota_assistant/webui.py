@@ -29,7 +29,7 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .config import DATA_DIR, ROOT, Config
+from .core.config import DATA_DIR, ROOT, Config
 from .log import HTTPServer
 
 log = logging.getLogger(__name__)

@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from dota_assistant.config import DATA_DIR
+from dota_assistant.core.config import DATA_DIR
 from dota_assistant.vision import Calibration, TemplateBank, crop, interpolate, read_image, recognize
 
 PORTRAITS = DATA_DIR / "portraits"

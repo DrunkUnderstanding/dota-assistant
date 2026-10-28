@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import data, kb
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 
 log = logging.getLogger(__name__)
 BENCH_DIR = DATA_DIR / "bench"

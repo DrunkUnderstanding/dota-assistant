@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 
 from . import data, explain, kb, lanes
-from .config import Config
+from .core.config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .heroes import Hero, HeroDB
 

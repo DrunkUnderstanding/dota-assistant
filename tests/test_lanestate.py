@@ -8,7 +8,7 @@ from unittest import mock
 import numpy as np
 
 from dota_assistant import lanestate as ls
-from dota_assistant.config import Config
+from dota_assistant.core.config import Config
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-lane-"))
 

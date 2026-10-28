@@ -16,7 +16,7 @@ _HOME = os.environ.get("DOTA_ASSISTANT_HOME")
 if _HOME:
     ROOT = Path(_HOME).resolve()
 else:
-    ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent.parent
+    ROOT = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
 
 

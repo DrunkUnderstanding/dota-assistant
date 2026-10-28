@@ -31,9 +31,10 @@ import cv2
 import numpy as np
 
 from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, mates, roles, ultcd
+from . import brief, buyback, buybackscan, coach, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, mates, roles, ultcd
 from . import log as logs
-from .config import DATA_DIR, ROOT, Config
+from .core import config
+from .core.config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
 from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer, ensure_cfg, find_dota, is_dota_dir
 from .heroes import Hero

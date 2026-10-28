@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import ROOT
+from .core.config import ROOT
 
 DUMP_DIR = ROOT / "shots" / "deaths"
 WINDOW = 20                  # 往回看多少秒

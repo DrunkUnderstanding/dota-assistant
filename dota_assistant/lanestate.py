@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import data
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 
 CACHE = DATA_DIR / "lane_matches.json"
 REPORT = DATA_DIR / "lane_report.txt"

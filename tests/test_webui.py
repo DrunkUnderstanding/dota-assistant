@@ -11,11 +11,12 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 
-from dota_assistant import advisor as adv, config, grid
+from dota_assistant import advisor as adv, grid
+from dota_assistant.core import config
 from dota_assistant import brief, buybackscan, coach, death, gameplan, lanestate
 from dota_assistant import live as live_mod
 from dota_assistant import mates as mates_mod
-from dota_assistant.config import Config
+from dota_assistant.core.config import Config
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
 from pathlib import Path

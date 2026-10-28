@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .config import DATA_DIR, ROOT
+from .core.config import DATA_DIR, ROOT
 
 KB_DIR = DATA_DIR / "kb"
 RULES_PATH = ROOT / "knowledge" / "rules.toml"

@@ -15,8 +15,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import config, data
-from .config import DATA_DIR, ROOT
+from . import data
+from .core import config
+from .core.config import DATA_DIR, ROOT
 
 FULL_UPDATE_DAYS = 3
 PLAYER_UPDATE_HOURS = 12

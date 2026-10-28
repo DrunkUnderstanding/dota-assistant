@@ -12,7 +12,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 PROBE = """
 import json, sys
-from dota_assistant import config
+from dota_assistant.core import config
 print(json.dumps({"root": str(config.ROOT), "data": str(config.DATA_DIR), "frozen": bool(config.FROZEN)}))
 """
 
@@ -20,7 +20,7 @@ FROZEN_PROBE = """
 import json, sys
 sys.frozen = True
 sys.executable = {exe!r}
-from dota_assistant import config
+from dota_assistant.core import config
 print(json.dumps({{"root": str(config.ROOT), "data": str(config.DATA_DIR), "frozen": bool(config.FROZEN)}}))
 """
 

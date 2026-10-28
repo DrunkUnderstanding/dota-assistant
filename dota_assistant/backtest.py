@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import data
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 from . import engine as E
 from .engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
 

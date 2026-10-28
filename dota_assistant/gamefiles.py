@@ -18,7 +18,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .config import DATA_DIR
+from .core.config import DATA_DIR
 
 GRID_PORTRAIT_DIR = DATA_DIR / "portraits_grid"
 SELECTION = "panorama/images/heroes/selection/npc_dota_hero_{}_png.vtex_c"

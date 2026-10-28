@@ -12,7 +12,7 @@ import time
 
 import requests
 
-from .config import Config
+from .core.config import Config
 
 # 比赛 9054096051 的真实选人顺序（OpenDota picks_bans），玩家在天辉打一号位
 DEMO_MATCH = 9054096051

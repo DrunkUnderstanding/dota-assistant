@@ -47,7 +47,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from .config import ROOT
+from .core.config import ROOT
 
 SAMPLES_DIR = ROOT / "shots" / "buyback"
 SAMPLES_KEEP = 200

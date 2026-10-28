@@ -9,7 +9,7 @@ from unittest import mock
 
 from dota_assistant import log as logs
 from dota_assistant import webui
-from dota_assistant.config import Config
+from dota_assistant.core.config import Config
 
 TOKEN = "eyJhbGciOiJIUzI1NiJ9.secret-token-value"
 

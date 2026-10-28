@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 
 from . import coach, data, gameplan, itembuild, kb, lanes, teamfight
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 
 log = logging.getLogger(__name__)

@@ -11,7 +11,7 @@ from unittest import mock
 import requests
 
 from dota_assistant import data, mates
-from dota_assistant.config import Config
+from dota_assistant.core.config import Config
 from dota_assistant.heroes import HeroDB
 from tests.test_engine import AXE, HEROES, PL
 from tests.test_webui import make_live

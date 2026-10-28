@@ -19,7 +19,7 @@ from pathlib import Path
 import requests
 from urllib3.util.retry import Retry
 
-from .config import DATA_DIR, Config
+from .core.config import DATA_DIR, Config
 from .heroes import Hero, HeroDB
 
 OPENDOTA = "https://api.opendota.com/api"
