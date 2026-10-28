@@ -26,8 +26,8 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from . import kb
-from .kb import cd_ops as kbcd   # 不叫 cd_ops：本模块原来有同名函数（已搬到 kb/cd_ops），旧模块里不再绑定这个名字
+from .. import kb
+from ..kb import cd_ops as kbcd   # 不叫 cd_ops：本模块原来有同名函数（已搬到 kb/cd_ops），旧模块里不再绑定这个名字
 
 READY_SHOW = 30              # 冷却好了亮几秒「大招好了」再变回技能名（实现假设，同买活）
 ULT_LEVELS = (6, 12, 18)     # 英雄几级能升大招

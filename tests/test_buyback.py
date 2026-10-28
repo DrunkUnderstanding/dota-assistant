@@ -8,9 +8,9 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 
-from dota_assistant import buyback
+from dota_assistant.domain import buyback
 from dota_assistant import buybackscan as bs
-from dota_assistant.buyback import COOLDOWN, READY_SHOW, Tracker
+from dota_assistant.domain.buyback import COOLDOWN, READY_SHOW, Tracker
 
 
 def topbar(dead=(), timers=None, size=(1080, 1920), badge=False) -> np.ndarray:

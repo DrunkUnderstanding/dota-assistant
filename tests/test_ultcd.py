@@ -3,9 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from dota_assistant import kb, ultcd
+from dota_assistant import kb
+from dota_assistant.domain import ultcd
 from dota_assistant.kb import cd_ops
-from dota_assistant.ultcd import READY_SHOW, Tracker
+from dota_assistant.domain.ultcd import READY_SHOW, Tracker
 
 
 def ab(name, cd, ultimate=True, granted=False):
