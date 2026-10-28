@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest import mock
 
 from dota_assistant.domain import brief
-from dota_assistant import kb, live
+from dota_assistant import kb
+from dota_assistant.app.live import consts as live_consts
 from dota_assistant.app import start
 from dota_assistant.domain import coach
 from dota_assistant.ai import gameplan, llm
@@ -77,8 +78,8 @@ class GameplanTest(unittest.TestCase):
 
 class NoteTest(unittest.TestCase):
     def test_plan_error_wording(self):
-        self.assertIn("数据页不受影响", live.plan_error(llm.Unavailable("没填 Anthropic API Key")))
-        self.assertTrue(live.plan_error(RuntimeError("超时")).startswith("AI 打法没做出来"))
+        self.assertIn("数据页不受影响", live_consts.plan_error(llm.Unavailable("没填 Anthropic API Key")))
+        self.assertTrue(live_consts.plan_error(RuntimeError("超时")).startswith("AI 打法没做出来"))
 
     def test_start_note(self):
         with mock.patch.object(stats, "positions_source", return_value=None), mock.patch("shutil.which", return_value=None):

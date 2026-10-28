@@ -36,7 +36,7 @@ IMPORTED_OK = {
         "test_nokey patch 后调 positions_source / load_positions，它们在 sources.stats 里按全局名 DATA_DIR 查（从 config import 进来）",
     ("dota_assistant.app.webui", "HTTPServer"):
         "test_webui patch 后起 WebServer，webui 里按全局名 HTTPServer 查（从 log import 进来）",
-    ("dota_assistant.live", "recognize"):
+    ("dota_assistant.app.live.core", "recognize"):
         "test_webui 直接赋值换掉 live 里的 recognize（从 vision import 进来，Live.scan 按全局名查）；"
         "P4 拆 live 时要跟着改到真正调 recognize 的那个模块",
 }

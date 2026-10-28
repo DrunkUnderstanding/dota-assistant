@@ -232,5 +232,5 @@ def _pipe_electron(stream) -> None:
 
 
 def run(cfg: Config, browser: bool = False) -> int:
-    from ..live import Live
+    from .live import Live
     return serve(Live(cfg), browser)

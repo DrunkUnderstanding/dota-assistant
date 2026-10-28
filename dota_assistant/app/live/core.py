@@ -27,133 +27,28 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-import cv2
 import numpy as np
 
-from .ai import gameplan, llm
-from .domain import advisor as adv
-from .domain import brief, buyback, coach, death, itembuild, jungle, lanelog, mates, ultcd
-from .vision import buybackscan, grid, roles
-from .core import config
-from .core import log as logs
-from .core.config import DATA_DIR, ROOT, Config
-from .core.dota_install import find_dota, is_dota_dir
-from .core.gsi_fields import SELECTION_STATE, STRATEGY_STATE
-from .core.heroes import Hero
-from .domain.engine import POSITION_NAMES
-from .game.gsi import GSIServer, ensure_cfg
-from .game.hotkeys import Hotkeys, vk_code
-from .kb import cd_ops
-from .sources import assets, http
-from .game.speech import Speaker
-from .vision.recognize import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
+from ...ai import gameplan, llm
+from ...domain import advisor as adv
+from ...domain import brief, buyback, coach, death, itembuild, jungle, lanelog, mates, ultcd
+from ...vision import buybackscan, grid, roles
+from ...core import config
+from ...core import log as logs
+from ...core.config import Config
+from ...core.dota_install import find_dota
+from ...core.gsi_fields import SELECTION_STATE, STRATEGY_STATE
+from ...core.heroes import Hero
+from ...domain.engine import POSITION_NAMES
+from ...game.gsi import GSIServer, ensure_cfg
+from ...game.hotkeys import Hotkeys
+from ...kb import cd_ops
+from ...sources import assets, http
+from ...game.speech import Speaker
+from ...vision.recognize import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
+from . import consts
 
-SHOTS_DIR = ROOT / "shots"
-OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
-FIX_FILE = DATA_DIR / "fixes.jsonl"            # 玩家帮认 / 改过的格子（一行一次），回头看学到的模板管不管用、哪次填错了
-OPACITY_MIN = 0.3                              # 叠加层底色再透就看不清字了
-OVERLAY_WIDTH = (300, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内
-SIDES = ("radiant", "dire")
-DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒（复活很快 / 演示加速时也看得到）
-# 死后第几秒截一张 Dota 窗口，和死前推送存在一起（shots/deaths/<时间>-<秒>s.png）。
-# 2026-10-26：先看死亡画面上有没有「谁杀的 / 受到的伤害」，有的话再做识别（出装要看这局谁威胁最大）
-DEATH_SHOT_DELAYS = (0, 2)
-SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
-SIDE_FALLBACK = "radiant"                      # 不知道阵营（自动但 GSI 没连上）时先当左边是我方，卡片和面板上要标出来
-ROLE_RETRY = 3.0                               # 认位置：没认出来隔几秒再试
-GRID_CONFIRM_MIN = 0.5                         # 顶栏分数至少这么多，再加上网格核对才算认出
-SAME_CROP = 0.92                               # 两张顶栏裁图特征相似度高于这个算同一个样子（没换头像 / 重复，不用再记）
-# 选人时顶栏这格比这局开头多出这么多彩色像素，才算真有人选了（没认出就显示「?」）。2026-10-23 截图量的：
-# 空位是灰底 + 段位小旗（红旗那几格 0.08~0.10），队友预选是半透明灰图（和空位一样 0.00~0.02），选定的头像 0.17~0.91
-PICKED_COLOR_GAIN = 0.04
-SCAN_MODES = ("auto", "manual")                # 自动识别 / 手动输入
-ORPHAN_WINDOW = 30                             # 消息栏认到「买活了」但顶栏没看出死过的：几帧要在这么多游戏秒内
-CLOCK_SLACK = 1.5                              # 买活倒计时用的「游戏时钟 0 秒对应的本机时间」差多少秒才改（GSI 时钟是整秒、推送有延迟）
 log = logging.getLogger(__name__)
-
-
-def _side_cn(side: str) -> str:
-    return "天辉" if side == "radiant" else "夜魇"
-
-
-def _names(hs) -> str:
-    return "、".join(h.name_cn for h in hs) or "无"
-
-
-def _slot_text(db, s) -> str:
-    """识别结果的一个格子：认出来的写名字，认不出写「?最像的」，后面带相似度"""
-    if s.hero_id in db.by_id:
-        return f"{db.by_id[s.hero_id].name_cn}({s.score:.2f})"
-    guess = db.by_id.get(s.guess)
-    return f"?{guess.name_cn if guess else ''}({s.score:.2f})"
-
-
-def _check_hotkeys(cfg: Config, keys: dict) -> dict:
-    """设置里改的热键：键名能注册、几个功能不撞键；返回要写进 config 的字段"""
-    updates = {}
-    for field, name in keys.items():
-        if field not in HOTKEY_ACTIONS:
-            raise ValueError(f"不认识的热键项 {field!r}")
-        name = str(name or "").strip().upper()
-        vk_code(name)                                  # 不支持的键名直接报错
-        updates[field] = name
-    merged = {f: updates.get(f, getattr(cfg, f)).upper() for f in HOTKEY_ACTIONS}
-    seen: dict[str, str] = {}
-    for f, name in merged.items():
-        if name in seen:
-            raise ValueError(f"{name} 同时绑了「{HOTKEY_ACTIONS[seen[name]][0]}」和「{HOTKEY_ACTIONS[f][0]}」，换一个")
-        seen[name] = f
-    return updates
-
-
-def _check_dota_dir(text) -> str:
-    """设置里填的 Dota 目录：空 = 自动找；选到 game\\dota 这种下一层也认，往上找到「dota 2 beta」那层"""
-    text = str(text or "").strip().strip('"').strip()
-    if not text:
-        return ""
-    p = Path(text)
-    for d in (p, *list(p.parents)[:2]):
-        if is_dota_dir(d):
-            return str(d)
-    raise ValueError(f"{text} 里没有 game\\dota\\pak01_dir.vpk，不像 Dota 安装目录。"
-                     "Steam 里右键 Dota 2 → 管理 → 浏览本地文件，复制打开的那个文件夹地址")
-
-
-def _colorful(img) -> float:
-    """顶栏裁图里彩色像素占多少（下面 15% 是玩家颜色条，不算）"""
-    hsv = cv2.cvtColor(img[: max(1, int(img.shape[0] * 0.85))], cv2.COLOR_BGR2HSV)
-    return float(((hsv[..., 1] > 89) & (hsv[..., 2] > 51)).mean())
-
-
-def _view_text(db, view, kinds=("radiant", "dire", "bans")) -> list[str]:
-    return [" ".join(_slot_text(db, s) for s in getattr(view, k)) or "-" for k in kinds]
-
-
-def plan_error(err: Exception) -> str:
-    """AI 打法页上的那行说明。调不了 AI（llm.Unavailable）不算出错：说缺什么、怎么办，数据页照常"""
-    if isinstance(err, llm.Unavailable):
-        return f"AI 打法用不了：{err}。数据页不受影响；控制面板右上角「设置」里换 AI 来源，或者关掉 AI 打法"
-    return f"AI 打法没做出来：{err}"
-
-
-SECRET_FIELDS = {"stratz_token": "STRATZ token", "ai_api_key": "API Key"}   # 不发给页面、不进日志
-# 热键：config 字段 → (完整说明, 面板窗口窄时的短说明)；按哪个键在「设置」里改
-HOTKEY_ACTIONS = {
-    "hotkey_toggle": ("显隐 / 关提醒", "显隐"),
-    "hotkey_lock": ("解锁 / 固定位置", "解锁"),
-    "hotkey_rescan": ("重识别", "重识别"),
-    "hotkey_shot": ("截图", "截图"),
-    "hotkey_brief": ("本局要点 / 翻页", "要点"),
-}
-
-
-def _next_stage(page: str) -> str:
-    order = [p for p, _ in brief.STAGES]
-    return order[(order.index(page) + 1) % len(order)] if page in order else order[0]
-
-
-def _mask(secret: str) -> dict:
-    return {"set": bool(secret), "tail": secret[-4:] if len(secret) >= 8 else ""}
 
 
 class Live:
@@ -174,7 +69,7 @@ class Live:
         self.bank = bank or TemplateBank()
         self.screen = None
         if screen_factory is None:
-            from .vision.capture import Screen
+            from ...vision.capture import Screen
             screen_factory = lambda: Screen(cfg.monitor)
         self._screen_factory = screen_factory
         self.gsi = None
@@ -189,8 +84,8 @@ class Live:
         self.dota_dir: Path | None = find_dota(cfg.dota_dir) if use_gsi else None
 
         # ---- 当前局面（控制面板的格子是唯一的「当前局面」，识别和手动输入都只是往里写）----
-        self.slots: dict[str, list[str]] = {s: [""] * 5 for s in SIDES}
-        self.hints: dict[str, list[dict]] = {s: [{} for _ in range(5)] for s in SIDES}   # 识别给的猜测 / 相似度
+        self.slots: dict[str, list[str]] = {s: [""] * 5 for s in consts.SIDES}
+        self.hints: dict[str, list[dict]] = {s: [{} for _ in range(5)] for s in consts.SIDES}   # 识别给的猜测 / 相似度
         self.bans_text = ""
         self.position = cfg.position
         self.side_mode = "auto"
@@ -199,7 +94,7 @@ class Live:
         self.speaker.enabled = cfg.voice
         self.scan_without_gsi = True
         self.user_hidden = False
-        self.overlay_file = overlay_file or OVERLAY_FILE
+        self.overlay_file = overlay_file or consts.OVERLAY_FILE
         self.overlay_locked = True               # 固定：鼠标穿透；解锁：可以拖动叠加层
         self.overlay_pos: dict | None = None     # 拖过的位置（占屏幕宽 / 高的比例）和拉过的宽度，没拖过就用 config 里的
         self._load_overlay_state()
@@ -266,7 +161,7 @@ class Live:
         self._picked_cache: tuple = (None, {})
         # 玩家在叠加层 / 顶栏 / 控制面板告诉我们的格子（这局）：选人时识别整排重写格子也不冲掉它们
         self._named: set[tuple[str, int]] = set()
-        self.fix_file = FIX_FILE
+        self.fix_file = consts.FIX_FILE
         # 选人网格上的禁用（红斜线），见 grid.py；新布局在后台建图
         self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher()
         self._grid_building = False
@@ -311,7 +206,7 @@ class Live:
         if self.hotkeys:
             self.hotkeys.stop()
         self.hotkeys = Hotkeys({getattr(self.cfg, f): key(getattr(self.cfg, f), *actions[f])
-                                for f in HOTKEY_ACTIONS}).start()
+                                for f in consts.HOTKEY_ACTIONS}).start()
 
     # ---------- 线程 / 订阅 ----------
 
@@ -383,10 +278,10 @@ class Live:
     def action(self, a: dict) -> str | None:
         """在工作线程里执行一条网页操作，返回状态栏提示。未知操作抛 ValueError。"""
         t = a.get("type")
-        log.info("网页操作 %s", {k: ("***" if k in SECRET_FIELDS and v else v) for k, v in a.items()})
+        log.info("网页操作 %s", {k: ("***" if k in consts.SECRET_FIELDS and v else v) for k, v in a.items()})
         if t == "set_slot":
             side, i = a["side"], int(a["index"])
-            if side not in SIDES or not 0 <= i < 5:
+            if side not in consts.SIDES or not 0 <= i < 5:
                 raise ValueError("格子不存在")
             before = self.slots[side][i]
             self.slots[side][i] = str(a.get("text") or "").strip()
@@ -410,10 +305,10 @@ class Live:
                 self._base_position = self.position
                 self._role_draft = self._drafts_seen         # 玩家手动选了，这局不再自动改
                 self.refresh(force_speech=True)
-            elif key == "side_mode" and value in SIDE_MODES:
+            elif key == "side_mode" and value in consts.SIDE_MODES:
                 self.side_mode = value
                 self.refresh(force_speech=True)
-            elif key == "mode" and value in SCAN_MODES:
+            elif key == "mode" and value in consts.SCAN_MODES:
                 self.mode = value
                 self.refresh()
             elif key == "voice":
@@ -487,7 +382,7 @@ class Live:
             if not acc.isdigit():
                 raise ValueError("好友代码应该是一串数字")
             updates["account_id"] = int(acc)
-        for key, name in SECRET_FIELDS.items():
+        for key, name in consts.SECRET_FIELDS.items():
             if key in a:
                 val = str(a[key] or "").strip()
                 if any(c.isspace() or c == '"' for c in val):
@@ -510,19 +405,19 @@ class Live:
                 raise ValueError("接口地址要以 http:// 或 https:// 开头")
             updates["ai_base_url"] = url
         if "hotkeys" in a:
-            updates.update(_check_hotkeys(self.cfg, a["hotkeys"]))
+            updates.update(consts._check_hotkeys(self.cfg, a["hotkeys"]))
         if "dota_dir" in a:
-            updates["dota_dir"] = _check_dota_dir(a["dota_dir"])
+            updates["dota_dir"] = consts._check_dota_dir(a["dota_dir"])
         if not updates:
             return
-        hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in HOTKEY_ACTIONS)
+        hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in consts.HOTKEY_ACTIONS)
         account_changed = any(updates.get(k, getattr(self.cfg, k)) != getattr(self.cfg, k)
                               for k in ("account_id", "stratz_token"))
         dota_changed = updates.get("dota_dir", self.cfg.dota_dir) != self.cfg.dota_dir
         path = config.save(updates, self.config_file)
         for k, v in updates.items():
             setattr(self.cfg, k, v)
-        log.info("设置已保存到 %s：%s", path, {k: ("已设置" if v else "未设置") if k in SECRET_FIELDS else v
+        log.info("设置已保存到 %s：%s", path, {k: ("已设置" if v else "未设置") if k in consts.SECRET_FIELDS else v
                                                for k, v in updates.items()})
         if hotkeys_changed and self.hotkeys:
             self._start_hotkeys()
@@ -548,7 +443,7 @@ class Live:
     def set_overlay_style(self, key: str, value, save: bool = True) -> None:
         """叠加层底色 / 不透明度。面板上拖滑块时 save=False 只改内存（叠加层马上跟着变），松手再写进 config.toml"""
         if key == "overlay_opacity":
-            value = round(min(1.0, max(OPACITY_MIN, float(value))), 2)
+            value = round(min(1.0, max(consts.OPACITY_MIN, float(value))), 2)
         elif not re.fullmatch(r"#[0-9a-fA-F]{6}", str(value)):
             raise ValueError(f"颜色要写成 #rrggbb，收到 {value!r}")
         else:
@@ -561,7 +456,7 @@ class Live:
 
     def overlay_style(self) -> dict:
         try:
-            opacity = min(1.0, max(OPACITY_MIN, float(self.cfg.overlay_opacity)))
+            opacity = min(1.0, max(consts.OPACITY_MIN, float(self.cfg.overlay_opacity)))
         except (TypeError, ValueError):
             opacity = Config.overlay_opacity
         color = self.cfg.overlay_color if re.fullmatch(r"#[0-9a-fA-F]{6}", str(self.cfg.overlay_color)) else Config.overlay_color
@@ -570,16 +465,16 @@ class Live:
     def settings_view(self) -> dict:
         """给面板「设置」窗口看的；密钥本身不发给页面，只给末 4 位让玩家认得出是哪个"""
         c = self.cfg
-        return {"account_id": c.account_id, "stratz_token": _mask(c.stratz_token), "ai_plan": c.ai_plan,
-                "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": _mask(c.ai_api_key),
+        return {"account_id": c.account_id, "stratz_token": consts._mask(c.stratz_token), "ai_plan": c.ai_plan,
+                "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": consts._mask(c.ai_api_key),
                 "ai_base_url": c.ai_base_url, "providers": llm.PROVIDERS,
                 "dota_dir": c.dota_dir, "dota_found": str(self.dota_dir or ""),
-                "hotkeys": [{"field": f, "key": getattr(c, f), "text": text} for f, (text, _) in HOTKEY_ACTIONS.items()]}
+                "hotkeys": [{"field": f, "key": getattr(c, f), "text": text} for f, (text, _) in consts.HOTKEY_ACTIONS.items()]}
 
     # ---------- 局面 ----------
 
     def side(self) -> str | None:
-        if self.side_mode in SIDES:
+        if self.side_mode in consts.SIDES:
             return self.side_mode
         return self.gsi.state.team if self.gsi and self.gsi.state.alive else None
 
@@ -593,8 +488,8 @@ class Live:
             return None
 
     def current_draft(self) -> adv.Draft:
-        team = {s: [h for t in self.slots[s] if (h := self._hero(t))] for s in SIDES}
-        side = self.side() or SIDE_FALLBACK
+        team = {s: [h for t in self.slots[s] if (h := self._hero(t))] for s in consts.SIDES}
+        side = self.side() or consts.SIDE_FALLBACK
         other = "dire" if side == "radiant" else "radiant"
         bans = [h for t in self.bans_text.replace("，", ",").split(",") if (h := self._hero(t))]
         if self.last_view and self.mode == "auto":
@@ -617,13 +512,13 @@ class Live:
         self.view = adv.render_view(advice, self.side())
         self.view["position_auto"] = self.position_auto
         if self.side() is None:                  # 友 / 敌是按默认的天辉分的，可能整个反了
-            self.view["side_assumed"] = SIDE_FALLBACK
+            self.view["side_assumed"] = consts.SIDE_FALLBACK
         self.notice = None
         changed = self.prev_draft is None or draft.key() != self.prev_draft.key()
         if changed:
             log.info("局面：我 %s · 队友 %s · 对面 %s · 禁用 %s · %d 号位 → 推荐 %s",
-                     draft.my_hero.name_cn if draft.my_hero else "未选", _names(draft.allies), _names(draft.enemies),
-                     _names(draft.bans), self.position,
+                     draft.my_hero.name_cn if draft.my_hero else "未选", consts._names(draft.allies), consts._names(draft.enemies),
+                     consts._names(draft.bans), self.position,
                      "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.picks + advice.targeted) or "无")
         if force_speech or changed:
             text = adv.speech(self.prev_draft, advice, force=force_speech)
@@ -650,8 +545,8 @@ class Live:
         over = game_state is not None and game_state != SELECTION_STATE
         me = self._my_slot(st) if st else None
         my_hero = next((h for h in self.db if h.key == st.my_hero_key), None) if st and st.my_hero_key else None
-        out: dict = {"ally": self.side() or SIDE_FALLBACK}
-        for side in SIDES:
+        out: dict = {"ally": self.side() or consts.SIDE_FALLBACK}
+        for side in consts.SIDES:
             cells = []
             for i in range(5):
                 h = self._hero(self.slots[side][i])
@@ -670,7 +565,7 @@ class Live:
                               "guess": hint.get("guess", "") if state == "ask" else "",
                               "manual": (side, i) in self._named, "pick": self._pick_view(side, i)})
             out[side] = cells
-        out["asks"] = sum(c["state"] == "ask" for s in SIDES for c in out[s])
+        out["asks"] = sum(c["state"] == "ask" for s in consts.SIDES for c in out[s])
         return out
 
     def _looks_picked(self, side: str, index: int) -> bool:
@@ -681,14 +576,14 @@ class Live:
         if (side, index) not in cache:
             cur, blank = self._crops["sel"].get((side, index)), self._crops["blank"].get((side, index))
             cache[(side, index)] = (cur is not None and blank is not None and cur is not blank
-                                    and float(feature(cur) @ feature(blank)) <= SAME_CROP
-                                    and _colorful(cur) >= _colorful(blank) + PICKED_COLOR_GAIN)
+                                    and float(feature(cur) @ feature(blank)) <= consts.SAME_CROP
+                                    and consts._colorful(cur) >= consts._colorful(blank) + consts.PICKED_COLOR_GAIN)
         return cache[(side, index)]
 
     def clear(self) -> None:
-        self.slots = {s: [""] * 5 for s in SIDES}
+        self.slots = {s: [""] * 5 for s in consts.SIDES}
         self._named.clear()
-        self.hints = {s: [{} for _ in range(5)] for s in SIDES}
+        self.hints = {s: [{} for _ in range(5)] for s in consts.SIDES}
         self.bans_text = ""
         self.grid.reset()
         self.prev_draft = None
@@ -752,7 +647,7 @@ class Live:
                 self.submit(self._grid_ready, gmap)
             threading.Thread(target=work, daemon=True, name="grid").start()
         if self.grid.update(img, boxes):
-            log.info("网格识别：禁用 %s；已选 %s", _names(self._ids(self.grid.bans)), _names(self._ids(self.grid.taken)))
+            log.info("网格识别：禁用 %s；已选 %s", consts._names(self._ids(self.grid.bans)), consts._names(self._ids(self.grid.taken)))
             self.refresh()
 
     def scan_role(self, img) -> None:
@@ -761,7 +656,7 @@ class Live:
         if (self._role_busy or self._role_draft == self._drafts_seen or time.monotonic() < self._role_next
                 or not (self.cal and self.cal.ready and st and st.alive and st.team)):
             return
-        self._role_busy, self._role_next = True, time.monotonic() + ROLE_RETRY
+        self._role_busy, self._role_next = True, time.monotonic() + consts.ROLE_RETRY
         draft, side, name, slot = self._drafts_seen, st.team, st.player_name, st.team_slot
 
         def work():
@@ -828,7 +723,7 @@ class Live:
         self.last_scan = time.time()
         key = view.key()
         if log.isEnabledFor(logging.DEBUG):                  # 每秒一次，只在 DEBUG 时记（调 match_threshold 用）
-            log.debug("识别：天辉 %s | 夜魇 %s", *_view_text(self.db, view, SIDES))
+            log.debug("识别：天辉 %s | 夜魇 %s", *consts._view_text(self.db, view, consts.SIDES))
         stable = force or key == self.pending_key            # 连续两次一致才采用，躲开动画过程
         self.pending_key = key
         if not stable:
@@ -843,12 +738,12 @@ class Live:
         self.last_view = view
         if changed or force:
             log.info("识别结果%s：天辉 %s | 夜魇 %s | 禁用 %s", "变了" if changed else "（手动重识别）",
-                     *_view_text(self.db, view))
+                     *consts._view_text(self.db, view))
             self.fill_slots(view, only_empty=only_empty)
             self.refresh(force_speech=force)
 
     def _keep_crops(self, view: DraftView, phase: str) -> None:
-        for side in SIDES:
+        for side in consts.SIDES:
             for i, s in enumerate(getattr(view, side)):
                 if s.image is not None and s.image.size:
                     if phase == "sel":
@@ -868,7 +763,7 @@ class Live:
             if c is None:
                 continue
             f = feature(c)
-            if (fb is not None and float(f @ fb) > SAME_CROP) or any(float(f @ g) > SAME_CROP for g in seen):
+            if (fb is not None and float(f @ fb) > consts.SAME_CROP) or any(float(f @ g) > consts.SAME_CROP for g in seen):
                 continue
             seen.append(f)
             hid, score, gap = self.bank.best(c)
@@ -878,20 +773,20 @@ class Live:
             n += 1
         if n:
             log.info("记住%s第 %d 格是%s：存了 %d 张模板（共学习 %d 张）",
-                     _side_cn(side), index + 1, h.name_cn, n, self.bank.learned)
+                     consts._side_cn(side), index + 1, h.name_cn, n, self.bank.learned)
         return n
 
     def name_slot(self, side: str, index: int, hero_id: int) -> None:
         """顶栏「这格是谁」点了一个英雄：填进格子，顺手记成模板"""
-        if side not in SIDES or not 0 <= index < 5:
+        if side not in consts.SIDES or not 0 <= index < 5:
             raise ValueError("格子不存在")
         h = self.db.by_id.get(int(hero_id))
         if h is None:
             raise ValueError(f"没有这个英雄 {hero_id}")
-        other = next(((sd, j) for sd in SIDES for j, t in enumerate(self.slots[sd])
+        other = next(((sd, j) for sd in consts.SIDES for j, t in enumerate(self.slots[sd])
                       if (sd, j) != (side, index) and self._hero(t) == h), None)
         if other:
-            self.message = f"{h.name_cn}已经在{_side_cn(other[0])}第 {other[1] + 1} 格了，先把那格改掉"
+            self.message = f"{h.name_cn}已经在{consts._side_cn(other[0])}第 {other[1] + 1} 格了，先把那格改掉"
             return
         before = self.slots[side][index] or (f"?{self.hints[side][index].get('guess')}" if self.hints[side][index].get("guess") else "")
         self.slots[side][index] = h.name_cn
@@ -899,7 +794,7 @@ class Live:
         self._named.add((side, index))
         n = self.learn_slot(side, index, h)
         self._record_fix(side, index, before, h, n, "帮认")
-        self.message = f"{_side_cn(side)}第 {index + 1} 格填上{h.name_cn}" + (f"，这格头像记住了，下次认得" if n else "")
+        self.message = f"{consts._side_cn(side)}第 {index + 1} 格填上{h.name_cn}" + (f"，这格头像记住了，下次认得" if n else "")
         log.info("帮认：%s", self.message)
         self.refresh()
 
@@ -921,7 +816,7 @@ class Live:
         """顶栏「这格是谁」的候选：除了已经在别的格子里的，所有英雄排个序——先是选人网格里被选走、还没分到格子、没被禁的（taken），
         再是别的，各自按和这格头像像不像排。页面先选属性、再把这个属性的全列出来（玩家 2026-10-28 要的），按这个顺序。
         只给 id（英雄名 / 图标 / 属性页面从 /api/heroes 拿一次），快照里 10 格都带也不大"""
-        used = {h.id for sd in SIDES for t in self.slots[sd] if (h := self._hero(t))}
+        used = {h.id for sd in consts.SIDES for t in self.slots[sd] if (h := self._hero(t))}
         pool = set(self.grid.taken) - used - set(self.grid.bans)
         sims: dict[int, float] = {}
         # 选人界面裁的优先；这局没裁到过（中途开的助手）就用局内顶栏头像——只拿来排序（对的那个分数 0.3~0.6，常排前几，见第 37 节）
@@ -943,20 +838,20 @@ class Live:
         """顶栏分数没过阈值、但最像的英雄在选人网格里确实已被选走（变暗没斜线）的，也算认出来。
         2026-10-23 实测：拉比克在顶栏只有 0.63（阈值 0.70），网格里已经变暗。"""
         for s in view.radiant + view.dire:
-            if s.hero_id is None and s.guess in self.grid.taken and s.score >= GRID_CONFIRM_MIN:
+            if s.hero_id is None and s.guess in self.grid.taken and s.score >= consts.GRID_CONFIRM_MIN:
                 s.hero_id = s.guess
 
     def fill_slots(self, view: DraftView, only_empty: bool = False) -> None:
         """正在手动改的格子由网页自己保护（输入框有焦点时不覆盖）；玩家这局告诉过我们的格子（_named）不动。
         only_empty：只往空格子里填认出来的英雄（已经有的不换、不清），填进去的英雄不能和别的格子重复"""
-        for side in SIDES:
+        for side in consts.SIDES:
             for i, s in enumerate(getattr(view, side)):
                 if (side, i) in self._named and self.slots[side][i]:
                     continue
                 if only_empty:
                     h = self.db.by_id.get(s.hero_id)
                     if (self.slots[side][i] or not h
-                            or any(self._hero(t) == h for sd in SIDES for t in self.slots[sd])):
+                            or any(self._hero(t) == h for sd in consts.SIDES for t in self.slots[sd])):
                         continue
                 self.slots[side][i] = self.db.by_id[s.hero_id].name_cn if s.hero_id in self.db.by_id else ""
                 guess = self.db.by_id.get(s.guess)
@@ -968,7 +863,7 @@ class Live:
             self.message = "还没有识别结果可以记"
             return
         n = 0
-        for side in SIDES:
+        for side in consts.SIDES:
             for text, s in zip(self.slots[side], getattr(self.last_view, side)):
                 if s.image is None:
                     continue
@@ -1026,7 +921,7 @@ class Live:
         died = st.deaths > self._coach_deaths
         self._coach_deaths = st.deaths
         respawned = (st.raw.get("hero") or {}).get("alive") is True
-        if self._death_shown and respawned and time.monotonic() - self._death_shown >= DEATH_MIN_SHOW:
+        if self._death_shown and respawned and time.monotonic() - self._death_shown >= consts.DEATH_MIN_SHOW:
             self._death_shown = 0.0              # 复活了：死亡卡片收起（别的卡片不动）
             if self.coach_card and self.coach_card.get("death"):
                 self.coach_card = None
@@ -1127,7 +1022,7 @@ class Live:
         else:
             self._bb_paused = None
             anchor = st.updated - clock
-            if self._bb_anchor is None or abs(anchor - self._bb_anchor) > CLOCK_SLACK:
+            if self._bb_anchor is None or abs(anchor - self._bb_anchor) > consts.CLOCK_SLACK:
                 self._bb_anchor = anchor
         me = self._my_slot(st)
         if me and st.buyback:
@@ -1166,7 +1061,7 @@ class Live:
         """没填英雄的格子留一张局内顶栏头像（活着、彩色的时候），给顶栏帮认的候选排序；每格留一次就够"""
         got = self._crops["game"]
         new = False
-        for side in SIDES:
+        for side in consts.SIDES:
             for i in range(5):
                 if ((side, i) not in got and not self.slots[side][i]
                         and buybackscan.saturation(img, side, i) >= buybackscan.ALIVE_SAT):
@@ -1186,7 +1081,7 @@ class Live:
     def _revived(self, rev) -> None:
         """复活了：接下来几帧看消息栏有没有「买活了」、行首小图是不是他（buybackscan.FeedCheck），够帧数了在 _feed_done 定"""
         h = self._hero(self.slots[rev.side][rev.index])
-        known = frozenset(x.key for side in SIDES for t in self.slots[side] if (x := self._hero(t)))
+        known = frozenset(x.key for side in consts.SIDES for t in self.slots[side] if (x := self._hero(t)))
         self._bb_checks.append(buybackscan.FeedCheck(rev, h.key if h else None, h.name_cn if h else None, known))
         log.info("买活自动记：%s %s 复活（灰了 %.0f 秒，倒计时 %s → 该在 %s 复活），看消息栏确认", coach._mmss(rev.clock / 60),
                  self._slot_name(rev.side, rev.index), rev.dead_for, rev.seconds,
@@ -1207,7 +1102,7 @@ class Live:
         todo = [c for c in self._bb_checks if not c.busy]
         if not todo:
             return
-        keys = {h.key for side in SIDES for t in self.slots[side] if (h := self._hero(t))}
+        keys = {h.key for side in consts.SIDES for t in self.slots[side] if (h := self._hero(t))}
         for c in todo:
             c.busy = True
 
@@ -1245,8 +1140,8 @@ class Live:
         头像灰不到 2 帧），有 FEED_AGREE 帧都看到就按第一次看到的时刻记（买活是在这之前一点）"""
         claimed = {k for c in (*checks, *self._bb_checks) for k in (c.hero, c.found) if k}
         seen = {ln.hero for ln in lines if ln.hero and ln.hero not in claimed}
-        self._bb_orphans = {k: v for k, v in self._bb_orphans.items() if clock - v[0] <= ORPHAN_WINDOW}
-        for side in SIDES:
+        self._bb_orphans = {k: v for k, v in self._bb_orphans.items() if clock - v[0] <= consts.ORPHAN_WINDOW}
+        for side in consts.SIDES:
             for i, t in enumerate(self.slots[side]):
                 if (h := self._hero(t)) is None or h.key not in seen or (side, i) == me:
                     continue
@@ -1279,7 +1174,7 @@ class Live:
     def _my_slot(self, st) -> tuple[str, int] | None:
         """我在顶栏哪一格：GSI 的 team_slot，没有就在格子里找我的英雄"""
         side = st.team
-        if side not in SIDES:
+        if side not in consts.SIDES:
             return None
         if st.team_slot is not None and 0 <= st.team_slot < 5:
             return side, st.team_slot
@@ -1288,7 +1183,7 @@ class Live:
 
     def mark_buyback(self, side: str, index: int) -> None:
         """顶栏头像下面的小条被点了：这个英雄刚买活，开始 8 分钟倒计时；正在倒计时就取消（点错了）"""
-        if side not in SIDES or not 0 <= index < 5:
+        if side not in consts.SIDES or not 0 <= index < 5:
             raise ValueError("格子不存在")
         clock = self._game_clock()
         if not (self._bb_show and self.cfg.buyback_timer) or clock is None:
@@ -1317,7 +1212,7 @@ class Live:
                 "slots": {s: [{"name": self.slots[s][i], "end": self.buyback.end(s, i, clock), "me": me == (s, i),
                                "auto": (s, i) in self.buyback.auto, "ult": self._ult_view(s, i, clock),
                                "pick": self._pick_view(s, i)}
-                              for i in range(5)] for s in SIDES}}
+                              for i in range(5)] for s in consts.SIDES}}
 
     def _pick_view(self, side: str, index: int) -> dict:
         """顶栏帮认的候选；快照每秒都做，格子 / 裁图 / 网格 / 模板没变就用上次算的"""
@@ -1334,7 +1229,7 @@ class Live:
 
     def _knowledge(self):
         if self._kb_base is None:
-            from . import kb
+            from ... import kb
             self._kb_base = kb.KnowledgeBase.load() or False
             self._kb_ops = cd_ops.load_ops(self._kb_base or None)
         return self._kb_base or None
@@ -1342,7 +1237,7 @@ class Live:
     def _ult_of(self, side: str, index: int):
         """顶栏这一格是对面的、填了英雄、知识库里有要计时的大招：(英雄, 大招, 能勾的减冷却)，否则 None"""
         mine = self.side()
-        if not self.cfg.ult_timer or mine not in SIDES or side == mine:
+        if not self.cfg.ult_timer or mine not in consts.SIDES or side == mine:
             return None
         h = self._hero(self.slots[side][index])
         base = self._knowledge() if h else None
@@ -1361,7 +1256,7 @@ class Live:
         return lv, fixed, on, ultcd.cooldown(ab, lv, on)
 
     def _ult_check(self, side: str, index: int):
-        if side not in SIDES or not 0 <= index < 5:
+        if side not in consts.SIDES or not 0 <= index < 5:
             raise ValueError("格子不存在")
         clock = self._game_clock()
         if not self._bb_show or clock is None:
@@ -1429,7 +1324,7 @@ class Live:
     def _death_recap(self, st) -> death.Recap | None:
         """刚死：把死前那段推送整理成「怎么死的」，顺手原样存一份（核对字段 / 调阈值用）"""
         if self._death_names is None or self._death_names[0] != st.my_hero_key:
-            from . import kb
+            from ... import kb
             base = kb.KnowledgeBase.load()
             self._death_names = (st.my_hero_key, *(death.names_from_kb(base, st.my_hero_key) if base else ({}, set())))
         history = st.history()
@@ -1440,7 +1335,7 @@ class Live:
             log.warning("死亡复盘：推送没存下来", exc_info=True)
         else:
             now = time.monotonic()
-            self._death_shots = [(now + d, path.with_name(f"{path.stem}-{d}s.png")) for d in DEATH_SHOT_DELAYS]
+            self._death_shots = [(now + d, path.with_name(f"{path.stem}-{d}s.png")) for d in consts.DEATH_SHOT_DELAYS]
             self._take_death_shots()
         if rec is None:
             log.info("死亡复盘：历史里没有死前的推送（刚开助手？）")
@@ -1469,7 +1364,7 @@ class Live:
         self.jungle, self.jungle_cue, self._cue_muted, self._lane_logged = None, None, set(), set()
         self._coach_deaths = self.gsi.state.deaths  # 中途开助手：之前的死亡不算
         my_id, enemy_ids, pos = draft.my_hero.id, [h.id for h in draft.enemies], self.position
-        log.info("比赛 %s：准备局内提醒（%s · %d 号位 · 对面 %s）", key, draft.my_hero.name_cn, pos, _names(draft.enemies))
+        log.info("比赛 %s：准备局内提醒（%s · %d 号位 · 对面 %s）", key, draft.my_hero.name_cn, pos, consts._names(draft.enemies))
 
         def work():
             t0 = time.monotonic()
@@ -1509,8 +1404,8 @@ class Live:
         self.pick_key = None                     # 真的选完了，「如果选它」的卡片就不用了
         ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
         lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
-        log.info("比赛 %s：做本局要点（%s · 队友 %s · 对面 %s）", key, draft.my_hero.name_cn, _names(draft.allies),
-                 _names(draft.enemies))
+        log.info("比赛 %s：做本局要点（%s · 队友 %s · 对面 %s）", key, draft.my_hero.name_cn, consts._names(draft.allies),
+                 consts._names(draft.enemies))
 
         def work():
             t0 = time.monotonic()
@@ -1562,7 +1457,7 @@ class Live:
         if key != self.brief_match or not self.brief:
             return
         if err:
-            self.brief.plan_note = plan_error(err)
+            self.brief.plan_note = consts.plan_error(err)
         else:
             self.brief.plan = plan
             self.brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
@@ -1580,14 +1475,14 @@ class Live:
     def show_brief(self) -> None:
         """热键 / 面板按钮：没在看就打开当前阶段那页，正在看就翻到下一阶段（后期再按回到对线期）"""
         if not self._showing_brief() and self.pick_brief and self.pick_key:
-            self.pick_page = _next_stage(self.pick_page)
+            self.pick_page = consts._next_stage(self.pick_page)
             self.user_hidden = False
             return
         if not self.brief:
             self.message = "这局还没有本局要点（要等选完人、GSI 告诉我你的英雄）"
             return
         if self._showing_brief():
-            self.brief_page = _next_stage(self.brief_page)
+            self.brief_page = consts._next_stage(self.brief_page)
         else:
             st = self.gsi.state if self.gsi else None
             self.brief_page = brief.stage_at(st.clock_minutes) if st and st.alive and st.in_match else "lane"
@@ -1687,7 +1582,7 @@ class Live:
         if key != self.pick_key or not self.pick_brief:
             return
         if err:
-            self.pick_brief.plan_note = plan_error(err)
+            self.pick_brief.plan_note = consts.plan_error(err)
             return
         self.pick_brief.plan = plan
         self.pick_brief.plan_note = "" if plan.sections else "AI 给的建议出处都对不上资料，全部丢掉了"
@@ -1725,7 +1620,7 @@ class Live:
             self.speaker.say("；".join(itembuild.text(t) for _, t in lines))
 
     def save_shot(self) -> None:
-        path = SHOTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.png"
+        path = consts.SHOTS_DIR / f"{datetime.now():%Y%m%d-%H%M%S}.png"
         write_image(path, self.grab())
         self.message = f"截图已保存：{path}"
         log.info(self.message)
@@ -1778,7 +1673,7 @@ class Live:
         width = width if width is not None else (self.overlay_pos or {}).get("width")
         self.overlay_pos = {"x": round(x, 4), "y": round(y, 4)}
         if width is not None:
-            if not OVERLAY_WIDTH[0] <= int(width) <= OVERLAY_WIDTH[1]:
+            if not consts.OVERLAY_WIDTH[0] <= int(width) <= consts.OVERLAY_WIDTH[1]:
                 raise ValueError("叠加层宽度不对")
             self.overlay_pos["width"] = int(width)
         self._save_overlay_state()
@@ -1791,7 +1686,7 @@ class Live:
         self.overlay_locked = bool(raw.get("locked", True))
         if isinstance(raw.get("x"), (int, float)) and isinstance(raw.get("y"), (int, float)):
             self.overlay_pos = {"x": raw["x"], "y": raw["y"]}
-            if isinstance(raw.get("width"), int) and OVERLAY_WIDTH[0] <= raw["width"] <= OVERLAY_WIDTH[1]:
+            if isinstance(raw.get("width"), int) and consts.OVERLAY_WIDTH[0] <= raw["width"] <= consts.OVERLAY_WIDTH[1]:
                 self.overlay_pos["width"] = raw["width"]
 
     def _save_overlay_state(self) -> None:
@@ -1830,14 +1725,14 @@ class Live:
             "calibrated": bool(self.cal and self.cal.ready),
             "last_scan": time.strftime("%H:%M:%S", time.localtime(self.last_scan)) if self.last_scan else "",
             "hotkeys": [{"key": getattr(self.cfg, f), "text": text, "short": short}
-                        for f, (text, short) in HOTKEY_ACTIONS.items()],
+                        for f, (text, short) in consts.HOTKEY_ACTIONS.items()],
             "hotkeys_failed": list(self.hotkeys.failed) if self.hotkeys else [],
             "message": self.message,
         }
 
     def snapshot(self) -> dict:
         slots = {}
-        for side in SIDES:
+        for side in consts.SIDES:
             slots[side] = []
             for text, hint in zip(self.slots[side], self.hints[side]):
                 h = self._hero(text)

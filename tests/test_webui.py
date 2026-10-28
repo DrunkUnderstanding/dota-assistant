@@ -20,14 +20,15 @@ from dota_assistant.domain import lanelog
 from dota_assistant.domain import coach
 from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
-from dota_assistant import live as live_mod
+from dota_assistant.app.live import consts as live_consts
+from dota_assistant.app.live import core as live_core
 from dota_assistant.domain import mates as mates_mod
 from dota_assistant.core.config import Config
 from dota_assistant.domain.engine import Engine, Suggestion
 from dota_assistant.game.gsi import GameState
 from pathlib import Path
 from dota_assistant.core.heroes import HeroDB
-from dota_assistant.live import Live
+from dota_assistant.app.live import Live
 from dota_assistant.vision.recognize import Calibration
 from dota_assistant.app.webui import WebServer, overlay_config
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
@@ -62,7 +63,7 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
 lanelog.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
-live_mod.FIX_FILE = TMP / "fixes.jsonl"                           # 帮认记录也不写本机 data/
+live_consts.FIX_FILE = TMP / "fixes.jsonl"                           # 帮认记录也不写本机 data/
 mates_mod.MATES_FILE = TMP / "mates.json"                         # 查过的队友也不读写本机 data/
 
 
@@ -524,8 +525,8 @@ class CoachLiveTest(unittest.TestCase):
         from dota_assistant.vision.recognize import DraftView, Slot
         junk = DraftView([Slot(WK.id, 0.73, WK.id)] + [Slot(None, 0.3, 0)] * 4,
                          [Slot(None, 0.3, 0), Slot(CM.id, 0.71, CM.id)] + [Slot(None, 0.3, 0)] * 3, [])
-        orig, live_mod.recognize = live_mod.recognize, lambda *a, **kw: junk
-        self.addCleanup(setattr, live_mod, "recognize", orig)
+        orig, live_core.recognize = live_core.recognize, lambda *a, **kw: junk
+        self.addCleanup(setattr, live_core, "recognize", orig)
         self.live.cal = SimpleNamespace(ready=True)
         self.live.slots["dire"][:3] = ["斧王", "潮汐猎人", ""]
         st = self.live.gsi.state
@@ -644,8 +645,8 @@ class CoachLiveTest(unittest.TestCase):
         self.assertTrue(self.live.snapshot()["overlay"]["view"]["slots"]["dire"][2]["manual"])
         empty = [Slot(None, 0.3, 0)] * 5
         view = DraftView(empty, [Slot(None, 0.3, 0)] * 3 + [Slot(CM.id, 0.8, CM.id), Slot(None, 0.3, 0)], [])
-        orig, live_mod.recognize = live_mod.recognize, lambda *a, **kw: view
-        self.addCleanup(setattr, live_mod, "recognize", orig)
+        orig, live_core.recognize = live_core.recognize, lambda *a, **kw: view
+        self.addCleanup(setattr, live_core, "recognize", orig)
         self.live.cal = SimpleNamespace(ready=True)
         wait(self.live.submit(self.live.scan, True, object()))
         self.assertEqual(self.live.slots["dire"], ["", "", TIDE.name_cn, CM.name_cn, ""])
@@ -779,13 +780,13 @@ class CoachLiveTest(unittest.TestCase):
         self.assertEqual(lines[-2:], [{"kind": "head", "text": "还缺"}, {"kind": "warn", "text": "缺黑皇杖"}])
         self.assertEqual(len(list(death.DUMP_DIR.glob("*.json"))), 1)   # 死前推送存了一份
         self.assertEqual(len(list(death.DUMP_DIR.glob("*-0s.png"))), 1)   # 死的那一刻截了 Dota 窗口；2 秒后那张还没到点
-        old = live_mod.DEATH_MIN_SHOW
-        live_mod.DEATH_MIN_SHOW = 0
+        old = live_consts.DEATH_MIN_SHOW
+        live_consts.DEATH_MIN_SHOW = 0
         try:
             self.assertTrue(self.push(20.3, deaths=1, alive=False)["visible"])   # 还没复活
             self.assertFalse(self.push(20.8, deaths=1)["visible"])              # 复活：收起
         finally:
-            live_mod.DEATH_MIN_SHOW = old
+            live_consts.DEATH_MIN_SHOW = old
 
 
     def test_buyback_timer(self):
