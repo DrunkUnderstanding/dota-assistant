@@ -189,7 +189,7 @@ class DeathPickTest(unittest.TestCase):
         cls.tree = coach.item_tree(assets.items_const())
 
     def rec(self, cause="", **kw):
-        from dota_assistant import death
+        from dota_assistant.domain import death
         return death.Recap(600, 1, cause=cause, **kw)
 
     def timings(self, **shares):
@@ -272,7 +272,7 @@ class ShopCardTest(unittest.TestCase):
         return json.loads(self.live.current_snapshot)["overlay"]
 
     def test_shop_line_on_death(self):
-        from dota_assistant import death
+        from dota_assistant.domain import death
         self.addCleanup(setattr, death, "DUMP_DIR", death.DUMP_DIR)
         death.DUMP_DIR = Path(tempfile.mkdtemp()) / "deaths"          # 死前推送存到临时目录
         self.push(0)

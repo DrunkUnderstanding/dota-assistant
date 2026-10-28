@@ -51,7 +51,7 @@ def _split(s: str | None) -> list[str]:
 
 
 def cmd_suggest(cfg: config.Config, args) -> int:
-    from . import advisor as adv
+    from .domain import advisor as adv
     if args.all_roles:
         cfg.position_filter = False
     if args.top:

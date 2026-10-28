@@ -11,9 +11,11 @@ from types import SimpleNamespace
 import cv2
 import numpy as np
 
-from dota_assistant import advisor as adv, grid
+from dota_assistant.domain import advisor as adv
+from dota_assistant import grid
 from dota_assistant.core import config
-from dota_assistant import brief, buybackscan, coach, death, lanestate
+from dota_assistant import brief, buybackscan, coach, lanestate
+from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
 from dota_assistant import live as live_mod
 from dota_assistant import mates as mates_mod

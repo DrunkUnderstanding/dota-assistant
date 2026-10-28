@@ -30,8 +30,9 @@ from typing import Callable
 import cv2
 import numpy as np
 
-from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, death, grid, itembuild, jungle, lanestate, mates, roles, ultcd
+from .domain import advisor as adv
+from . import brief, buyback, buybackscan, coach, grid, itembuild, jungle, lanestate, mates, roles, ultcd
+from .domain import death
 from .ai import gameplan, llm
 from .core import config
 from .core import log as logs

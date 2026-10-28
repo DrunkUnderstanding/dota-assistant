@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from .domain import explain
-from . import kb
-from .domain import lanes
-from .core.config import Config
-from .domain.engine import POSITION_NAMES, Engine, Suggestion, pct
-from .core.heroes import Hero, HeroDB
-from .sources import assets, player
-from .sources import stats as stats_mod
+from . import explain
+from .. import kb
+from . import lanes
+from ..core.config import Config
+from .engine import POSITION_NAMES, Engine, Suggestion, pct
+from ..core.heroes import Hero, HeroDB
+from ..sources import assets, player
+from ..sources import stats as stats_mod
 
 TARGETED_TITLE = "针对这局"
 TEAM_TOP, TEAM_TARGETED = 3, 3   # 剩余位置每个空位置：推荐几个 + 针对这局几个（玩家要求 3 + 3，不跟 config 的 top / top_other）

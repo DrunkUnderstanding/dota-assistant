@@ -7,7 +7,8 @@ import unittest
 import urllib.request
 from pathlib import Path
 
-from dota_assistant import advisor as adv, gsi
+from dota_assistant.domain import advisor as adv
+from dota_assistant import gsi
 from dota_assistant.core import dota_install
 from dota_assistant.domain.engine import Engine, Suggestion
 from dota_assistant.gsi import GSIServer

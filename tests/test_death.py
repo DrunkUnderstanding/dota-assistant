@@ -1,7 +1,7 @@
 """死亡复盘：用手写的 GSI 推送序列（字段按 Valve GSI 的写法）"""
 import unittest
 
-from dota_assistant import death
+from dota_assistant.domain import death
 from dota_assistant.gsi import GameState
 
 BKB = {"name": "item_black_king_bar", "cooldown": 0, "can_cast": True}

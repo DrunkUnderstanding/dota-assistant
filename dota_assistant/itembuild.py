@@ -334,7 +334,7 @@ def death_sim(cfg, paths: list) -> str:
     位置用这个英雄在本分段最常打的位置（推送里没有）；同一场（matchid）的死亡按顺序累计次数"""
     import json
     from pathlib import Path
-    from . import death
+    from .domain import death
     from .sources import stats as stats_mod
     base = kb.KnowledgeBase.load()
     if base is None:

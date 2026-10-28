@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 
 from .. import kb
-from ..death import SAVE_EXCLUDE
+from .death import SAVE_EXCLUDE
 from .engine import POSITION_NAMES
 from .explain import Why
 

@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 
 from .. import kb
-from ..death import SAVE_EXCLUDE, SAVE_RE
+from .death import SAVE_EXCLUDE, SAVE_RE
 from .explain import Why
 from .lanes import ESCAPE_EXCLUDE, INTERRUPT_TAGS, UNTOUCHABLE
 

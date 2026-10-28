@@ -15,7 +15,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .core.config import ROOT
+from ..core.config import ROOT
 
 DUMP_DIR = ROOT / "shots" / "deaths"
 WINDOW = 20                  # 往回看多少秒
@@ -280,7 +280,7 @@ def _after(rec: Recap, alive: dict, now: dict) -> None:
         bits.append(f"掉了 {int(_num(g0) - _num(g1))} 金")
     if h.get("buyback_cost") is not None and g1 is not None:
         cost, gold = int(_num(h["buyback_cost"])), int(_num(g1))
-        from .core.gsi_fields import buyback_left
+        from ..core.gsi_fields import buyback_left
         if buyback_left(now) > 0:
             bits.append("买活冷却中")
         else:
