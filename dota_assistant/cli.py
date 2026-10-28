@@ -368,7 +368,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "say":
         import time
-        from .speech import Speaker
+        from .game.speech import Speaker
         s = Speaker(cfg.voice_rate)
         s.say(" ".join(args.text))
         time.sleep(max(2.0, len("".join(args.text)) * 0.25))
