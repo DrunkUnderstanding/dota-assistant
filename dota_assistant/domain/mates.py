@@ -14,8 +14,8 @@ from pathlib import Path
 
 import requests
 
-from .core.config import DATA_DIR, Config
-from .sources import http, player
+from ..core.config import DATA_DIR, Config
+from ..sources import http, player
 
 MATES_FILE = DATA_DIR / "mates.json"
 KEEP = 8                         # 最多记几个人（新查的排最前，挤掉最久没查的）

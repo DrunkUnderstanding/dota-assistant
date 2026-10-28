@@ -21,7 +21,7 @@ from dota_assistant.domain import coach
 from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
 from dota_assistant import live as live_mod
-from dota_assistant import mates as mates_mod
+from dota_assistant.domain import mates as mates_mod
 from dota_assistant.core.config import Config
 from dota_assistant.domain.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState

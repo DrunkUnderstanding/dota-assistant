@@ -10,7 +10,7 @@ from unittest import mock
 
 import requests
 
-from dota_assistant import mates
+from dota_assistant.domain import mates
 from dota_assistant.core.config import Config
 from dota_assistant.core.heroes import HeroDB
 from dota_assistant.sources import http, player
