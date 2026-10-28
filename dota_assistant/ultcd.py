@@ -165,7 +165,7 @@ def cd_ops(kv_text: str, ability: str) -> dict[str, str]:
 
 def _reader():
     """(来源说明, 读一个英雄文件的函数)：本机装了 Dota 读资源包，没装读 GitHub 上的同步"""
-    from .start import find_dota
+    from .gsi import find_dota
     dota = find_dota()
     vpk_path = dota / "game" / "dota" / "pak01_dir.vpk" if dota else None
     if vpk_path and vpk_path.exists():

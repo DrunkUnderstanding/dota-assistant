@@ -1,11 +1,13 @@
 """GSI 服务与播报文案。不联网、不出声。"""
 import json
 import socket
+import tempfile
 import time
 import unittest
 import urllib.request
+from pathlib import Path
 
-from dota_assistant import advisor as adv
+from dota_assistant import advisor as adv, gsi
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GSIServer
 from dota_assistant.heroes import HeroDB
@@ -39,6 +41,44 @@ class GSITest(unittest.TestCase):
         finally:
             srv.stop()
             srv.server.server_close()
+
+
+def make_dota(lib: Path, real: bool = True) -> Path:
+    """假 Steam 库里的 dota 2 beta；real=False 是挪库 / 卸载留下的空壳（只有 game\\dota\\cfg）"""
+    d = lib / "steamapps" / "common" / "dota 2 beta"
+    (d / "game" / "dota" / "cfg").mkdir(parents=True)
+    if real:
+        (d / "game" / "dota" / "pak01_dir.vpk").write_bytes(b"")
+    return d
+
+
+class DotaDirTest(unittest.TestCase):
+    """2026-10-27 朋友的电脑：Steam 根目录下有个只剩 cfg 的 dota 2 beta 空壳，被当成 Dota，GSI 配置写进去游戏不读"""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="dota-dir-"))
+        self.shell = make_dota(self.tmp / "steam", real=False)
+        self.real = make_dota(self.tmp / "lib2")
+        self.libs = [self.tmp / "steam", self.tmp / "lib2"]
+
+    def test_skips_shell(self):
+        self.assertFalse(gsi.is_dota_dir(self.shell))
+        self.assertEqual(gsi.find_dota("", self.libs), self.real)
+        self.assertIsNone(gsi.find_dota("", self.libs[:1]))
+
+    def test_configured_dir_first(self):
+        other = make_dota(self.tmp / "lib3")
+        self.assertEqual(gsi.find_dota(str(other), self.libs), other)
+        self.assertEqual(gsi.find_dota(str(self.shell), self.libs), self.real)   # 填错了照样自动找
+
+    def test_cfg_only_into_real_install(self):
+        with self.assertRaises(FileNotFoundError):
+            gsi.install_cfg(self.shell, 3000)
+        path = gsi.ensure_cfg(self.real, 3000)
+        self.assertEqual(path, gsi.cfg_path(self.real))
+        self.assertIn("127.0.0.1:3000", path.read_text(encoding="utf-8"))
+        self.assertIsNone(gsi.ensure_cfg(self.real, 3000))                       # 没变不重写
+        self.assertEqual(gsi.ensure_cfg(self.real, 3001), path)                  # 端口变了重写
 
 
 class SpeechTextTest(unittest.TestCase):

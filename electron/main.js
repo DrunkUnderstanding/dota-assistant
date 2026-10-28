@@ -32,8 +32,9 @@ let grabbing = false;    // 窗口现在是否接鼠标
 let topbar = null;       // 买活计时条
 let topbarRects = [];    // 它的可点区域（小条）
 let topbarGrabbing = false;
-const TOPBAR_HEIGHT = 330; // 买活 / 大招计时条窗口高（1080 高的屏幕上；Dota 顶栏头像高 40、下面 40~66 是复活倒计时，买活小条在 69~93、
-                          // 对面大招小条在 96~120，右键大招小条弹的菜单从 124 往下到约 305）；只有小条和打开的菜单接鼠标，其余透明点穿
+const TOPBAR_HEIGHT = 410; // 买活 / 大招计时条窗口高（1080 高的屏幕上；Dota 顶栏头像高 40、下面 40~66 是复活倒计时，买活小条在 69~93、
+                          // 对面大招小条在 96~120，右键大招小条弹的菜单从 124 往下到约 305，挑英雄菜单最长的力量列 6 行到约 390）；
+                          // 只有小条和打开的菜单接鼠标，其余透明点穿
 
 function log(level, ...parts) {
   const text = parts.map((p) => (typeof p === 'string' ? p : JSON.stringify(p))).join(' ');

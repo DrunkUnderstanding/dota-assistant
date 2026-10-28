@@ -100,8 +100,9 @@ connect((s) => {
 let lastRects = '';
 function reportHitRects() {
   // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」）+ 要点卡片的翻页标签 / 展开收起
-  // + 剩余位置的空位置（点了切位置）/ 展开收起；其余地方照样点穿
-  const hits = ['.pick[data-id]', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold'];
+  // + 剩余位置的空位置（点了切位置）/ 展开收起 + 顶栏对照的格子（点了帮认）和打开的「这格是谁」；其余地方照样点穿
+  const hits = ['.pick[data-id]', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold',
+    '.slot[data-slot]', '.slot-picker'];
   const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [wrap];
   const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
     .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }));

@@ -405,21 +405,23 @@ def rank_name(tier: int | None) -> str:
     return MEDALS.get(medal, "?") + (f" {star} 星" if star and medal < 8 else "")
 
 
-def _player_matches_stratz(cfg: Config) -> list[tuple[int, int, bool]]:
-    """[(英雄 id, 位置 1~5 / 0=未解析, 是否赢)]，每页 100 局"""
+def _player_matches_stratz(cfg: Config, account_id: int | None = None, limit: int | None = None
+                           ) -> list[tuple[int, int, bool]]:
+    """[(英雄 id, 位置 1~5 / 0=未解析, 是否赢)]，每页 100 局；不传 account_id 就是我自己（查队友战绩时传队友的）"""
+    account_id, limit = account_id or cfg.account_id, limit or cfg.history_matches
     q = """query($id: Long!, $skip: Int) { player(steamAccountId: $id) {
              matches(request: {take: 100, skip: $skip, lobbyTypeIds: [7]}) {
                players(steamAccountId: $id) { heroId position isVictory } } } }"""
     out = []
-    for skip in range(0, cfg.history_matches, 100):
-        page = _stratz(cfg, q, id=cfg.account_id, skip=skip)["player"]["matches"] or []
+    for skip in range(0, limit, 100):
+        page = _stratz(cfg, q, id=account_id, skip=skip)["player"]["matches"] or []
         for m in page:
             pl = m["players"][0]
             pos = (pl["position"] or "").removeprefix("POSITION_")
             out.append((pl["heroId"], int(pos) if pos in _POSITIONS else 0, pl["isVictory"]))
         if len(page) < 100:
             break
-    return out[:cfg.history_matches]
+    return out[:limit]
 
 
 def _player_matches_opendota(cfg: Config) -> list[tuple[int, int, bool]]:

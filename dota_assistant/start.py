@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
 import subprocess
 import time
@@ -62,37 +61,18 @@ def ensure_electron() -> bool:
     return True
 
 
-def find_dota() -> Path | None:
-    """从注册表找 Steam，再从 libraryfolders.vdf 找装了 Dota 的库"""
-    try:
-        import winreg
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
-            steam = Path(winreg.QueryValueEx(k, "SteamPath")[0])
-    except OSError:
-        return None
-    libs = [steam]
-    vdf = steam / "steamapps" / "libraryfolders.vdf"
-    if vdf.exists():
-        libs += [Path(p.replace("\\\\", "\\")) for p in re.findall(r'"path"\s+"([^"]+)"', vdf.read_text(encoding="utf-8",
-                                                                                                    errors="ignore"))]
-    for lib in libs:
-        d = lib / "steamapps" / "common" / "dota 2 beta"
-        if (d / "game" / "dota").exists():
-            return d
-    return None
-
-
 def ensure_gsi(cfg: config.Config) -> None:
-    from .gsi import CFG_NAME, CFG_TEMPLATE, install_cfg
-    dota = find_dota()
+    from .gsi import ensure_cfg, find_dota
+    dota = find_dota(cfg.dota_dir)
     if dota is None:
-        _say("没找到 Dota 2 安装目录，跳过 GSI（阵营要在控制面板手动选）。")
+        _say("没找到 Dota 2 安装目录（要有 game\\dota\\pak01_dir.vpk），GSI 没法自动配：\n"
+             "  控制面板右上角「设置」里填 Dota 目录（Steam 里右键 Dota 2 → 管理 → 浏览本地文件 就是它）；\n"
+             "  填好之前阵营要在控制面板手动选。")
         return
-    target = dota / "game" / "dota" / "cfg" / "gamestate_integration" / CFG_NAME
-    # 端口或订阅的字段变了都重写（例如死亡复盘要的 abilities）；Dota 启动时才读，开着的话要重开 Dota
-    if not target.exists() or target.read_text(encoding="utf-8") != CFG_TEMPLATE.format(port=cfg.gsi_port):
-        install_cfg(dota, cfg.gsi_port)
-        _say(f"已写入 GSI 配置：{target}（Dota 开着的话要重开才生效）")
+    log.info("Dota 目录：%s", dota)
+    written = ensure_cfg(dota, cfg.gsi_port)
+    if written:
+        _say(f"已写入 GSI 配置：{written}（Dota 开着的话要重开才生效）")
     if not FIRST_RUN_MARK.exists():
         _say("提醒（只说一次）：Steam 库里右键 Dota 2 → 属性 → 启动选项，加上  -gamestateintegration\n"
               "              Dota 设置：显示模式改「无边框窗口」，社交里打开「公开比赛数据」。\n")
@@ -100,10 +80,11 @@ def ensure_gsi(cfg: config.Config) -> None:
         FIRST_RUN_MARK.write_text("1", encoding="utf-8")
 
 
-def ensure_grid_portraits() -> None:
+def ensure_grid_portraits(cfg: config.Config) -> None:
     """选人网格认禁用要用游戏自己的英雄图（gamefiles.py）；游戏更新了才重新导出"""
     from . import gamefiles
-    dota = find_dota()
+    from .gsi import find_dota
+    dota = find_dota(cfg.dota_dir)
     heroes_file = DATA_DIR / "heroes.json"
     if dota is None or not heroes_file.exists():
         return
@@ -165,7 +146,7 @@ def main() -> int:
         return 1
     ensure_gsi(cfg)
     ensure_data(cfg)
-    ensure_grid_portraits()
+    ensure_grid_portraits(cfg)
     note = no_key_note(cfg)
     if note:
         _say(note)

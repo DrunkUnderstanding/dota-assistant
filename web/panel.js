@@ -1,6 +1,6 @@
 // 控制面板：把 Python 推来的快照画出来，把操作发回去。局面以 Python 那边为准，这里不存状态。
 import { act, connect, getJSON } from './api.js';
-import { applyOverlayStyle, bindOverlayClicks, portrait, renderOverlay } from './view.js';
+import { applyOverlayStyle, bindOverlayClicks, esc, portrait, renderOverlay } from './view.js';
 
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
@@ -40,11 +40,15 @@ attachAutocomplete(bans, (text) => {
 }, true);
 
 function paintSlots(s) {
-  const mine = s.overlay.view?.side;
+  // 不知道阵营时（GSI 没连上）推荐先按 side_assumed 分友敌，标签带问号提醒去下面「阵营」手动选
+  const v = s.overlay.view;
+  const mine = v?.side || v?.side_assumed;
+  const q = v?.side ? '' : '？';
   for (const side of SIDES) {
     const team = $(`.team[data-side="${side}"]`);
     team.classList.toggle('is-mine', mine === side);
-    $('.team-tag', team).textContent = mine ? (mine === side ? '我方' : '对方') : '';
+    $('.team-tag', team).textContent = mine ? (mine === side ? '我方' : '对方') + q : '';
+    $('.team-tag', team).title = q ? '不知道你在哪边，先当天辉算；在夜魇就到下面「阵营」选夜魇' : '';
     $$('.slot', team).forEach((el, i) => {
       const slot = s.slots[side][i];
       const input = $('input', el);
@@ -65,6 +69,80 @@ function paintSlots(s) {
   }
   if (document.activeElement !== bans) bans.value = bans._sent = s.bans_text;
 }
+
+// ---------- 队友战绩 ----------
+
+$('#mate-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#mate-code');
+  if (!input.value.trim()) return input.focus();
+  await run('mate_query', { code: input.value });
+  input.value = '';
+});
+$('#mates').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-mate]');
+  if (!b) return;
+  const id = Number(b.dataset.mate);
+  if (b.dataset.do === 'remove') run('mate_remove', { account_id: id });
+  else run('mate_query', { code: String(id), force: true });
+});
+
+const pct = (w, g) => (g ? Math.round((w / g) * 100) : 0);
+// 胜率上色：样本太少不上色
+const rateCls = (w, g) => (g < 5 ? '' : pct(w, g) >= 55 ? 'is-good' : pct(w, g) <= 45 ? 'is-bad' : '');
+const rate = (w, g) => `<span class="mate-rate ${rateCls(w, g)}">${pct(w, g)}%</span>`;
+
+function ago(t) {
+  const m = Math.floor((Date.now() / 1000 - t) / 60);
+  if (m < 1) return '刚刚';
+  if (m < 60) return `${m} 分钟前`;
+  if (m < 60 * 24) return `${Math.floor(m / 60)} 小时前`;
+  return `${Math.floor(m / 60 / 24)} 天前`;
+}
+
+function mateCard(m) {
+  const btns = `
+    <button class="btn btn-small" data-mate="${m.account_id}" ${m.busy ? 'disabled' : ''}>${m.busy ? '查询中…' : '刷新'}</button>
+    <button class="btn btn-small btn-ghost" data-mate="${m.account_id}" data-do="remove" title="不再记这个人">×</button>`;
+  const name = esc(m.name || `好友代码 ${m.account_id}`);
+  const when = m.fetched_at ? `<span class="mate-time" title="数据是这时候查的">${ago(m.fetched_at)}查的</span>` : '';
+  const err = m.error ? `<div class="mate-err">${esc(m.error)}</div>` : '';
+  if (!m.loaded) {
+    return `<div class="mate"><div class="mate-head"><b class="mate-name">${name}</b><span class="spacer"></span>${btns}</div>
+      ${err || (m.busy ? '<div class="mate-note">正在查…</div>' : '')}</div>`;
+  }
+  const withMe = m.with_me?.[0]
+    ? `<span class="mate-with" title="OpenDota 记录里你们在同一边的全部对局">和你一起 ${m.with_me[0]} 局 · ${rate(m.with_me[1], m.with_me[0])}</span>` : '';
+  const head = `<div class="mate-head"><b class="mate-name" title="好友代码 ${m.account_id}">${name}</b>
+    <span class="mate-rank">${esc(m.rank)}</span>${withMe}<span class="spacer"></span>${when}${btns}</div>`;
+  if (m.private) {
+    return `<div class="mate">${head}${err}<div class="mate-note">查不到比赛记录：对方没在游戏里公开比赛数据，或者还没打过</div></div>`;
+  }
+  const w = m.matches.filter((x) => x.win).length;
+  const recent = m.matches.map((x) => `<span class="mate-game ${x.win ? 'is-win' : 'is-lose'}"
+      title="${esc(x.name)} · ${x.win ? '胜' : '负'} · ${x.kda.join('/')} · ${x.ranked ? '天梯 · ' : ''}${ago(x.t)}"><img src="${portrait(x.hero_id)}" alt="" onerror="this.remove()"></span>`).join('');
+  const heroes = m.heroes.map((h) => `<span class="mate-hero" title="${esc(h.name)}：${h.games} 局 ${h.wins} 胜">
+      <img src="${portrait(h.id)}" alt="" onerror="this.remove()"><span>${h.games} 局 ${rate(h.wins, h.games)}</span></span>`).join('');
+  const posGames = (m.positions || []).reduce((n, [, g]) => n + g, 0);   // 占比按分出了位置的局算
+  const pos = m.positions?.length
+    ? m.positions.map(([p, g, wins]) => `<span class="mate-pos" title="${g} 局 ${wins} 胜"><b>${p} 号位</b> ${pct(g, posGames)}% · 胜 ${rate(wins, g)}</span>`).join('')
+    : `<span class="mate-note">${esc(m.positions_note || '没有位置数据')}</span>`;
+  return `<div class="mate">${head}${err}
+    <div class="mate-row"><span class="mate-label">最近 ${m.matches.length} 局<b class="mate-wl">${w} 胜 ${m.matches.length - w} 负</b></span><div class="mate-recent">${recent}</div></div>
+    <div class="mate-row"><span class="mate-label" title="最近 ${m.sample} 局里玩得最多的">常玩</span><div class="mate-heroes">${heroes}</div></div>
+    <div class="mate-row"><span class="mate-label" title="最近 ${m.positions_sample || 100} 局天梯（STRATZ），其中 ${posGames} 局分出了位置">位置</span><div class="mate-poss">${pos}</div></div>
+  </div>`;
+}
+
+function paintMates(list) {
+  const box = $('#mates');
+  const key = JSON.stringify(list) + Math.floor(Date.now() / 60000);   // 每分钟更新一次「几分钟前」
+  if (box.dataset.key === key) return;
+  box.dataset.key = key;
+  box.innerHTML = list.length ? list.map(mateCard).join('')
+    : '<div class="mate-empty">还没查过谁。好友代码在 Steam 好友列表「添加好友」那页、或者他的 Dota 个人资料里能看到</div>';
+}
+setInterval(() => { if (state) paintMates(state.mates); }, 60000);
 
 // ---------- 设置 ----------
 
@@ -133,6 +211,8 @@ function openSettings() {
   form.dataset.keySet = c.ai_api_key.set ? '1' : '';
   form.ai_base_url.value = c.ai_base_url;
   form.ai_model.value = c.ai_model;
+  form.dota_dir.value = c.dota_dir;
+  form.dota_dir.placeholder = c.dota_found ? `留空 = 自动找（现在用的：${c.dota_found}）` : '没自动找到，填 dota 2 beta 那个文件夹';
   form.dataset.provider = c.ai_provider;
   showProvider();
   paintHotkeyForm(c.hotkeys);
@@ -179,6 +259,7 @@ form.addEventListener('submit', async (e) => {
     ai_provider: form.ai_provider.value,
     ai_model: form.ai_model.value.trim(),
     ai_base_url: form.ai_base_url.value.trim(),
+    dota_dir: form.dota_dir.value.trim(),
   };
   // 有输入才发：只输了空白 = 清掉，什么都没输 = 不改
   if (form.stratz_token.value) payload.stratz_token = form.stratz_token.value.trim();
@@ -195,6 +276,12 @@ $('#settings-cancel').addEventListener('click', () => dlg.close());
 $('#btn-settings').addEventListener('click', openSettings);
 // 点顶栏的快捷键直接跳到设置里的热键
 $('#status').addEventListener('click', (e) => {
+  if (e.target.closest('.chip-dota')) {         // 没找到 Dota 目录：点状态直接去填
+    openSettings();
+    $('#dota-head').scrollIntoView({ block: 'start' });
+    form.dota_dir.focus();
+    return;
+  }
   if (!e.target.closest('.chip-key')) return;
   openSettings();
   $('#hotkeys-head').scrollIntoView({ block: 'start' });
@@ -216,14 +303,14 @@ $$('[data-act]').forEach((b) => b.addEventListener('click', () => run(b.dataset.
 
 function paintStatus(s) {
   const st = s.status;
-  const gsiDot = { ok: 'dot-ok', off: '', disabled: '', busy: 'dot-bad' }[st.gsi.state];
+  const gsiDot = { ok: 'dot-ok', off: '', disabled: '', busy: 'dot-bad', nodota: 'dot-bad' }[st.gsi.state];
   const keys = st.hotkeys.map((h) => {
     const failed = st.hotkeys_failed.includes(h.key);
     const tip = `${h.key} ${h.text}${failed ? '（注册失败，被别的程序占用）' : ''}，点这里改键`;
     return `<span class="chip chip-key ${failed ? 'chip-fail' : ''}" title="${tip}"><kbd>${h.key}</kbd><span class="key-full">${h.text}</span><span class="key-short">${h.short || h.text}</span></span>`;
   }).join('');
   $('#status').innerHTML = `
-    <span class="chip"><i class="dot ${gsiDot}"></i>${st.gsi.text}</span>
+    <span class="chip ${st.gsi.state === 'nodota' ? 'chip-dota' : ''}" title="${st.gsi.tip || ''}"><i class="dot ${gsiDot}"></i>${st.gsi.text}</span>
     <span class="chip"><i class="dot ${st.calibrated ? 'dot-ok' : 'dot-warn'}"></i>${st.calibrated ? '已校准' : '未校准'}</span>
     <span class="chip" title="${st.last_scan ? `上次识别 ${st.last_scan}` : '还没识别过'}">${st.last_scan ? `<span class="chip-text">上次识别 </span>${st.last_scan}` : '未识别'}</span>
     <span class="status-sep"></span>
@@ -405,6 +492,7 @@ connect((s) => {
   maybeFirstRun(s.config);
   paintSettings(s.settings);
   paintSlots(s);
+  paintMates(s.mates);
   paintStatus(s);
   renderOverlay($('#preview'), s.overlay.view);
   $('#preview').classList.toggle('is-hidden', !s.overlay.visible);

@@ -27,19 +27,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+import cv2
+import numpy as np
+
 from . import advisor as adv
-from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, roles, ultcd
+from . import brief, buyback, buybackscan, coach, config, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, mates, roles, ultcd
 from . import log as logs
 from .config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
-from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer
+from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer, ensure_cfg, find_dota, is_dota_dir
 from .heroes import Hero
 from .hotkeys import Hotkeys, vk_code
 from .speech import Speaker
-from .vision import EMPTY, Calibration, DraftView, TemplateBank, recognize, write_image
+from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
 
 SHOTS_DIR = ROOT / "shots"
 OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
+FIX_FILE = DATA_DIR / "fixes.jsonl"            # 玩家帮认 / 改过的格子（一行一次），回头看学到的模板管不管用、哪次填错了
 OPACITY_MIN = 0.3                              # 叠加层底色再透就看不清字了
 OVERLAY_WIDTH = (300, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内
 SIDES = ("radiant", "dire")
@@ -48,11 +52,21 @@ DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒�
 # 2026-10-26：先看死亡画面上有没有「谁杀的 / 受到的伤害」，有的话再做识别（出装要看这局谁威胁最大）
 DEATH_SHOT_DELAYS = (0, 2)
 SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
+SIDE_FALLBACK = "radiant"                      # 不知道阵营（自动但 GSI 没连上）时先当左边是我方，卡片和面板上要标出来
 ROLE_RETRY = 3.0                               # 认位置：没认出来隔几秒再试
 GRID_CONFIRM_MIN = 0.5                         # 顶栏分数至少这么多，再加上网格核对才算认出
+SAME_CROP = 0.92                               # 两张顶栏裁图特征相似度高于这个算同一个样子（没换头像 / 重复，不用再记）
+# 选人时顶栏这格比这局开头多出这么多彩色像素，才算真有人选了（没认出就显示「?」）。2026-10-23 截图量的：
+# 空位是灰底 + 段位小旗（红旗那几格 0.08~0.10），队友预选是半透明灰图（和空位一样 0.00~0.02），选定的头像 0.17~0.91
+PICKED_COLOR_GAIN = 0.04
 SCAN_MODES = ("auto", "manual")                # 自动识别 / 手动输入
+ORPHAN_WINDOW = 30                             # 消息栏认到「买活了」但顶栏没看出死过的：几帧要在这么多游戏秒内
 CLOCK_SLACK = 1.5                              # 买活倒计时用的「游戏时钟 0 秒对应的本机时间」差多少秒才改（GSI 时钟是整秒、推送有延迟）
 log = logging.getLogger(__name__)
+
+
+def _side_cn(side: str) -> str:
+    return "天辉" if side == "radiant" else "夜魇"
 
 
 def _names(hs) -> str:
@@ -83,6 +97,25 @@ def _check_hotkeys(cfg: Config, keys: dict) -> dict:
             raise ValueError(f"{name} 同时绑了「{HOTKEY_ACTIONS[seen[name]][0]}」和「{HOTKEY_ACTIONS[f][0]}」，换一个")
         seen[name] = f
     return updates
+
+
+def _check_dota_dir(text) -> str:
+    """设置里填的 Dota 目录：空 = 自动找；选到 game\\dota 这种下一层也认，往上找到「dota 2 beta」那层"""
+    text = str(text or "").strip().strip('"').strip()
+    if not text:
+        return ""
+    p = Path(text)
+    for d in (p, *list(p.parents)[:2]):
+        if is_dota_dir(d):
+            return str(d)
+    raise ValueError(f"{text} 里没有 game\\dota\\pak01_dir.vpk，不像 Dota 安装目录。"
+                     "Steam 里右键 Dota 2 → 管理 → 浏览本地文件，复制打开的那个文件夹地址")
+
+
+def _colorful(img) -> float:
+    """顶栏裁图里彩色像素占多少（下面 15% 是玩家颜色条，不算）"""
+    hsv = cv2.cvtColor(img[: max(1, int(img.shape[0] * 0.85))], cv2.COLOR_BGR2HSV)
+    return float(((hsv[..., 1] > 89) & (hsv[..., 2] > 51)).mean())
 
 
 def _view_text(db, view, kinds=("radiant", "dire", "bans")) -> list[str]:
@@ -123,7 +156,7 @@ class Live:
                  overlay_file: Path | None = None, coach_prepare: Callable | None = None,
                  brief_build: Callable | None = None, plan_build: Callable | None = None,
                  ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None,
-                 ocr: Callable | None = None):
+                 ocr: Callable | None = None, mate_fetch: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.config_file: Path | None = None    # 账号设置写到哪；None = 项目根目录的 config.toml，测试里换成临时文件
@@ -145,6 +178,8 @@ class Live:
             except OSError as e:
                 self.gsi = None                  # 端口被占用：照样能用，只是没有 GSI
                 log.warning("GSI 端口 %d 用不了（%s），这次没有 GSI", cfg.gsi_port, e)
+        # GSI 配置写在哪个 Dota 目录；None = 没找到（GSI 一直连不上，状态栏要说清楚为什么）
+        self.dota_dir: Path | None = find_dota(cfg.dota_dir) if use_gsi else None
 
         # ---- 当前局面（控制面板的格子是唯一的「当前局面」，识别和手动输入都只是往里写）----
         self.slots: dict[str, list[str]] = {s: [""] * 5 for s in SIDES}
@@ -198,6 +233,7 @@ class Live:
         self._bb_scan_err = False                 # 截图 / 认图出过错（这局只记一次日志）
         self._ocr = ocr or roles.ocr              # 认复活倒计时 / 消息栏「买活了」（Windows OCR），测试换成假的
         self._bb_checks: list[buybackscan.FeedCheck] = []   # 刚复活、正在看消息栏确认是不是买活的格子
+        self._bb_orphans: dict[str, list[float]] = {}   # 消息栏「买活了」认出是这局某个英雄、但他没在确认的：英雄 key → 看到的几帧的游戏时钟
         self._hero_icons: dict[str, object] = {}  # 英雄小图标（key → 图，下不到是 None），和消息栏行首的小图比
         self._kb_base = None                      # 知识库（查对面大招冷却用，第一次用到才读；读不到是 False）
         self._kb_ops: dict = {}                   # 大招神杖 / 魔晶冷却的写法（ultcd.load_ops）
@@ -208,8 +244,22 @@ class Live:
         self.pick_page = "lane"
         self.pick_note = ""                      # 还没做好 / 出错时显示什么
 
+        # ---- 队友战绩：控制面板填好友代码查（mates.py）----
+        self.mates = mates.Mates()
+        self._mate_fetch = mate_fetch or mates.fetch
+
         self.last_view: DraftView | None = None
         self.pending_key = None
+        # 这局顶栏每格裁下来的头像（选人界面那套格子）：blank = 这局第一次认时的样子（还没人选）、sel = 选人阶段最后一次、
+        # strat = 策略时间最后一次。玩家在顶栏 / 面板上告诉我们这格是谁，就拿它们记成模板（learn_slot），下次认得
+        # game = 局内顶栏头像（买活那套几何），只给帮认的候选排序、不记成模板（大小和选人界面不一样）
+        self._crops: dict[str, dict[tuple[str, int], np.ndarray]] = {"blank": {}, "sel": {}, "strat": {}, "game": {}}
+        self._crops_ver = 0
+        self._cand_cache: tuple = (None, {})
+        self._picked_cache: tuple = (None, {})
+        # 玩家在叠加层 / 顶栏 / 控制面板告诉我们的格子（这局）：选人时识别整排重写格子也不冲掉它们
+        self._named: set[tuple[str, int]] = set()
+        self.fix_file = FIX_FILE
         # 选人网格上的禁用（红斜线），见 grid.py；新布局在后台建图
         self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher()
         self._grid_building = False
@@ -331,7 +381,16 @@ class Live:
             side, i = a["side"], int(a["index"])
             if side not in SIDES or not 0 <= i < 5:
                 raise ValueError("格子不存在")
+            before = self.slots[side][i]
             self.slots[side][i] = str(a.get("text") or "").strip()
+            if self.slots[side][i]:
+                self._named.add((side, i))
+            else:
+                self._named.discard((side, i))
+            if (h := self._hero(self.slots[side][i])) and (n := self.learn_slot(side, i, h)):
+                self.message = f"{h.name_cn}这格的头像记住了，下次认得"
+            if h and self._hero(before) != h:
+                self._record_fix(side, i, before, h, n, "控制面板")
             self.refresh()
         elif t == "set_bans":
             self.bans_text = str(a.get("text") or "")
@@ -387,6 +446,8 @@ class Live:
             self.mark_buyback(str(a.get("side")), int(a["index"]))
         elif t == "ult":
             self.mark_ult(str(a.get("side")), int(a["index"]))
+        elif t == "name_slot":
+            self.name_slot(str(a.get("side")), int(a["index"]), int(a["hero_id"]))
         elif t == "ult_set":
             self.set_ult(str(a.get("side")), int(a["index"]), a.get("level"), a.get("mod"), a.get("on"))
         elif t == "toggle_overlay":
@@ -399,6 +460,10 @@ class Live:
             self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"))
         elif t == "save_settings":
             self.save_settings(a)
+        elif t == "mate_query":
+            self.query_mate(a.get("code"), bool(a.get("force")))
+        elif t == "mate_remove":
+            self.mates.remove(int(a["account_id"]))
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
@@ -439,11 +504,14 @@ class Live:
             updates["ai_base_url"] = url
         if "hotkeys" in a:
             updates.update(_check_hotkeys(self.cfg, a["hotkeys"]))
+        if "dota_dir" in a:
+            updates["dota_dir"] = _check_dota_dir(a["dota_dir"])
         if not updates:
             return
         hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in HOTKEY_ACTIONS)
         account_changed = any(updates.get(k, getattr(self.cfg, k)) != getattr(self.cfg, k)
                               for k in ("account_id", "stratz_token"))
+        dota_changed = updates.get("dota_dir", self.cfg.dota_dir) != self.cfg.dota_dir
         path = config.save(updates, self.config_file)
         for k, v in updates.items():
             setattr(self.cfg, k, v)
@@ -451,9 +519,24 @@ class Live:
                                                for k, v in updates.items()})
         if hotkeys_changed and self.hotkeys:
             self._start_hotkeys()
-        self.message = ("设置已保存。账号改了要重启助手才会重新拉个人数据" if account_changed
+        dota_msg = self._apply_dota_dir() if dota_changed else ""
+        self.message = (dota_msg if dota_msg
+                        else "设置已保存。账号改了要重启助手才会重新拉个人数据" if account_changed
                         else "设置已保存，热键已换好" if hotkeys_changed
                         else "设置已保存，AI 打法下一局按新设置")
+
+    def _apply_dota_dir(self) -> str:
+        """设置里改了 Dota 目录：重新找一次，GSI 配置马上写进去（不用重启助手，但 Dota 要重开才读）"""
+        if not self.use_gsi:
+            return ""
+        self.dota_dir = find_dota(self.cfg.dota_dir)
+        if self.dota_dir is None:
+            return "设置已保存，但还是没找到 Dota 目录，阵营先在控制面板手动选"
+        written = ensure_cfg(self.dota_dir, self.cfg.gsi_port)
+        if written:
+            log.info("GSI 配置写进了 %s", written)
+            return f"设置已保存，GSI 配置写进了 {self.dota_dir}：重开 Dota 才生效"
+        return f"设置已保存，Dota 目录 {self.dota_dir}（GSI 配置已经在了）"
 
     def set_overlay_style(self, key: str, value, save: bool = True) -> None:
         """叠加层底色 / 不透明度。面板上拖滑块时 save=False 只改内存（叠加层马上跟着变），松手再写进 config.toml"""
@@ -483,6 +566,7 @@ class Live:
         return {"account_id": c.account_id, "stratz_token": _mask(c.stratz_token), "ai_plan": c.ai_plan,
                 "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": _mask(c.ai_api_key),
                 "ai_base_url": c.ai_base_url, "providers": llm.PROVIDERS,
+                "dota_dir": c.dota_dir, "dota_found": str(self.dota_dir or ""),
                 "hotkeys": [{"field": f, "key": getattr(c, f), "text": text} for f, (text, _) in HOTKEY_ACTIONS.items()]}
 
     # ---------- 局面 ----------
@@ -503,7 +587,7 @@ class Live:
 
     def current_draft(self) -> adv.Draft:
         team = {s: [h for t in self.slots[s] if (h := self._hero(t))] for s in SIDES}
-        side = self.side() or "radiant"
+        side = self.side() or SIDE_FALLBACK
         other = "dire" if side == "radiant" else "radiant"
         bans = [h for t in self.bans_text.replace("，", ",").split(",") if (h := self._hero(t))]
         if self.last_view and self.mode == "auto":
@@ -525,6 +609,8 @@ class Live:
         advice = self.advisor.advise(draft, self.position)
         self.view = adv.render_view(advice, self.side())
         self.view["position_auto"] = self.position_auto
+        if self.side() is None:                  # 友 / 敌是按默认的天辉分的，可能整个反了
+            self.view["side_assumed"] = SIDE_FALLBACK
         self.notice = None
         changed = self.prev_draft is None or draft.key() != self.prev_draft.key()
         if changed:
@@ -542,12 +628,59 @@ class Live:
     def draft_view(self) -> dict:
         """选人卡片；进了游戏（GSI：出门到比赛结束）就不再显示剩余位置"""
         st = self.gsi.state if self.gsi else None
-        if self.view.get("team") and st and st.alive and st.in_match:
-            return {**self.view, "team": None}
-        return self.view
+        view = {**self.view, "slots": self.slots_view()} if self.view.get("kind") == "draft" else self.view
+        if view.get("team") and st and st.alive and st.in_match:
+            return {**view, "team": None}
+        return view
+
+    def slots_view(self) -> dict:
+        """叠加层「顶栏对照」：双方 5 格按 Dota 顶栏的顺序，玩家一眼看出哪格没认出、点了帮认。
+        state：ok 认出了（点了能改）/ ask 这格有人但没认出（金色「?」）/ empty 看着还没选（也能点）/ me 自己。
+        ask 怎么定：策略时间起（GSI）人人都有英雄了，空着的都是没认出；选人时看这格比这局开头多出了彩色头像（_looks_picked）。
+        没连 GSI 时不知道在不在选人，只给 empty"""
+        st = self.gsi.state if self.gsi and self.gsi.state.alive else None
+        game_state = st.game_state if st else None
+        over = game_state is not None and game_state != SELECTION_STATE
+        me = self._my_slot(st) if st else None
+        my_hero = next((h for h in self.db if h.key == st.my_hero_key), None) if st and st.my_hero_key else None
+        out: dict = {"ally": self.side() or SIDE_FALLBACK}
+        for side in SIDES:
+            cells = []
+            for i in range(5):
+                h = self._hero(self.slots[side][i])
+                if me == (side, i):
+                    h = h or my_hero
+                    cells.append({"state": "me", "hero": adv.hero_ref(h) if h else None})
+                    continue
+                if h:
+                    state = "ok"
+                elif over or (game_state == SELECTION_STATE and self._looks_picked(side, i)):
+                    state = "ask"
+                else:
+                    state = "empty"
+                hint = self.hints[side][i]
+                cells.append({"state": state, "hero": adv.hero_ref(h) if h else None,
+                              "guess": hint.get("guess", "") if state == "ask" else "",
+                              "manual": (side, i) in self._named, "pick": self._pick_view(side, i)})
+            out[side] = cells
+        out["asks"] = sum(c["state"] == "ask" for s in SIDES for c in out[s])
+        return out
+
+    def _looks_picked(self, side: str, index: int) -> bool:
+        """选人阶段这格看着是不是有人选定了：和这局开头那张不一样、而且多出了彩色（队友预选是半透明灰图，不算）"""
+        if self._picked_cache[0] != (id(self._crops), self._crops_ver):
+            self._picked_cache = ((id(self._crops), self._crops_ver), {})
+        cache = self._picked_cache[1]
+        if (side, index) not in cache:
+            cur, blank = self._crops["sel"].get((side, index)), self._crops["blank"].get((side, index))
+            cache[(side, index)] = (cur is not None and blank is not None and cur is not blank
+                                    and float(feature(cur) @ feature(blank)) <= SAME_CROP
+                                    and _colorful(cur) >= _colorful(blank) + PICKED_COLOR_GAIN)
+        return cache[(side, index)]
 
     def clear(self) -> None:
         self.slots = {s: [""] * 5 for s in SIDES}
+        self._named.clear()
         self.hints = {s: [{} for _ in range(5)] for s in SIDES}
         self.bans_text = ""
         self.grid.reset()
@@ -577,6 +710,8 @@ class Live:
 
     def tick(self) -> None:
         self.coach_tick()                        # 先更新阶段（进新一局选人要先清掉上一局的禁用）
+        if "side" in self.view and self.view["side"] != self.side():
+            self.refresh()                       # GSI 连上 / 断开、阵营变了：友 / 敌要重新分
         scan, bans = self.should_scan(), self.should_scan_bans()
         if scan or bans:
             img = self.grab()                    # 顶栏识别和禁用识别共用一帧
@@ -669,6 +804,17 @@ class Live:
         if not (self.cal and self.cal.ready):
             self.message = "还没校准：先运行 python -m dota_assistant calibrate <截图>"
             return
+        # 校准的是选人界面的顶栏；进了游戏顶栏头像小一圈、位置也不一样，按选人的格子裁出来全是乱的。
+        # 2026-10-28 实战：局内连按 F9，每次认出一套不同的错英雄，把选人时认对的对面三个全冲掉了，大招 / 买活小条跟着错
+        st = self.gsi.state if self.gsi else None
+        game_state = st.game_state if st and st.alive else None
+        if game_state not in (None, SELECTION_STATE, STRATEGY_STATE):
+            if force:
+                self.message = "进了游戏不能重识别（顶栏和选人界面不一样，会认乱）；没认出 / 认错的英雄在控制面板对应格子里手动改"
+                log.info("局内按了重识别：不认，%s", self.message)
+            return
+        # 策略时间画面换了，顶栏有的格子会认乱（同一局：选人时认对的潮汐猎人、主宰被换成修补匠、百戏大王）：只补空着的格子
+        only_empty = game_state == STRATEGY_STATE
         img = self.grab() if img is None else img
         view = recognize(img, self.cal, self.bank, self.cfg.match_threshold, keep_images=True)
         self._confirm_with_grid(view)
@@ -680,13 +826,111 @@ class Live:
         self.pending_key = key
         if not stable:
             return
+        self._keep_crops(view, "strat" if only_empty else "sel")
+        # 玩家告诉过的格子：头像后来变了样（刚选时盖着的数字徽章没了、策略时间换了样子、帮认时那格还没出头像）也接着记，
+        # 已经认得出的 learn_slot 自己跳过，不会每秒重复存
+        for side, i in sorted(self._named):
+            if h := self._hero(self.slots[side][i]):
+                self.learn_slot(side, i, h)
         changed = self.last_view is None or self.last_view.key() != key
         self.last_view = view
         if changed or force:
             log.info("识别结果%s：天辉 %s | 夜魇 %s | 禁用 %s", "变了" if changed else "（手动重识别）",
                      *_view_text(self.db, view))
-            self.fill_slots(view)
+            self.fill_slots(view, only_empty=only_empty)
             self.refresh(force_speech=force)
+
+    def _keep_crops(self, view: DraftView, phase: str) -> None:
+        for side in SIDES:
+            for i, s in enumerate(getattr(view, side)):
+                if s.image is not None and s.image.size:
+                    if phase == "sel":
+                        self._crops["blank"].setdefault((side, i), s.image)
+                    self._crops[phase][(side, i)] = s.image
+        self._crops_ver += 1
+
+    def learn_slot(self, side: str, index: int, h: Hero) -> int:
+        """玩家告诉我们顶栏这格是 h：把这局在这格裁到的头像记成 h 的模板，返回记了几张。
+        不记的：和这局一开始（还没人选）一样的（那格根本没出头像，例如 2026-10-28 断线的那个人，记了会把空位认成他）、
+        两张一样的、本来就认得出的"""
+        blank = self._crops["blank"].get((side, index))
+        fb = feature(blank) if blank is not None else None
+        seen, n = [], 0
+        for phase in ("sel", "strat"):
+            c = self._crops[phase].get((side, index))
+            if c is None:
+                continue
+            f = feature(c)
+            if (fb is not None and float(f @ fb) > SAME_CROP) or any(float(f @ g) > SAME_CROP for g in seen):
+                continue
+            seen.append(f)
+            hid, score, gap = self.bank.best(c)
+            if hid == h.id and confident(score, gap, self.cfg.match_threshold):
+                continue
+            self.bank.learn(h.id, c)
+            n += 1
+        if n:
+            log.info("记住%s第 %d 格是%s：存了 %d 张模板（共学习 %d 张）",
+                     _side_cn(side), index + 1, h.name_cn, n, self.bank.learned)
+        return n
+
+    def name_slot(self, side: str, index: int, hero_id: int) -> None:
+        """顶栏「这格是谁」点了一个英雄：填进格子，顺手记成模板"""
+        if side not in SIDES or not 0 <= index < 5:
+            raise ValueError("格子不存在")
+        h = self.db.by_id.get(int(hero_id))
+        if h is None:
+            raise ValueError(f"没有这个英雄 {hero_id}")
+        other = next(((sd, j) for sd in SIDES for j, t in enumerate(self.slots[sd])
+                      if (sd, j) != (side, index) and self._hero(t) == h), None)
+        if other:
+            self.message = f"{h.name_cn}已经在{_side_cn(other[0])}第 {other[1] + 1} 格了，先把那格改掉"
+            return
+        before = self.slots[side][index] or (f"?{self.hints[side][index].get('guess')}" if self.hints[side][index].get("guess") else "")
+        self.slots[side][index] = h.name_cn
+        self.hints[side][index] = {}
+        self._named.add((side, index))
+        n = self.learn_slot(side, index, h)
+        self._record_fix(side, index, before, h, n, "帮认")
+        self.message = f"{_side_cn(side)}第 {index + 1} 格填上{h.name_cn}" + (f"，这格头像记住了，下次认得" if n else "")
+        log.info("帮认：%s", self.message)
+        self.refresh()
+
+    def _record_fix(self, side: str, index: int, before: str, h: Hero, learned: int, how: str) -> None:
+        """记一次玩家纠正（data/fixes.jsonl）：模板本身已经存进 templates/ 了，这里是给人看的流水"""
+        st = self.gsi.state if self.gsi and self.gsi.state.alive else None
+        row = {"time": datetime.now().isoformat(timespec="seconds"), "match": st.match_id if st else "",
+               "phase": (st.game_state or "").removeprefix("DOTA_GAMERULES_STATE_") if st else "",
+               "side": side, "slot": index + 1, "before": before, "hero": h.name_cn, "hero_id": h.id,
+               "learned": learned, "how": how}
+        try:
+            self.fix_file.parent.mkdir(parents=True, exist_ok=True)
+            with self.fix_file.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+        except OSError as e:
+            log.warning("纠正记录写不了 %s：%s", self.fix_file, e)
+
+    def pick_candidates(self, side: str, index: int) -> dict:
+        """顶栏「这格是谁」的候选：除了已经在别的格子里的，所有英雄排个序——先是选人网格里被选走、还没分到格子、没被禁的（taken），
+        再是别的，各自按和这格头像像不像排。页面先选属性、再把这个属性的全列出来（玩家 2026-10-28 要的），按这个顺序。
+        只给 id（英雄名 / 图标 / 属性页面从 /api/heroes 拿一次），快照里 10 格都带也不大"""
+        used = {h.id for sd in SIDES for t in self.slots[sd] if (h := self._hero(t))}
+        pool = set(self.grid.taken) - used - set(self.grid.bans)
+        sims: dict[int, float] = {}
+        # 选人界面裁的优先；这局没裁到过（中途开的助手）就用局内顶栏头像——只拿来排序（对的那个分数 0.3~0.6，常排前几，见第 37 节）
+        for phases in (("sel", "strat"), ("game",)):
+            for phase in phases:
+                if (c := self._crops[phase].get((side, index))) is not None:
+                    for hid, v in self.bank.scores(c).items():
+                        sims[hid] = max(v, sims.get(hid, -2.0))
+            if sims:
+                break
+        if not sims:                                         # 什么都没裁到：按名字
+            sims = {i: 0.0 for i in self.db.by_id}
+        ids = sorted((i for i in sims if i not in used), key=lambda i: (i not in pool, -sims[i], self.db.by_id[i].name_cn
+                                                                       if i in self.db.by_id else ""))
+        ids = [i for i in ids if i in self.db.by_id]
+        return {"order": ids, "taken": [i for i in ids if i in pool]}
 
     def _confirm_with_grid(self, view: DraftView) -> None:
         """顶栏分数没过阈值、但最像的英雄在选人网格里确实已被选走（变暗没斜线）的，也算认出来。
@@ -695,10 +939,18 @@ class Live:
             if s.hero_id is None and s.guess in self.grid.taken and s.score >= GRID_CONFIRM_MIN:
                 s.hero_id = s.guess
 
-    def fill_slots(self, view: DraftView) -> None:
-        """正在手动改的格子由网页自己保护（输入框有焦点时不覆盖），这里照常写"""
+    def fill_slots(self, view: DraftView, only_empty: bool = False) -> None:
+        """正在手动改的格子由网页自己保护（输入框有焦点时不覆盖）；玩家这局告诉过我们的格子（_named）不动。
+        only_empty：只往空格子里填认出来的英雄（已经有的不换、不清），填进去的英雄不能和别的格子重复"""
         for side in SIDES:
             for i, s in enumerate(getattr(view, side)):
+                if (side, i) in self._named and self.slots[side][i]:
+                    continue
+                if only_empty:
+                    h = self.db.by_id.get(s.hero_id)
+                    if (self.slots[side][i] or not h
+                            or any(self._hero(t) == h for sd in SIDES for t in self.slots[sd])):
+                        continue
                 self.slots[side][i] = self.db.by_id[s.hero_id].name_cn if s.hero_id in self.db.by_id else ""
                 guess = self.db.by_id.get(s.guess)
                 self.hints[side][i] = {"score": round(s.score, 2),
@@ -730,6 +982,8 @@ class Live:
         if selecting and not self._in_selection:
             self._drafts_seen += 1
             self.grid.reset()                    # 新一局：上一局的禁用不算
+            self._crops = {"blank": {}, "sel": {}, "strat": {}, "game": {}}
+            self._named.clear()
             # 上一局点 × 收起的叠加层、点开的「如果选它」卡片，新一局选人时自动恢复，不用再按热键
             self.user_hidden = False
             self.pick_key = None
@@ -850,6 +1104,7 @@ class Live:
             self.ults.reset()
             self._bb_watch.reset()
             self._bb_checks.clear()
+            self._bb_orphans.clear()
             self._bb_scan_err = False
         m = st.raw.get("map") or {}
         clock = m.get("clock_time")
@@ -880,6 +1135,7 @@ class Live:
             if getattr(self.screen, "source", "window") != "window":
                 return                           # 截到的是整块屏幕（Dota 切出去了），顶栏不在那儿
             deaths, revs = self._bb_watch.update(img, clock, skip={me} if me else ())
+            self._keep_game_crops(img)
         except Exception:
             if not self._bb_scan_err:
                 self._bb_scan_err = True
@@ -897,7 +1153,20 @@ class Live:
             threading.Thread(target=work, daemon=True, name="buyback").start()
         for rev in revs:
             self._revived(rev)
-        self._check_feed(img, match)
+        self._check_feed(img, match, clock, me)
+
+    def _keep_game_crops(self, img) -> None:
+        """没填英雄的格子留一张局内顶栏头像（活着、彩色的时候），给顶栏帮认的候选排序；每格留一次就够"""
+        got = self._crops["game"]
+        new = False
+        for side in SIDES:
+            for i in range(5):
+                if ((side, i) not in got and not self.slots[side][i]
+                        and buybackscan.saturation(img, side, i) >= buybackscan.ALIVE_SAT):
+                    got[(side, i)] = buybackscan.portrait_crop(img, side, i)
+                    new = True
+        if new:
+            self._crops_ver += 1
 
     def _timer_read(self, match, d, sec) -> None:
         if match == self._bb_match:
@@ -910,29 +1179,34 @@ class Live:
     def _revived(self, rev) -> None:
         """复活了：接下来几帧看消息栏有没有「买活了」、行首小图是不是他（buybackscan.FeedCheck），够帧数了在 _feed_done 定"""
         h = self._hero(self.slots[rev.side][rev.index])
-        self._bb_checks.append(buybackscan.FeedCheck(rev, h.key if h else None, h.name_cn if h else None))
+        known = frozenset(x.key for side in SIDES for t in self.slots[side] if (x := self._hero(t)))
+        self._bb_checks.append(buybackscan.FeedCheck(rev, h.key if h else None, h.name_cn if h else None, known))
         log.info("买活自动记：%s %s 复活（灰了 %.0f 秒，倒计时 %s → 该在 %s 复活），看消息栏确认", coach._mmss(rev.clock / 60),
                  self._slot_name(rev.side, rev.index), rev.dead_for, rev.seconds,
                  coach._mmss(rev.expected / 60) if rev.expected is not None else "?")
 
-    def _hero_icon(self, key: str):
+    def _hero_icon(self, key: str, download: bool = True):
         """英雄小图标（Valve CDN，第一次下、之后读 data/icons）；下不到是 None（这次运行不再试）。
-        第一次可能要联网下，只在后台线程里调"""
+        第一次可能要联网下，只在后台线程里调。download=False：本地没有就算了（不在局内挨个下 127 张）"""
         if key not in self._hero_icons:
-            self._hero_icons[key] = buybackscan.load_icon(data.fetch_icon(buybackscan.HERO_ICON.format(key)))
+            rel = buybackscan.HERO_ICON.format(key)
+            if not download and not (data.ICON_DIR / rel).is_file():
+                return None
+            self._hero_icons[key] = buybackscan.load_icon(data.fetch_icon(rel))
         return self._hero_icons[key]
 
-    def _check_feed(self, img, match) -> None:
+    def _check_feed(self, img, match, clock: float, me=None) -> None:
         """每个还在确认的格子拿这一帧看一次消息栏（后台线程，OCR 一次约 0.5 秒；上一帧还没认完就跳过这帧）"""
         todo = [c for c in self._bb_checks if not c.busy]
         if not todo:
             return
-        keys = {h.key for side in SIDES for t in self.slots[side] if (h := self._hero(t))}   # 行首小图只在这局 10 个英雄里认
+        keys = {h.key for side in SIDES for t in self.slots[side] if (h := self._hero(t))}
         for c in todo:
             c.busy = True
 
         def work():
-            icons = {k: ic for k in keys if (ic := self._hero_icon(k)) is not None}
+            # 行首小图和全部英雄比（格子没填的也认得出；本地有的才用，这局的英雄没有就现下）
+            icons = {h.key: ic for h in self.db if (ic := self._hero_icon(h.key, download=h.key in keys)) is not None}
             for c in todo:
                 c.has_icon = c.hero in icons
             try:
@@ -941,10 +1215,10 @@ class Live:
                 log.warning("买活自动记：消息栏没认（%s）", e)
                 lines = []
             feed = buybackscan.feed_crop(img).copy()
-            self.submit(self._feed_read, match, todo, lines, feed)
+            self.submit(self._feed_read, match, todo, lines, feed, clock, me)
         threading.Thread(target=work, daemon=True, name="buyback").start()
 
-    def _feed_read(self, match, checks, lines, feed) -> None:
+    def _feed_read(self, match, checks, lines, feed, clock: float = 0.0, me=None) -> None:
         if match != self._bb_match:
             return
         if lines:
@@ -957,10 +1231,30 @@ class Live:
             if bb is not None:
                 self._bb_checks.remove(c)
                 self._feed_done(c, bb, why)
+        self._feed_orphans(lines, checks, clock, me)
+
+    def _feed_orphans(self, lines, checks, clock: float, me) -> None:
+        """「买活了」那行认出是这局某个英雄，但他不在确认的里头：顶栏没看出他死过（2026-10-27 裂魂人死了马上买活，
+        头像灰不到 2 帧），有 FEED_AGREE 帧都看到就按第一次看到的时刻记（买活是在这之前一点）"""
+        claimed = {k for c in (*checks, *self._bb_checks) for k in (c.hero, c.found) if k}
+        seen = {ln.hero for ln in lines if ln.hero and ln.hero not in claimed}
+        self._bb_orphans = {k: v for k, v in self._bb_orphans.items() if clock - v[0] <= ORPHAN_WINDOW}
+        for side in SIDES:
+            for i, t in enumerate(self.slots[side]):
+                if (h := self._hero(t)) is None or h.key not in seen or (side, i) == me:
+                    continue
+                at = self._bb_orphans.setdefault(h.key, [])
+                at.append(clock)
+                if len(at) >= buybackscan.FEED_AGREE and self.buyback.start(side, i, at[0]):
+                    when = coach._mmss(at[0] / 60)
+                    log.info("买活自动记：%s %s → 买活（顶栏没看出他死过，消息栏 %d 帧认到他买活）", when, h.name_cn, len(at))
+                    self.message = f"{when} {h.name_cn}买活了（消息栏认到的），冷却 8:00 开始倒计时；认错了点他头像下面的小条取消"
 
     def _feed_done(self, c, bb: bool, why: str) -> None:
         rev = c.rev
         name, when = self._slot_name(rev.side, rev.index), coach._mmss(rev.clock / 60)
+        if bb and c.hero is None and (h := next((h for h in self.db if h.key == c.found), None)):
+            name += f"（格子没填，消息栏小图是{h.name_cn}）"
         log.info("买活自动记：%s %s → %s（%s；倒计时那边：%s）", when, name, "买活" if bb else "不是买活", why,
                  {True: "早复活了", False: "按时复活", None: "没认出倒计时"}[rev.buyback])
         try:
@@ -1014,8 +1308,20 @@ class Live:
                 "ready_show": buyback.READY_SHOW, "ult_ready_show": ultcd.READY_SHOW, "my_side": st.team,
                 "buyback_on": self.cfg.buyback_timer,
                 "slots": {s: [{"name": self.slots[s][i], "end": self.buyback.end(s, i, clock), "me": me == (s, i),
-                               "auto": (s, i) in self.buyback.auto, "ult": self._ult_view(s, i, clock)}
+                               "auto": (s, i) in self.buyback.auto, "ult": self._ult_view(s, i, clock),
+                               "pick": self._pick_view(s, i)}
                               for i in range(5)] for s in SIDES}}
+
+    def _pick_view(self, side: str, index: int) -> dict:
+        """顶栏帮认的候选；快照每秒都做，格子 / 裁图 / 网格 / 模板没变就用上次算的"""
+        key = (tuple(self.slots["radiant"] + self.slots["dire"]), id(self._crops), self._crops_ver,
+               len(self.grid.taken), len(self.grid.bans), self.bank.learned)
+        if self._cand_cache[0] != key:
+            self._cand_cache = (key, {})
+        cache = self._cand_cache[1]
+        if (side, index) not in cache:
+            cache[(side, index)] = self.pick_candidates(side, index)
+        return cache[(side, index)]
 
     # ---------- 对面大招冷却 ----------
 
@@ -1283,6 +1589,39 @@ class Live:
 
     # ---------- 选人时「如果选它」 ----------
 
+    def query_mate(self, code, force: bool = False) -> None:
+        """查队友战绩：后台线程联网，查完排进工作线程写回。20 分钟内查过的不重查（force = 面板上点了「刷新」）"""
+        aid = mates.parse_code(code)
+        e = self.mates.touch(aid)
+        if e["busy"]:
+            return
+        if not force and mates.Mates.fresh(e):
+            self.mates.save()
+            self.message = f"{e['data']['name']} 刚查过，要重查点「刷新」"
+            return
+        e["busy"], e["error"] = True, ""
+        self.message = f"正在查好友代码 {aid} 的战绩…"
+
+        def work():
+            t0 = time.monotonic()
+            try:
+                res, err = self._mate_fetch(self.cfg, aid), ""
+                log.info("队友战绩 %s 查好了（%.1f 秒）", aid, time.monotonic() - t0)
+            except LookupError as ex:
+                res, err = None, str(ex)
+            except data.NETWORK_ERRORS as ex:     # 断网 / 限速：一行就够，不记堆栈
+                log.warning("队友战绩 %s 没查到：%s", aid, ex)
+                res, err = None, f"联网失败：{ex}"
+            except Exception as ex:
+                log.exception("队友战绩 %s 出错", aid)
+                res, err = None, f"出错：{ex}（详情见日志）"
+            self.submit(self._mate_ready, aid, res, err)
+        threading.Thread(target=work, daemon=True, name="mate").start()
+
+    def _mate_ready(self, aid: int, res: dict | None, err: str) -> None:
+        self.mates.done(aid, res, err)
+        self.message = err or (f"{res['name']} 的战绩查好了" if res else "")
+
     def explain_pick(self, hero_id: int) -> None:
         """点了某个推荐英雄：按当前局面做「如果选它」的要点（联网，后台），做好再让 AI 写打法"""
         h = self.db.by_id.get(hero_id)
@@ -1472,8 +1811,13 @@ class Live:
         elif self.gsi.state.alive:
             team = {"radiant": "天辉", "dire": "夜魇"}.get(self.gsi.state.team or "", "?")
             gsi = {"state": "ok", "text": f"GSI 已连接 · {team}", "game_state": self.gsi.state.game_state}
+        elif self.dota_dir is None:
+            gsi = {"state": "nodota", "text": "GSI 未连接 · 没找到 Dota 目录",
+                   "tip": "点这里到「设置」填 Dota 安装目录；填好之前阵营在下面手动选"}
         else:
-            gsi = {"state": "off", "text": "GSI 未连接"}
+            gsi = {"state": "off", "text": "GSI 未连接",
+                   "tip": f"GSI 配置在 {self.dota_dir}。连不上的话：Steam 启动选项加 -gamestateintegration，"
+                          "先开助手再开（或重开）Dota；还不行就到「设置」看 Dota 目录对不对"}
         return {
             "gsi": gsi,
             "calibrated": bool(self.cal and self.cal.ready),
@@ -1499,6 +1843,7 @@ class Live:
             "slots": slots,
             "bans_text": self.bans_text,
             "buyback": self.buyback_view(),
+            "mates": self.mates.view(self.db),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},
@@ -1516,7 +1861,7 @@ class Live:
         return self.coach_card or self.pick_view() or self.notice or self.draft_view()
 
     def heroes(self) -> list[dict]:
-        return sorted(({"id": h.id, "name": h.name_cn, "en": h.name_en} for h in self.db),
+        return sorted(({"id": h.id, "name": h.name_cn, "en": h.name_en, "key": h.key, "attr": h.attr} for h in self.db),
                       key=lambda h: h["name"])
 
     def close(self) -> None:

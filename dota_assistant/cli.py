@@ -74,7 +74,7 @@ def cmd_suggest(cfg: config.Config, args) -> int:
 
 def cmd_recognize(cfg: config.Config, path: Path) -> int:
     import cv2
-    from .vision import Calibration, TemplateBank, read_image, recognize, write_image
+    from .vision import SURE_GAP, SURE_SCORE, Calibration, TemplateBank, read_image, recognize, write_image
     cal = Calibration.load()
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
@@ -90,7 +90,7 @@ def cmd_recognize(cfg: config.Config, path: Path) -> int:
         for r, s in zip(rects, getattr(view, side)):
             hero = db.by_id.get(s.guess)
             ok = s.hero_id is not None
-            names.append(f"{hero.name_cn if hero else '空'}{'' if ok else '?'}({s.score:.2f})")
+            names.append(f"{hero.name_cn if hero else '空'}{'' if ok else '?'}({s.score:.2f}/+{s.gap:.2f})")
             x, y, rw, rh = int(r[0] * w), int(r[1] * h), int(r[2] * w), int(r[3] * h)
             cv2.rectangle(out, (x, y), (x + rw, y + rh), (80, 220, 80) if ok else (80, 80, 240), 2)
             cv2.putText(out, (hero.key if hero else "empty")[:12], (x, y + rh + 16),
@@ -99,7 +99,8 @@ def cmd_recognize(cfg: config.Config, path: Path) -> int:
             print(f"{side:8}", "  ".join(names))
     preview = path.with_name(path.stem + "_识别.png")
     write_image(preview, out)
-    print(f"（? = 低于阈值 {cfg.match_threshold}，按空位处理）标注图：{preview}")
+    print(f"（括号里：相似度 / 比第二像的别的英雄高出多少。? = 没认出，按空位处理：要高出 {SURE_GAP} 以上、"
+          f"相似度到 {min(cfg.match_threshold, SURE_SCORE)}）标注图：{preview}")
     return 0
 
 
@@ -312,7 +313,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "gsi-install":
         from .gsi import install_cfg
         path = install_cfg(args.dota_dir, cfg.gsi_port)
-        print(f"已写入 {path}\n还需要在 Steam → Dota 2 → 属性 → 启动选项 里加上：-gamestateintegration")
+        config.save({"dota_dir": str(args.dota_dir)})   # 以后一键启动、导出网格图都用这个目录，不再自动找
+        print(f"已写入 {path}（Dota 目录也记进了 config.toml）\n"
+              "还需要在 Steam → Dota 2 → 属性 → 启动选项 里加上：-gamestateintegration，然后重开 Dota")
         return 0
     if args.cmd == "backtest":
         from .backtest import run as backtest

@@ -1,5 +1,7 @@
 // 叠加层的内容（选人推荐卡片 / 提醒）。叠加层窗口和控制面板右侧的预览共用这一份。
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+import { getJSON } from './api.js';
+
+export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 export const portrait = (id) => `/portraits/${id}.png`;
 
@@ -30,6 +32,80 @@ function face(h, cls = '') {
 function lineup(label, heroes, cls) {
   if (!heroes.length) return '';
   return `<div class="lineup ${cls}"><span class="lineup-label">${label}</span><div class="lineup-faces">${heroes.map((h) => face(h)).join('')}</div></div>`;
+}
+
+// 顶栏对照：双方 5 格按 Dota 顶栏的顺序（Live.slots_view），玩家一眼看出哪格没认出。
+// 金色「?」= 这格有人选了但没认出；虚线「空」= 看着还没选；认出的头像点了也能改（认错了）。点开下面接「这格是谁」：
+// 先点属性再列这个属性的全部（和局内顶栏的菜单一样，玩家 2026-10-28 要的），候选顺序 Python 排好（选人网格里被选走的在前，再按像不像）
+const SIDE_CN = { radiant: '天辉', dire: '夜魇' };
+const ATTRS = [['str', '力量'], ['agi', '敏捷'], ['int', '智力'], ['all', '全才']];
+let slotPick = null;       // 打开的「这格是谁」：{ side, i, attr, order, taken }；打开时定住候选，快照每秒更新也不在鼠标底下换按钮
+let heroIndex = null;      // id → { id, name, key, attr }，第一次打开时从 /api/heroes 拿
+function loadHeroes(root) {
+  if (heroIndex) return;
+  heroIndex = {};
+  getJSON('/api/heroes').then((list) => {
+    heroIndex = Object.fromEntries(list.map((h) => [h.id, h]));
+    renderOverlay(root, root._view);
+  }).catch(() => { heroIndex = null; });
+}
+
+function slotCell(c, side, i) {
+  const where = `${SIDE_CN[side]}第 ${i + 1} 格`;
+  if (c.state === 'me') {
+    return `<span class="slot is-me" title="你">${c.hero ? face(c.hero) : '<i>你</i>'}</span>`;
+  }
+  const open = slotPick && slotPick.side === side && slotPick.i === i ? 'is-open' : '';
+  const attr = `data-slot="${side}:${i}"`;
+  if (c.state === 'ok') {
+    const tip = `${where}：${c.hero.name}${c.manual ? '（你告诉我的）' : ''}\n认错了就点一下改`;
+    return `<span class="slot is-ok ${open}" ${attr} title="${esc(tip)}">${face(c.hero)}</span>`;
+  }
+  if (c.state === 'ask') {
+    const tip = `${where}有人选了，但我没认出来${c.guess ? `（最像${c.guess}，没把握）` : ''}\n点一下告诉我是谁，我记住这格头像，下次认得`;
+    return `<span class="slot is-ask ${open}" ${attr} title="${esc(tip)}"><b>?</b></span>`;
+  }
+  const tip = `${where}：看着还没选\n游戏里这格已经有英雄了？点一下告诉我是谁`;
+  return `<span class="slot is-empty ${open}" ${attr} title="${esc(tip)}"><i>空</i></span>`;
+}
+
+function slotRow(label, side, cells, cls) {
+  return `<div class="lineup slot-row ${cls}"><span class="lineup-label" title="${SIDE_CN[side]}，从左到右和游戏顶栏一样">${label}</span>`
+    + `<div class="lineup-faces">${cells.map((c, i) => slotCell(c, side, i)).join('')}</div></div>`;
+}
+
+function pickerHTML(slots) {
+  const cell = slotPick && slots[slotPick.side]?.[slotPick.i];
+  if (!cell || cell.state === 'me') return '';
+  const title = cell.hero ? `${cell.hero.name}认错了？${SIDE_CN[slotPick.side]}第 ${slotPick.i + 1} 格是谁`
+    : `${SIDE_CN[slotPick.side]}第 ${slotPick.i + 1} 格是谁？`;
+  const all = slotPick.order.map((id) => heroIndex?.[id]).filter(Boolean);
+  const taken = new Set(slotPick.taken);
+  const tabs = ATTRS.map(([a, name]) => `<button class="sp-tab sp-${a} ${slotPick.attr === a ? 'is-on' : ''}" type="button" data-attr="${a}">`
+    + `${name}<em>${all.filter((h) => h.attr === a).length}</em></button>`).join('');
+  let body;
+  if (!all.length) body = `<div class="sp-tip">${heroIndex ? '没有候选，到控制面板这一格填' : '英雄表还没拿到…'}</div>`;
+  else if (!slotPick.attr) body = '<div class="sp-tip">先点他是哪种属性，再从里面挑</div>';
+  else {
+    body = `<div class="sp-grid">${all.filter((h) => h.attr === slotPick.attr).map((h) => {
+      const tk = taken.has(h.id);
+      return `<button class="sp-hero ${tk ? 'is-taken' : ''}" type="button" data-hero="${h.id}" title="${esc(tk ? `${h.name}（选人网格里被选走了）` : h.name)}">`
+        + `<img src="/icons/heroes/icons/${encodeURIComponent(h.key)}.png" alt="" onerror="this.remove()"><span>${esc(h.name)}</span></button>`;
+    }).join('')}</div>`;
+  }
+  return `
+    <section class="slot-picker">
+      <div class="sp-head"><span>${esc(title)}</span><button class="sp-x" type="button" title="收起">×</button></div>
+      <div class="sp-tabs">${tabs}</div>${body}
+      <div class="sp-note">金边 = 选人网格里被选走的，排在前面；挑了会记住这格头像，下次认得</div>
+    </section>`;
+}
+
+function slotsHTML(v) {
+  const s = v.slots;
+  const enemy = s.ally === 'radiant' ? 'dire' : 'radiant';
+  const tip = s.asks ? `<div class="slot-tip"><b>${s.asks}</b> 格有人选了但我没认出（金色 ?），点一下告诉我是谁</div>` : '';
+  return slotRow('敌', enemy, s[enemy], 'lineup-enemy') + slotRow('友', s.ally, s[s.ally], 'lineup-ally') + tip;
 }
 
 // 对位克制：推荐英雄对每个已选敌人的胜率差，±1 个百分点以内算没明显关系
@@ -153,8 +229,13 @@ function draftHTML(v) {
     </header>`;
   let a = '';
   let html = '';
-  const lines = lineup('敌', v.enemies, 'lineup-enemy') + lineup('友', v.allies, 'lineup-ally') + lineup('禁', v.bans || [], 'lineup-ban');
+  if (v.side_assumed) {                              // GSI 没连上：友 / 敌是按默认的天辉分的
+    a += `<div class="ov-sidewarn">不知道你在哪边，先当<b>天辉（左边）</b>是我方。在夜魇的话到控制面板「阵营」选夜魇</div>`;
+  }
+  const lines = (v.slots ? slotsHTML(v) : lineup('敌', v.enemies, 'lineup-enemy') + lineup('友', v.allies, 'lineup-ally'))
+    + lineup('禁', v.bans || [], 'lineup-ban');
   if (lines) a += `<section class="ov-lineups">${lines}</section>`;
+  if (v.slots) a += pickerHTML(v.slots);
   a += teamHTML(v.team, !!v.my_hero);
   const lanes = lanesHTML(v.lanes);
   a += lanes.rows;
@@ -240,6 +321,31 @@ export function renderOverlay(root, view) {
 // 要点小节 / 剩余位置的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
+    const slot = e.target.closest('.slot[data-slot]');
+    if (slot) {
+      const [side, i] = [slot.dataset.slot.split(':')[0], Number(slot.dataset.slot.split(':')[1])];
+      const cell = root._view?.slots?.[side]?.[i];
+      const same = slotPick && slotPick.side === side && slotPick.i === i;
+      slotPick = same || !cell ? null
+        : { side, i, attr: null, order: cell.pick?.order || [], taken: cell.pick?.taken || [] };
+      if (slotPick) loadHeroes(root);
+      return renderOverlay(root, root._view);
+    }
+    const spTab = e.target.closest('.sp-tab[data-attr]');
+    if (spTab && slotPick) {
+      slotPick.attr = spTab.dataset.attr;
+      return renderOverlay(root, root._view);
+    }
+    const spHero = e.target.closest('.sp-hero[data-hero]');
+    if (spHero && slotPick) {
+      act('name_slot', { side: slotPick.side, index: slotPick.i, hero_id: Number(spHero.dataset.hero) });
+      slotPick = null;
+      return renderOverlay(root, root._view);
+    }
+    if (e.target.closest('.sp-x')) {
+      slotPick = null;
+      return renderOverlay(root, root._view);
+    }
     const fold = e.target.closest('.brief-fold[data-fold]');
     if (fold) {
       const key = fold.dataset.fold;

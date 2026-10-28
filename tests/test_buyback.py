@@ -131,6 +131,44 @@ class FeedTest(unittest.TestCase):
             c.add([], None)
         self.assertEqual(c.verdict, (False, "消息栏没有买活"))  # 倒计时说早复活了也不记：没有买活消息
 
+    def test_many_icons_need_margin(self):
+        """和全部英雄比：第一名要比第二名高出 ICON_MARGIN 才算（两个几乎一样的小图分不开就不认）"""
+        many = {f"h{i}": hero_icon(10 + i) for i in range(30)} | self.icons
+        img = feed_line(topbar(), self.icons["axe"])
+        line = bs.read_feed(img, lambda im: feed_words("某人 买活了"), many)[0]
+        self.assertEqual(line.hero, "axe")
+        twin = self.icons["axe"].copy()
+        twin[16:, 16:, :3] = twin[16:, 16:, :3] // 2 + 60      # 和斧王只差一角
+        line = bs.read_feed(img, lambda im: feed_words("某人 买活了"), many | {"twin": twin})[0]
+        self.assertIsNone(line.hero)
+
+    def test_unknown_slot_uses_icon_outside_lineup(self):
+        """格子没填（选人时没认出来）：小图认出是这局格子里没有的英雄，就算这格的；格子里有的英雄不算；
+        倒计时说按时复活的不算（是别的没填的格子在买活）。2026-10-27 军团指挥官买活就是这样漏的"""
+        known = frozenset({"axe", "pudge"})
+        hinted = self.rev(None)
+        hinted.hint = True                                     # 倒计时只认到一次（84），也说早复活了
+        c = bs.FeedCheck(hinted, None, None, known)
+        c.add([self.line("pudge"), self.line("legion_commander")], None)
+        c.add([self.line("legion_commander")], None)
+        self.assertEqual((c.verdict[0], c.found), (True, "legion_commander"))
+        c = bs.FeedCheck(self.rev(True), None, None, known)    # 格子外两个英雄：取最下面（最新）那行
+        c.add([bs.FeedLine("x 买活了", 600, "storm_spirit"), bs.FeedLine("y 买活了", 640, "legion_commander")], None)
+        self.assertEqual(c.found, "legion_commander")
+        for timer in (None, False):                            # 没有早复活的迹象 / 倒计时说按时复活：小图说明不了是这一格
+            c = bs.FeedCheck(self.rev(timer), None, None, known)
+            for _ in range(bs.FEED_TRIES):
+                c.add([self.line("legion_commander")], None)
+            self.assertIs(c.verdict[0], False, timer)
+        c = bs.FeedCheck(self.rev(True), None, None, known)
+        for _ in range(bs.FEED_TRIES):
+            c.add([self.line("pudge")], None)                  # 格子里有的英雄：是别人
+        self.assertIs(c.verdict[0], False)
+        c = bs.FeedCheck(self.rev(True), None, None, known)    # 两帧是两个不同的英雄：不算
+        c.add([self.line("legion_commander")], None)
+        c.add([self.line("lion")], None)
+        self.assertEqual(c.hits, 1)
+
     def test_fallback_without_icon(self):
         """他的小图标下不到：消息栏有「买活」行（认不出是谁）几帧 + 倒计时也说早复活了，才记"""
         for timer, want in ((True, True), (False, False), (None, False)):
@@ -254,6 +292,20 @@ class WatcherTest(unittest.TestCase):
         self.assertIsNone(w.slots[("dire", 0)].expected)
         w.set_timer(w.update(topbar(dead), 13)[0][0], 8)
         self.assertEqual(w.slots[("dire", 0)].expected, 21)
+
+    def test_single_read_gives_hint(self):
+        """死了马上买活，倒计时只来得及认到一次（2026-10-27 军团指挥官：认到 84、一秒后就复活了）：
+        核对不上不算 buyback，但记个「早复活的迹象」；认到的几次有一次说按时就没有"""
+        for reads, want in (((84,), True), ((84, 2), False)):
+            w = bs.Watcher()
+            dead = {("dire", 0)}
+            w.update(topbar(dead), 10)
+            for k, sec in enumerate(reads):
+                w.set_timer(w.update(topbar(dead), 11 + k)[0][0], sec)
+            w.update(topbar(), 13)
+            rev = w.update(topbar(), 14)[1][0]
+            self.assertIsNone(rev.buyback)
+            self.assertIs(rev.early, want, reads)
 
     def test_stale_ocr_result_ignored(self):
         w = bs.Watcher()

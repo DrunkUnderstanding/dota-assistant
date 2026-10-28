@@ -8,11 +8,13 @@ import urllib.error
 import urllib.request
 from types import SimpleNamespace
 
+import cv2
 import numpy as np
 
 from dota_assistant import advisor as adv, config, grid
 from dota_assistant import brief, buybackscan, coach, death, gameplan, lanestate
 from dota_assistant import live as live_mod
+from dota_assistant import mates as mates_mod
 from dota_assistant.config import Config
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
@@ -40,6 +42,9 @@ class FakeSpeaker:
 class FakeBank:
     portraits, learned = 0, 0
 
+    def scores(self, img):
+        return {}
+
 
 def fake_advisor(cfg: Config) -> adv.Advisor:
     a = adv.Advisor.__new__(adv.Advisor)
@@ -50,6 +55,8 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
 lanestate.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
+live_mod.FIX_FILE = TMP / "fixes.jsonl"                           # 帮认记录也不写本机 data/
+mates_mod.MATES_FILE = TMP / "mates.json"                         # 查过的队友也不读写本机 data/
 
 
 def no_brief(*args, **kw):
@@ -222,6 +229,52 @@ class LiveTest(unittest.TestCase):
         self.assertEqual([h["id"] for h in s["overlay"]["view"]["enemies"]], [AXE.id])   # 我在夜魇，天辉是对面
         wait(self.live.submit(self.live.action, {"type": "clear"}))
         self.assertEqual(self.snap()["slots"]["radiant"][0]["text"], "")
+
+    def test_unknown_side_is_flagged(self):
+        # 阵营自动、GSI 没连上：先当天辉算，但卡片要标出来（以前悄悄当天辉，人在夜魇时友敌整个反了）
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "radiant", "index": 0, "text": "斧王"}))
+        view = self.snap()["overlay"]["view"]
+        self.assertIsNone(view["side"])
+        self.assertEqual(view["side_assumed"], "radiant")
+        self.assertEqual([h["id"] for h in view["allies"]], [AXE.id])
+        wait(self.live.submit(self.live.action, {"type": "set", "key": "side_mode", "value": "dire"}))
+        view = self.snap()["overlay"]["view"]
+        self.assertNotIn("side_assumed", view)
+        self.assertEqual([h["id"] for h in view["enemies"]], [AXE.id])
+
+    def test_gsi_connects_mid_draft_resplits_teams(self):
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "radiant", "index": 0, "text": "斧王"}))
+        state = GameState()
+        state.update({"player": {"team_name": "dire"}})       # 真实游戏第一条推送就只有 draft / player / provider
+        self.live.gsi = SimpleNamespace(state=state, stop=lambda: None)
+        wait(self.live.submit(self.live.tick))
+        view = self.snap()["overlay"]["view"]
+        self.assertEqual(view["side"], "dire")
+        self.assertEqual([h["id"] for h in view["enemies"]], [AXE.id])
+
+    def test_gsi_status_explains_missing_dota(self):
+        self.live.use_gsi, self.live.gsi = True, SimpleNamespace(state=GameState(), stop=lambda: None)
+        self.live.dota_dir = None
+        self.assertEqual(self.live.status()["gsi"]["state"], "nodota")
+        self.live.dota_dir = Path("E:/SteamLibrary/steamapps/common/dota 2 beta")
+        g = self.live.status()["gsi"]
+        self.assertEqual(g["state"], "off")
+        self.assertIn("-gamestateintegration", g["tip"])
+
+    def test_dota_dir_setting(self):
+        dota = TMP / f"lib-{time.monotonic_ns()}" / "dota 2 beta"
+        (dota / "game" / "dota").mkdir(parents=True)
+        save = lambda **kw: wait(self.live.submit(self.live.action, {"type": "save_settings", **kw}))
+        with self.assertRaises(ValueError):                     # 空壳：没有资源包
+            save(dota_dir=str(dota))
+        (dota / "game" / "dota" / "pak01_dir.vpk").write_bytes(b"")
+        self.live.use_gsi = True
+        save(dota_dir=f'"{dota / "game" / "dota"}"')            # 选深了一层、带引号也认
+        self.assertEqual(config.load(self.live.config_file).dota_dir, str(dota))
+        self.assertEqual(self.live.dota_dir, dota)
+        self.assertTrue((dota / "game" / "dota" / "cfg" / "gamestate_integration").is_dir())   # GSI 配置马上写进去
+        self.assertIn("重开 Dota", self.live.message)
+        self.assertEqual(self.snap()["config"]["dota_found"], str(dota))
 
     def test_unknown_action_rejected(self):
         with self.assertRaises(ValueError):
@@ -458,6 +511,150 @@ class CoachLiveTest(unittest.TestCase):
         self.live._confirm_with_grid(view)
         self.assertEqual([s.hero_id for s in view.radiant[:2]], [PL.id, None])
 
+    def test_no_top_bar_scan_after_draft(self):
+        # 2026-10-28 实战：局内按 F9 按选人界面的格子裁顶栏，认出一套乱的，把对面英雄冲掉了
+        from dota_assistant.vision import DraftView, Slot
+        junk = DraftView([Slot(WK.id, 0.73, WK.id)] + [Slot(None, 0.3, 0)] * 4,
+                         [Slot(None, 0.3, 0), Slot(CM.id, 0.71, CM.id)] + [Slot(None, 0.3, 0)] * 3, [])
+        orig, live_mod.recognize = live_mod.recognize, lambda *a, **kw: junk
+        self.addCleanup(setattr, live_mod, "recognize", orig)
+        self.live.cal = SimpleNamespace(ready=True)
+        self.live.slots["dire"][:3] = ["斧王", "潮汐猎人", ""]
+        st = self.live.gsi.state
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", "clock_time": 600},
+                   "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.scan, True, object()))
+        self.assertEqual(self.live.slots["dire"][:3], ["斧王", "潮汐猎人", ""])
+        self.assertEqual(self.live.slots["radiant"][0], "")
+        self.assertIn("不能重识别", self.live.message)
+        # 策略时间：只往空格子里填，已认出的不换不清
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_STRATEGY_TIME", "clock_time": -80},
+                   "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.scan, True, object()))
+        self.assertEqual(self.live.slots["dire"][:3], ["斧王", "潮汐猎人", ""])     # 第 2 格认成 CM 也不换
+        self.assertEqual(self.live.slots["radiant"][0], WK.name_cn)                 # 空格子补上
+        # 选人阶段照常整排写
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.scan, True, object()))
+        self.assertEqual(self.live.slots["dire"][:3], ["", CM.name_cn, ""])
+
+    def test_name_slot_learns_crop(self):
+        # 选人时没认出来的格子，玩家在顶栏挑了是谁：填进格子 + 把那格头像记成模板；那格根本没出头像（和开局一样）的不记
+        from dota_assistant.vision import TemplateBank, write_image
+        rng = np.random.default_rng(7)
+        def rand_pic():                                                   # 色块图：缩放以后还认得出（纯噪声一缩就糊了）
+            return cv2.resize(rng.integers(0, 255, (6, 8, 3), dtype=np.uint8), (64, 36), interpolation=cv2.INTER_NEAREST)
+        pic = {h.id: rand_pic() for h in (AXE, CM, PL, TIDE)}
+        pdir, tdir = Path(tempfile.mkdtemp(dir=TMP)), Path(tempfile.mkdtemp(dir=TMP))
+        for hid, img in pic.items():
+            write_image(pdir / f"{hid}.png", img)
+        self.live.bank = TemplateBank(pdir, tdir)
+        blank = rand_pic()
+        wk = rand_pic()            # 白虎在顶栏的样子，模板里没有
+        like_tide = np.clip(pic[TIDE.id].astype(int) + rng.integers(-40, 40, (36, 64, 3)), 0, 255).astype(np.uint8)
+        c = self.live._crops
+        c["blank"].update({("dire", 3): blank, ("dire", 4): blank, ("dire", 2): blank})
+        c["sel"].update({("dire", 3): wk, ("dire", 4): blank.copy(), ("dire", 2): like_tide})
+        c["strat"][("dire", 3)] = wk.copy()                               # 和选人时一样：只记一张
+        self.live.grid.taken = {PL.id, TIDE.id, AXE.id}
+        self.live.slots["dire"][:2] = ["斧王", "潮汐猎人"]
+
+        cands = self.live.pick_candidates("dire", 2)
+        self.assertEqual((cands["order"][:1], cands["taken"]), ([PL.id], [PL.id]))     # 网格里剩下的先给
+        self.assertNotIn(AXE.id, cands["order"])                                        # 已经在别的格子里的不给
+        self.live.slots["dire"][1] = ""
+        self.assertEqual(self.live.pick_candidates("dire", 2)["order"][:2], [TIDE.id, PL.id])  # 按像不像排
+
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 3, "hero_id": WK.id}))
+        self.assertEqual(self.live.slots["dire"][3], WK.name_cn)
+        self.assertEqual(self.live.bank.learned, 1)
+        self.assertEqual(self.live.bank.match(wk)[0], WK.id)
+        self.assertEqual(len(list((tdir / str(WK.id)).glob("*.png"))), 1)
+        self.assertIn("记住", self.live.message)
+        # 断线那种：整局那格都和开局一样，不记（不然以后空位会被认成他）
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 4, "hero_id": CM.id}))
+        self.assertEqual((self.live.slots["dire"][4], self.live.bank.learned), (CM.name_cn, 1))
+        # 已经在别的格子里的英雄不能再填
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 2, "hero_id": WK.id}))
+        self.assertEqual(self.live.slots["dire"][2], "")
+        self.assertIn("已经在夜魇第 4 格", self.live.message)
+        # 控制面板手填也记
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "dire", "index": 2, "text": "PL"}))
+        self.assertEqual(self.live.bank.learned, 2)
+        # 新一局：上一局的裁图清掉
+        self.live.gsi.state.update({"map": {"matchid": "2", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                                    "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        self.assertEqual(self.live._crops["sel"], {})
+        # 这局选人时没裁到（中途开的助手）：拿局内顶栏头像给候选排序；页面先选属性再列这个属性的全部（属性从 /api/heroes 拿）
+        self.live.slots["dire"] = [""] * 5
+        self.live.grid.taken = set()
+        screen = np.zeros((1080, 1920, 3), np.uint8)
+        box = buybackscan._box(screen, "dire", 2, *buybackscan.PORTRAIT)
+        box[:] = cv2.resize(pic[AXE.id], (box.shape[1], box.shape[0]))           # 潮汐那张上面已经被记成 PL 了，换斧王
+        self.live._keep_game_crops(screen)
+        self.assertEqual(list(self.live._crops["game"]), [("dire", 2)])            # 其余格子是黑的（死了 / 没东西）不留
+        self.assertEqual(self.live.pick_candidates("dire", 2)["order"][0], AXE.id)
+        self.assertEqual(sorted(self.live.pick_candidates("dire", 0)["order"]), sorted(h.id for h in HEROES))  # 什么都没裁到：全部英雄
+        self.assertEqual({h["attr"] for h in self.live.heroes()}, {h.attr for h in HEROES})
+
+    def test_slots_view_marks_unrecognized(self):
+        # 选人界面叠加层的「顶栏对照」：没认出的格子要让玩家看得出来（金色 ?），帮填的格子选人时识别也不冲掉
+        from dota_assistant.vision import DraftView, Slot
+        grey = np.full((36, 64, 3), 60, np.uint8)                         # 空位 / 队友预选：灰的
+        hover = grey.copy()
+        hover[5:25, 10:50] = 140                                           # 半透明的预选头像：变了样子但还是灰的
+        picked = grey.copy()
+        picked[:28] = (40, 160, 230)                                       # 选定的头像：彩色
+        c = self.live._crops
+        for k in range(5):
+            c["blank"][("dire", k)] = grey
+        c["sel"].update({("dire", 0): grey.copy(), ("dire", 1): hover, ("dire", 2): picked})
+        self.live.slots["dire"] = ["", "", "", AXE.name_cn, ""]
+        st = self.live.gsi.state
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "radiant", "team_slot": 1}, "hero": {"name": "npc_dota_hero_phantom_lancer"}})
+        wait(self.live.submit(self.live.refresh))
+        v = self.live.snapshot()["overlay"]["view"]["slots"]
+        self.assertEqual(v["ally"], "radiant")
+        self.assertEqual([x["state"] for x in v["dire"]], ["empty", "empty", "ask", "ok", "empty"])
+        self.assertEqual(v["asks"], 1)
+        self.assertEqual((v["radiant"][1]["state"], v["radiant"][1]["hero"]["id"]), ("me", PL.id))   # 自己那格：GSI 的英雄
+        self.assertIn("order", v["dire"][2]["pick"])
+        # 策略时间起人人都有英雄：空着的都是没认出
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_STRATEGY_TIME"},
+                   "player": {"team_name": "radiant", "team_slot": 1}})
+        v = self.live.snapshot()["overlay"]["view"]["slots"]
+        self.assertEqual([x["state"] for x in v["dire"]], ["ask", "ask", "ask", "ok", "ask"])
+        # 选人阶段帮填了第 3 格：后面识别整排重写，这格不动（别的格照常写）
+        learned = []
+        self.live.learn_slot = lambda side, i, h: learned.append((side, i, h.id)) and 0   # 记模板另有测试（test_name_slot_learns_crop）
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "radiant", "team_slot": 1}})
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 2, "hero_id": TIDE.id}))
+        self.assertTrue(self.live.snapshot()["overlay"]["view"]["slots"]["dire"][2]["manual"])
+        empty = [Slot(None, 0.3, 0)] * 5
+        view = DraftView(empty, [Slot(None, 0.3, 0)] * 3 + [Slot(CM.id, 0.8, CM.id), Slot(None, 0.3, 0)], [])
+        orig, live_mod.recognize = live_mod.recognize, lambda *a, **kw: view
+        self.addCleanup(setattr, live_mod, "recognize", orig)
+        self.live.cal = SimpleNamespace(ready=True)
+        wait(self.live.submit(self.live.scan, True, object()))
+        self.assertEqual(self.live.slots["dire"], ["", "", TIDE.name_cn, CM.name_cn, ""])
+        self.assertEqual(learned, [("dire", 2, TIDE.id)] * 2)          # 帮认时记一次；之后每次识别那格头像变了样也接着记
+        rows = [json.loads(x) for x in self.live.fix_file.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual({k: rows[-1][k] for k in ("side", "slot", "hero", "phase", "how")},
+                         {"side": "dire", "slot": 3, "hero": TIDE.name_cn, "phase": "HERO_SELECTION", "how": "帮认"})
+        # 控制面板清空这格 = 不再护着；新一局也不护着
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "dire", "index": 2, "text": ""}))
+        self.assertNotIn(("dire", 2), self.live._named)
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 2, "hero_id": TIDE.id}))
+        self.live._in_selection = False
+        st.update({"map": {"matchid": "2", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "radiant"}})
+        wait(self.live.submit(self.live.coach_tick))
+        self.assertEqual(self.live._named, set())
+
     def test_local_games_with_zero_matchid(self):
         # 本地 / 机器人局 matchid 一直是 0：回到选人阶段就算新的一局，本局要点要重做
         def go(state):
@@ -643,7 +840,7 @@ class CoachLiveTest(unittest.TestCase):
         # 小的图是顶栏那一格（认倒计时），大的是消息栏
         self.live._ocr = lambda im: frame["feed"] if im.shape[1] > 600 else [SimpleNamespace(text=str(frame["timer"]))] * 3
         icons = {"axe": hero_icon(1), "tidehunter": hero_icon(2)}
-        self.live._hero_icon = icons.get                       # 不联网下小图标
+        self.live._hero_icon = lambda k, download=True: icons.get(k)   # 不联网下小图标
         st = self.live.gsi.state
 
         def go(clock):
@@ -693,6 +890,26 @@ class CoachLiveTest(unittest.TestCase):
             go(clock)
         self.assertIsNone(json.loads(self.live.current_snapshot)["buyback"]["slots"]["radiant"][0]["end"])
         self.assertEqual(len(list(buybackscan.SAMPLES_DIR.glob("*-radiant1-respawn-*.png"))), 1)
+
+        # 夜魇第 3 个格子没填（选人时没认出来）：消息栏小图是格子里没有的英雄 → 算他的
+        icons["skeleton_king"] = hero_icon(3)
+        die("dire", 2, range(1560, 1564), 50)
+        frame["img"] = feed_line(topbar(), icons["skeleton_king"])
+        frame["feed"] = feed_words("啊哈 买活了")
+        for clock in range(1570, 1574):
+            go(clock)
+        self.assertAlmostEqual(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][2]["end"], 1570 + 480, delta=1)
+        self.assertIn("消息栏小图是冥魂大帝", self.live.message)
+
+        # 潮汐死了马上买活，顶栏没看出死过：别人复活时顺带看到消息栏两帧都是潮汐的「买活了」→ 也记
+        frame["feed"] = []
+        die("radiant", 0, (1580, 1581, 1582), 9)
+        frame["img"] = feed_line(topbar(), icons["tidehunter"])
+        frame["feed"] = feed_words("某人 买活了")
+        for clock in range(1590, 1594):
+            go(clock)
+        self.assertAlmostEqual(json.loads(self.live.current_snapshot)["buyback"]["slots"]["dire"][1]["end"], 1591 + 480, delta=1)
+        self.assertIn("潮汐猎人买活了", self.live.message)
 
     def test_ult_timer(self):
         """对面头像下面的大招小条：只给对面、按自己等级猜大招等级；点一下开始、再点取消；

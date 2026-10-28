@@ -45,6 +45,7 @@
 </section>
 
 <main class="main">
+  <div class="col">
   <section class="card board">
     <div class="card-head">
       <h2>当前局面</h2>
@@ -72,6 +73,19 @@
       <button class="btn btn-ghost" data-act="clear">清空</button>
     </div>
   </section>
+
+  <section class="card mates">
+    <div class="card-head">
+      <h2>队友战绩</h2>
+      <span class="card-hint">填好友代码查最近战绩、常玩英雄和位置（OpenDota / STRATZ 的公开数据，对方没公开比赛数据就查不到）</span>
+    </div>
+    <form class="mate-form" id="mate-form" autocomplete="off">
+      <input id="mate-code" inputmode="numeric" spellcheck="false" placeholder="好友代码（也能粘 Steam ID 或个人页链接）" title="好友代码；也认 Steam 64 位 ID、OpenDota / STRATZ / Dotabuff 个人页链接">
+      <button class="btn btn-primary" type="submit">查询</button>
+    </form>
+    <div class="mate-list" id="mates"></div>
+  </section>
+  </div>
 
   <aside class="card preview">
     <div class="card-head">
@@ -133,6 +147,16 @@
         <label class="row"><span>模型</span>
           <input name="ai_model" spellcheck="false">
         </label>
+      </section>
+
+      <section class="dlg-sec" id="dota-head">
+        <div class="sec-head">
+          <div><h3>Dota 目录</h3><p class="dlg-sub">GSI 配置写在这里，助手靠它知道你在天辉还是夜魇；改了要重开 Dota</p></div>
+        </div>
+        <label class="row"><span>安装目录</span>
+          <input name="dota_dir" spellcheck="false">
+        </label>
+        <p class="row-hint">Steam 里右键 Dota 2 → 管理 → 浏览本地文件，把打开的文件夹地址（以 dota 2 beta 结尾）粘过来。自动找对了就留空。</p>
       </section>
 
       <section class="dlg-sec" id="hotkeys-head">

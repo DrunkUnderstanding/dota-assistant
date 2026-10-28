@@ -13,6 +13,7 @@ heroes/icons/<key>.png，和消息栏里的是同一套图）比：**「买活�
 真实截图验证：两次真买活的小图在全部 127 个英雄里都排第一（0.79 / 0.83，第二名 ≤ 0.56），
 一整列 11 行消息的小图全认对（第一 0.74~0.90，第二 ≤ 0.69）。只有这两次真买活的样本，都是 1080p。
 下面倒计时那套（第 3 条）现在只在小图标下不到（断网、第一次用）时兜底：消息栏有「买活」字 + 倒计时也说早复活了，才记。
+2026-10-28 起小图和全部英雄比：选人时没认出来、格子空着的英雄也认得出是谁（还要那一格有早复活的迹象，见 FeedCheck._mine）。
 
 原来的办法（**能从已知画面推出来**的）：
 
@@ -75,10 +76,13 @@ FEED_TRIES = 5               # 复活后看几帧消息栏
 FEED_AGREE = 2               # 几帧都认到才算买活（玩家：「超过两个说明对的概率就大了」）
 BUYBACK_TEXT = "买活"
 ICON_SIZES = range(19, 27)   # 消息栏里英雄小图的边长（1080 高时 ≈22，按图高缩放）
+ICON_SIZE = 22               # 全部英雄先只用这一个大小粗排（127 个全试 ICON_SIZES 要 1.4 秒，粗排 0.2 秒）
+ICON_REFINE = 3              # 粗排前几名再把 ICON_SIZES 全试一遍（2026-10-27 实战 16 行：粗排第一都是全试的第一）
 ICON_X = 90                  # 小图在这一行开头：x < 这个
 ICON_DY = 20                 # 行中心上下这么多里找小图
 FEED_TEXT_X = 200            # 这一行的字从这个 x 以后才开始 = 聊天行（「玩家名（英雄名）买活了!」，行首没有小图，靠英雄名）
 ICON_MIN = 0.7               # 小图相似度（TM_CCOEFF_NORMED）到这个才算认出来；实测对的 0.74~0.90，错的最高 0.69
+ICON_MARGIN = 0.1            # 还要比第二名高这么多：和全部英雄比时第二名（常是狙击手）到过 0.70，对的第一名都高出 ≥ 0.15
 HERO_ICON = "heroes/icons/{}.png"   # Valve CDN 上的英雄小图标（data.fetch_icon 下、存 data/icons）
 
 
@@ -93,6 +97,11 @@ def saturation(img: np.ndarray, side: str, i: int) -> float:
     """头像饱和度的中位数（不用平均：头像角上的彩色小图标会把死了的灰头像平均值抬到阈值附近）"""
     crop = _box(img, side, i, *PORTRAIT)
     return float(np.median(cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)[..., 1])) if crop.size else 0.0
+
+
+def portrait_crop(img: np.ndarray, side: str, i: int) -> np.ndarray:
+    """局内顶栏这一格的头像（顶栏帮认给候选排序用；活着才有颜色，死了是灰的，认不了）"""
+    return _box(img, side, i, *PORTRAIT).copy()
 
 
 def timer_crop(img: np.ndarray, side: str, i: int) -> np.ndarray:
@@ -144,6 +153,12 @@ class Revival:
     seconds: int | None          # 认到的倒计时
     before: np.ndarray | None    # 给 OCR 的那一格（存样本）
     after: np.ndarray            # 复活那一帧那一格
+    hint: bool = False           # 倒计时没核对上（只认到一次之类），但认到的每一次都说早复活了
+
+    @property
+    def early(self) -> bool:
+        """有没有早复活的迹象（格子没填时要靠这个确定消息栏那行是不是这一格的）"""
+        return bool(self.buyback) or (self.buyback is None and self.hint)
 
     @property
     def buyback(self) -> bool | None:
@@ -201,8 +216,9 @@ class Watcher:
                         st.color_at, st.color_crop = clock, timer_crop(img, side, i)
                     if st.color < REVIVE_FRAMES:
                         continue
+                    hint = bool(st.reads) and all(st.color_at <= at - BUYBACK_MARGIN for at, _, _ in st.reads)
                     revs.append(Revival(side, i, st.color_at, st.color_at - st.dead_since, st.expected, st.seconds,
-                                        st.crop, st.color_crop))
+                                        st.crop, st.color_crop, hint))
                 self.slots[(side, i)] = _Slot()
         return deaths, revs
 
@@ -268,12 +284,12 @@ def load_icon(path: Path | None) -> np.ndarray | None:
     return im if im is not None and im.ndim == 3 and im.shape[2] == 4 else None
 
 
-def icon_score(region: np.ndarray, icon: np.ndarray, s: float) -> float:
+def icon_score(region: np.ndarray, icon: np.ndarray, s: float, sizes=ICON_SIZES) -> float:
     """小图在 region 里最像的地方有多像：几种大小都试，只比不透明的像素（TM_CCOEFF_NORMED 带遮罩）。
     不用 TM_CCORR_NORMED：带遮罩时它对所有英雄都给 0.9 上下，分不开（2026-10-27 真实截图实测）"""
     best = -1.0
     reg = region.astype(np.float32)
-    for z in ICON_SIZES:
+    for z in sizes:
         n = max(8, round(z * s))
         if n > reg.shape[0] or n > reg.shape[1]:
             continue
@@ -288,7 +304,8 @@ def icon_score(region: np.ndarray, icon: np.ndarray, s: float) -> float:
 
 
 def read_feed(img: np.ndarray, ocr, icons: dict[str, np.ndarray]) -> list[FeedLine]:
-    """消息栏里带「买活」的行，每行认一下行首小图是 icons 里的哪个英雄。ocr(img) -> [roles.Word]；没有 OCR 抛 OSError"""
+    """消息栏里带「买活」的行，每行认一下行首小图是 icons 里的哪个英雄（icons 可以是全部英雄：先粗排再细比）。
+    ocr(img) -> [roles.Word]；没有 OCR 抛 OSError"""
     s = img.shape[0] / 1080
     crop = feed_crop(img)
     if not crop.size:
@@ -308,9 +325,10 @@ def read_feed(img: np.ndarray, ocr, icons: dict[str, np.ndarray]) -> list[FeedLi
             continue
         region = img[max(0, int(cy - (ICON_DY + max(ICON_SIZES) / 2) * s)):int(cy + (ICON_DY + max(ICON_SIZES) / 2) * s),
                      :int((ICON_X + max(ICON_SIZES)) * s)]
-        scores = sorted(((icon_score(region, ic, s), k) for k, ic in icons.items()), reverse=True)
-        hero, score = (scores[0][1], scores[0][0]) if scores and scores[0][0] >= ICON_MIN else (None, scores[0][0] if scores else 0.0)
-        out.append(FeedLine(text, cy, hero, score))
+        coarse = sorted(((icon_score(region, ic, s, (ICON_SIZE,)), k) for k, ic in icons.items()), reverse=True)
+        scores = sorted(((icon_score(region, icons[k], s), k) for _, k in coarse[:ICON_REFINE]), reverse=True) + [(-1.0, None)] * 2
+        (top, hero), (second, _) = scores[:2]
+        out.append(FeedLine(text, cy, hero if top >= ICON_MIN and top - second >= ICON_MARGIN else None, max(top, 0.0)))
     return out
 
 
@@ -320,6 +338,8 @@ class FeedCheck:
     rev: Revival
     hero: str | None             # 这一格的英雄 key（格子没填是 None）
     name: str | None             # 中文名（聊天行「玩家名（英雄名）买活了」里找）
+    known: frozenset = frozenset()   # 格子没填时用：这局格子里已有的英雄。小图认出是这之外的英雄，就只能是没填的这格
+    found: str | None = None     # 格子没填时，小图认出来是谁
     seen: int = 0                # 看了几帧
     hits: int = 0                # 几帧「买活」+ 小图 / 英雄名都对上他
     text_hits: int = 0           # 几帧有「买活」行但没法确认是谁（行首小图没认出来）
@@ -331,7 +351,10 @@ class FeedCheck:
     def add(self, lines: list[FeedLine], feed: np.ndarray | None) -> None:
         self.seen += 1
         self.busy = False
-        mine = [ln for ln in lines if (self.hero and ln.hero == self.hero) or (self.name and self.name in ln.text.replace(" ", ""))]
+        mine = [ln for ln in lines if self._mine(ln)]
+        if self.hero is None and mine:
+            mine = [max(mine, key=lambda ln: ln.y)]   # 格子外的英雄有好几个：取最下面（最新）那行，上面的可能是一分钟前的
+            self.found = mine[0].hero
         if mine:
             self.hits += 1
             if self.hits == 1:
@@ -342,6 +365,15 @@ class FeedCheck:
             self.others += 1
         if self.hits == 0:
             self.feed = feed
+
+    def _mine(self, ln: FeedLine) -> bool:
+        if self.hero is not None:
+            return ln.hero == self.hero or bool(self.name and self.name in ln.text.replace(" ", ""))
+        # 格子没填（选人时没认出来、玩家也没改；2026-10-27 军团指挥官买活就这样漏了）：小图认出是格子里没有的英雄，
+        # 每帧都是同一个；小图只说明「格子外的某个英雄」，是不是这一格还要这一格自己有早复活的迹象——
+        # 同一波常有几个没填的格子先后复活（2026-10-27 风暴之灵买活时，另一个没填的格子刚好按时复活）
+        return (ln.hero is not None and ln.hero not in self.known and ln.hero == (self.found or ln.hero)
+                and self.rev.early)
 
     @property
     def verdict(self) -> tuple[bool | None, str]:

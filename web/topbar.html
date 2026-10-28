@@ -62,11 +62,32 @@
   .menu .mod.on::before { content: '\2611  '; }
   .menu .cd { margin-top: calc(6px * var(--s)); color: var(--text); font-family: var(--num); }
   .menu .note { color: var(--text-faint); font-size: calc(11px * var(--s)); }
+  /* 选人时没认出来的格子：大招小条那一行显示「?」，点开从候选里挑这格是谁（挑了会记成模板，下次认得） */
+  .bb.ask { color: var(--gold); border-style: dashed; border-color: rgba(214, 178, 94, 0.7); font: 600 calc(14px * var(--s)) / 1 var(--font); }
+  .bb.ask:hover, .bb.ask.open { background: rgba(10, 13, 18, 0.9); border-style: solid; }
+  /* 挑英雄菜单：先点属性（力量 / 敏捷 / 智力 / 全才，同 Dota 选人界面的分法），再把这个属性的英雄全列出来（6 列） */
+  .menu.wide { width: calc(616px * var(--s)); }
+  .menu .tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: calc(5px * var(--s)); margin-top: calc(6px * var(--s)); }
+  .menu .tabs button { padding: calc(4px * var(--s)) 0; font-weight: 600; text-align: center; }
+  .menu .tabs button em { font-style: normal; font-weight: 400; color: var(--text-faint); margin-left: calc(4px * var(--s)); }
+  .menu .tabs .str { color: #e5675c; } .menu .tabs .agi { color: #5cc77f; } .menu .tabs .int { color: #5eaeea; } .menu .tabs .all { color: var(--gold); }
+  .menu .tabs button.on { color: #10141a; }
+  .menu .tabs button.on em { color: rgba(16, 20, 26, 0.6); }
+  .menu .tabs .str.on { background: #e5675c; border-color: #e5675c; } .menu .tabs .agi.on { background: #5cc77f; border-color: #5cc77f; }
+  .menu .tabs .int.on { background: #5eaeea; border-color: #5eaeea; } .menu .tabs .all.on { background: var(--gold); border-color: var(--gold); }
+  .menu .picks { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(3px * var(--s)); margin-top: calc(6px * var(--s)); }
+  .menu .picks button { display: flex; align-items: center; gap: calc(4px * var(--s)); min-width: 0; padding: calc(1px * var(--s)) calc(3px * var(--s)) calc(1px * var(--s)) calc(1px * var(--s)); text-align: left; }
+  .menu .picks button.taken { border-color: rgba(214, 178, 94, 0.6); color: var(--text); }
+  .menu .picks img { flex: none; width: calc(20px * var(--s)); height: calc(20px * var(--s)); border-radius: calc(3px * var(--s)); }
+  .menu .picks span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .menu .ask-attr { margin-top: calc(8px * var(--s)); color: var(--text-dim); }
+  .menu .foot { display: flex; align-items: center; gap: calc(6px * var(--s)); margin-top: calc(6px * var(--s)); }
+  .menu .foot .note { flex: 1; }
 </style>
 </head>
 <body>
 <script type="module">
-import { act, connect } from './api.js';
+import { act, connect, getJSON } from './api.js';
 
 // 位置按 1920×1080 的真实对局截图量的（2026-10-22，shots/ingame_coach.png）：顶栏头像高 40、间距 63，
 // 天辉第 1 个中心在屏幕中线左边 391、夜魇第 1 个在右边 138（天辉总在左边）。Dota 界面按屏幕高度等比缩放，所以都乘 s = 屏幕高 / 1080。
@@ -84,7 +105,7 @@ if (preview) document.body.classList.add('preview');
 const shell = window.overlayShell;   // Electron 预加载脚本给的；浏览器预览时没有
 
 const pills = [];
-for (const kind of ['buyback', 'ult']) {
+for (const kind of ['buyback', 'ult', 'ask']) {
   for (const side of ['radiant', 'dire']) {
     for (let i = 0; i < 5; i++) {
       const el = document.createElement('button');
@@ -92,11 +113,14 @@ for (const kind of ['buyback', 'ult']) {
       el.className = 'bb';
       el.hidden = true;
       el.style.left = `calc(50% + ${(CENTER0[side] + PITCH * i - W / 2) * s}px)`;
-      el.style.top = `${(kind === 'ult' ? ULT_TOP : TOP) * s}px`;
-      el.addEventListener('click', () => send(kind, { side, index: i }));
-      if (kind === 'ult') {
-        el.addEventListener('contextmenu', (e) => { e.preventDefault(); toggleMenu(side, i, el); });
-      }
+      el.style.top = `${(kind === 'buyback' ? TOP : ULT_TOP) * s}px`;
+      // 「?」点开挑英雄；买活小条右键也能挑（认错了换人）；大招小条右键是等级 / 减冷却菜单
+      if (kind === 'ask') el.addEventListener('click', () => toggleMenu(side, i, el, 'pick'));
+      else el.addEventListener('click', () => send(kind, { side, index: i }));
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        toggleMenu(side, i, el, kind === 'ult' ? 'ult' : 'pick');
+      });
       const ic = document.createElement('img');
       ic.className = 'ic';
       ic.alt = '';
@@ -119,7 +143,12 @@ const menuEl = document.createElement('div');
 menuEl.className = 'menu';
 menuEl.hidden = true;
 document.body.append(menuEl);
-let menu = null;   // { side, i, until }
+let menu = null;   // { type: 'ult' 等级 / 减冷却 | 'pick' 这格是谁, side, i, until, attr 挑英雄时点了哪个属性 }
+const ATTRS = [['str', '力量'], ['agi', '敏捷'], ['int', '智力'], ['all', '全才']];
+const MENU_W = { ult: 236, pick: 622 };
+// 英雄表（名字 / 图标 key / 属性）拿一次；快照里每格只给候选 id 的顺序
+let heroes = {};
+if (!preview) getJSON('/api/heroes').then((list) => { heroes = Object.fromEntries(list.map((h) => [h.id, h])); render(); }).catch(() => {});
 menuEl.addEventListener('pointerdown', () => { if (menu) menu.until = Date.now() + MENU_IDLE; });
 menuEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -136,7 +165,13 @@ function demo() {
   const now = Date.now();
   const ult = (name, key, end, cd) => ({ hero: '', name, key, end, level: 2, fixed: false, cd, cds: `${cd + 10}/${cd}/${cd - 10}`,
     mods: [{ key: 'talent:x', label: '20 级天赋：-10秒 末日冷却', on: false }, { key: 'octarine', label: '玲珑心：-25% 冷却', on: false }] });
-  const slot = (end) => ({ name: '', end, me: false, auto: false, ult: null });
+  const list = [['宙斯', 'zuus', 'int'], ['力丸', 'riki', 'agi'], ['撼地者', 'earthshaker', 'str'], ['破晓辰星', 'dawnbreaker', 'str'],
+    ['死亡先知', 'death_prophet', 'all'], ['帕吉', 'pudge', 'str'], ['斧王', 'axe', 'str'], ['莉娜', 'lina', 'int'], ['米拉娜', 'mirana', 'all'],
+    ['幽鬼', 'spectre', 'agi'], ['不朽尸王', 'undying', 'str'], ['潮汐猎人', 'tidehunter', 'str'], ['斯温', 'sven', 'str'],
+    ['马格纳斯', 'magnataur', 'all'], ['敌法师', 'antimage', 'agi']].map(([name, key, attr], k) => ({ id: k + 1, key, name, attr }));
+  heroes = Object.fromEntries(list.map((h) => [h.id, h]));
+  const pick = { order: list.map((h) => h.id), taken: [1, 2, 3, 4, 5] };
+  const slot = (end) => ({ name: '演示', end, me: false, auto: false, ult: null, pick });
   const slots = { radiant: [0, 1, 2, 3, 4].map(() => slot(null)), dire: [0, 1, 2, 3, 4].map(() => slot(null)) };
   slots.radiant[1].end = 1800 + 470;
   slots.dire[2].end = 1800 + 25;
@@ -145,6 +180,7 @@ function demo() {
   slots.radiant[1].ult = ult('黑洞', 'enigma_black_hole', null, 170);
   slots.radiant[2].ult = ult('绝冥再生', 'skeleton_king_reincarnation', 1800 - 4, 150);
   slots.radiant[4].ult = ult('热血竞技场', 'no_such_ability', null, 95);   // 图标下不到：退回写字
+  slots.radiant[3].name = '';   // 选人时没认出来：显示「?」
   return { show: true, anchor: now - 1800 * 1000, paused: null, ready_show: 30, ult_ready_show: 30,
            my_side: 'dire', buyback_on: true, slots };
 }
@@ -153,6 +189,11 @@ function demo() {
 async function send(type, payload) {
   if (!preview) return act(type, payload);
   const u = state.slots?.[payload.side]?.[payload.index]?.ult;
+  if (type === 'name_slot') {
+    const d = state.slots[payload.side][payload.index];
+    d.name = heroes[payload.hero_id]?.name || '';
+    render();
+  }
   if (type === 'ult_set' && u) {
     if (payload.level) Object.assign(u, { level: payload.level, fixed: true });
     const m = u.mods.find((x) => x.key === payload.mod);
@@ -162,12 +203,14 @@ async function send(type, payload) {
   return { ok: true };
 }
 
-function toggleMenu(side, i, pill) {
-  menu = menu && menu.side === side && menu.i === i ? null : { side, i, until: Date.now() + MENU_IDLE };
+function toggleMenu(side, i, pill, type) {
+  menu = menu && menu.side === side && menu.i === i && menu.type === type ? null
+    : { type, side, i, until: Date.now() + MENU_IDLE, attr: null };
   if (menu) {
     const r = pill.getBoundingClientRect();
+    menuEl.classList.toggle('wide', type === 'pick');
     menuEl.style.top = `${r.bottom + 4 * s}px`;
-    menuEl.style.left = `${Math.max(0, Math.min(r.left, window.innerWidth - 236 * s))}px`;
+    menuEl.style.left = `${Math.max(0, Math.min(r.left, window.innerWidth - MENU_W[type] * s))}px`;
   }
   render();
 }
@@ -190,7 +233,9 @@ function render() {
   const clock = state.paused ?? (Date.now() - state.anchor) / 1000;
   for (const p of pills) {
     const d = state.show ? state.slots?.[p.side]?.[p.i] : null;
-    if (p.kind === 'ult') { renderUlt(p, d?.ult, clock, menu && menu.side === p.side && menu.i === p.i); continue; }
+    const open = menu && menu.side === p.side && menu.i === p.i;
+    if (p.kind === 'ult') { renderUlt(p, d?.ult, clock, open && menu.type === 'ult'); continue; }
+    if (p.kind === 'ask') { renderAsk(p, d, open && menu.type === 'pick'); continue; }
     p.el.hidden = !d || state.buyback_on === false;
     if (p.el.hidden) continue;
     const left = d.end == null ? null : d.end - clock;
@@ -203,31 +248,43 @@ function render() {
     p.el.title = d.auto ? `${who}：买活冷却按 GSI 自动算`
       : left != null && left > 0 ? `${who}买活冷却还剩 ${text}（点错了再点一下取消）`
       : `${who}买活了就点一下，开始 8 分钟倒计时`;
+    if (d.name && !d.me) p.el.title += `\n右键：${d.name}认错了，换一个`;
   }
   renderMenu();
   reportHitRects();
 }
 setInterval(render, 250);
 
+function renderAsk(p, d, open) {
+  p.el.hidden = !d || !!d.name || d.me;
+  if (p.el.hidden) return;
+  show(p, '', '?', `bb ask${open ? ' open' : ''}`);
+  p.el.title = '选人时没认出这格是谁：点一下挑（挑了会记住这格头像，下次认得）';
+}
+
+const btn = (text, cls, onClick, title = '') => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = cls;
+  b.textContent = text;
+  b.title = title;
+  b.addEventListener('click', onClick);
+  return b;
+};
+
 let menuKey = '';
 function renderMenu() {
-  const u = menu && state.show ? state.slots?.[menu.side]?.[menu.i]?.ult : null;
+  const d = menu && state.show ? state.slots?.[menu.side]?.[menu.i] : null;
+  const u = menu?.type === 'ult' ? d?.ult : d;
   if (!u || Date.now() > menu.until) menu = null;
   menuEl.hidden = !menu;
   if (!menu) { menuKey = ''; return; }
-  const key = JSON.stringify([menu.side, menu.i, u.level, u.fixed, u.cd, u.mods]);
+  const key = JSON.stringify(menu.type === 'ult' ? [menu.side, menu.i, u.level, u.fixed, u.cd, u.mods]
+    : [menu.side, menu.i, menu.attr, d.name, d.pick, Object.keys(heroes).length]);
   if (key === menuKey) return;   // 每 0.25 秒都调，没变不重建（不然按钮在鼠标底下被换掉，点不着）
   menuKey = key;
+  if (menu.type === 'pick') { renderPicker(d); return; }
   const { side, i } = menu;
-  const btn = (text, cls, onClick, title = '') => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = cls;
-    b.textContent = text;
-    b.title = title;
-    b.addEventListener('click', onClick);
-    return b;
-  };
   const head = document.createElement('div');
   head.className = 'head';
   const name = document.createElement('span');
@@ -249,6 +306,61 @@ function renderMenu() {
   note.className = 'note';
   note.textContent = u.fixed ? '点开他看到了再勾；这局一直按这个算' : '等级是按你的等级猜的；点开他看到了再改 / 勾';
   menuEl.replaceChildren(head, lv, ...mods, cd, note);
+}
+
+// 「这格是谁」：先点属性，再把这个属性的英雄全列出来。顺序是 Python 排好的：选人网格里被选走、还没分到格子的（金边）在前，
+// 再是别的，都按和这格头像像不像排
+function renderPicker(d) {
+  const { side, i } = menu;
+  const head = document.createElement('div');
+  head.className = 'head';
+  const title = document.createElement('span');
+  title.textContent = d.name ? `${d.name}认错了？这格是谁` : '这格是谁？';
+  head.append(title, btn('×', 'x', () => { menu = null; render(); }, '收起'));
+  const taken = new Set(d.pick?.taken || []);
+  const all = (d.pick?.order || []).map((id) => heroes[id]).filter(Boolean);
+  const tabs = document.createElement('div');
+  tabs.className = 'tabs';
+  for (const [a, label] of ATTRS) {
+    const n = all.filter((h) => h.attr === a).length;
+    const b = btn(label, `${a}${menu.attr === a ? ' on' : ''}`, () => { menu.attr = a; render(); });
+    const em = document.createElement('em');
+    em.textContent = String(n);
+    b.append(em);
+    tabs.append(b);
+  }
+  const parts = [head, tabs];
+  if (menu.attr) {
+    const grid = document.createElement('div');
+    grid.className = 'picks';
+    for (const h of all.filter((x) => x.attr === menu.attr)) {
+      const b = btn('', taken.has(h.id) ? 'taken' : '', () => { menu = null; send('name_slot', { side, index: i, hero_id: h.id }); render(); },
+        taken.has(h.id) ? `${h.name}（选人时被选走了）` : h.name);
+      const img = document.createElement('img');
+      img.alt = '';
+      img.draggable = false;
+      img.src = `/icons/heroes/icons/${h.key}.png`;
+      img.addEventListener('error', () => img.remove());
+      const t = document.createElement('span');
+      t.textContent = h.name;
+      b.append(img, t);
+      grid.append(b);
+    }
+    parts.push(grid);
+  } else {
+    const ask = document.createElement('div');
+    ask.className = 'ask-attr';
+    ask.textContent = all.length ? '先点他是哪种属性，再从里面挑' : '英雄表还没拿到，到控制面板这一格填';
+    parts.push(ask);
+  }
+  const foot = document.createElement('div');
+  foot.className = 'foot';
+  const note = document.createElement('span');
+  note.className = 'note';
+  note.textContent = '金边 = 选人时被选走的，排在前面；挑了会记住这格头像，下次认得';
+  foot.append(note);
+  parts.push(foot);
+  menuEl.replaceChildren(...parts);
 }
 
 function renderUlt(p, u, clock, open) {
