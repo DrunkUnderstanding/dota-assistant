@@ -5478,9 +5478,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._buyback_tick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5488,9 +5488,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._check_feed",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5538,9 +5538,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._feed_done",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5548,9 +5548,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._feed_orphans",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5558,9 +5558,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._feed_read",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5568,9 +5568,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._game_clock",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5598,9 +5598,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._hero_icon",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5638,9 +5638,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._keep_game_crops",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5648,9 +5648,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._knowledge",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5708,9 +5708,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._my_slot",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5768,9 +5768,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._revived",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5808,9 +5808,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._scan_buyback",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5838,9 +5838,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._slot_name",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5908,9 +5908,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._timer_read",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5918,9 +5918,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._ult_cd",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5928,9 +5928,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._ult_check",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5938,9 +5938,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._ult_of",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5948,9 +5948,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._ult_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -5968,9 +5968,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.buyback_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -6108,9 +6108,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.mark_buyback",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -6118,9 +6118,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.mark_ult",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
@@ -6318,9 +6318,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.set_ult",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/timers.py",
    "tags": [
     "live_method"
    ]
