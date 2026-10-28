@@ -16,7 +16,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 
-from .heroes import Hero, HeroDB
+from .core.heroes import Hero, HeroDB
 
 # 收缩强度 = 单局噪声方差 / 真实效应方差：单局方差 0.25（=2500 个百分点²），
 # 真实克制效应大致在 ±2.5 个百分点 → 2500 / 6.25 = 400；配合效应更小（±1.5）→ 约 1100。

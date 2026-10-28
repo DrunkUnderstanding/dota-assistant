@@ -30,7 +30,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .core.config import DATA_DIR, ROOT, Config
-from .log import HTTPServer
+from .core.log import HTTPServer
 
 log = logging.getLogger(__name__)
 elog = logging.getLogger("dota_assistant.electron")      # Electron 主进程 / 页面的输出

@@ -10,7 +10,7 @@ from pathlib import Path
 from dota_assistant import advisor as adv, gsi
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GSIServer
-from dota_assistant.heroes import HeroDB
+from dota_assistant.core.heroes import HeroDB
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, make_stats
 
 

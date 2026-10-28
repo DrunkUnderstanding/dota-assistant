@@ -94,7 +94,7 @@ class OpenDotaPositionsTest(unittest.TestCase):
 
     def test_split_by_roles(self):
         from tests.test_engine import AXE, CM, HEROES, PL
-        from dota_assistant.heroes import HeroDB
+        from dota_assistant.core.heroes import HeroDB
         rows = lambda *lg: [{"lane_role": r, "time": 900, "games": str(g), "wins": "0"} for r, g in lg]
         pos = data.positions_from_lane_roles(HeroDB(HEROES), {
             PL.id: rows((1, 900), (2, 100)),           # 幻影长矛手：一号位标签，优势路几乎都算一号位

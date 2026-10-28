@@ -20,7 +20,7 @@ import requests
 from urllib3.util.retry import Retry
 
 from .core.config import DATA_DIR, Config
-from .heroes import Hero, HeroDB
+from .core.heroes import Hero, HeroDB
 
 OPENDOTA = "https://api.opendota.com/api"
 VALVE_HEROLIST = "https://www.dota2.com/datafeed/herolist?language=schinese"

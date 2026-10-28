@@ -22,7 +22,7 @@ from datetime import datetime
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from .core.config import ROOT, Config
+from .config import ROOT, Config
 
 LOG_DIR = ROOT / "logs"
 KEEP = 30                          # 留最近多少次启动的日志

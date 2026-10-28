@@ -159,7 +159,7 @@ class PrefetchTest(unittest.TestCase):
     def run_fetch(self, d: Path, fetch):
         from unittest import mock
         from dota_assistant import data
-        from dota_assistant.heroes import Hero, HeroDB
+        from dota_assistant.core.heroes import Hero, HeroDB
         db = HeroDB([Hero(1, "doom_bringer", "末日使者", "Doom", (), "str"), Hero(2, "pudge", "帕吉", "Pudge", (), "str")])
         base = mock.Mock(patch="7.41f", heroes={1: hero(ab("doom_bringer_doom", "140/130/120")),
                                                 2: hero(ab("pudge_dismember", "30/25/20"))})

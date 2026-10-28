@@ -20,7 +20,7 @@ from dota_assistant.core.config import Config
 from dota_assistant.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
 from pathlib import Path
-from dota_assistant.heroes import HeroDB
+from dota_assistant.core.heroes import HeroDB
 from dota_assistant.live import Live
 from dota_assistant.vision import Calibration
 from dota_assistant.webui import WebServer, overlay_config
@@ -1184,7 +1184,7 @@ class WebServerTest(unittest.TestCase):
         """随机端口分到 Chromium 拒绝的端口（例如 6669）就换一个，不然 Electron 界面打不开"""
         from unittest import mock
         from dota_assistant import webui
-        from dota_assistant.log import HTTPServer
+        from dota_assistant.core.log import HTTPServer
         probe = HTTPServer(("127.0.0.1", 0), None)
         bad = probe.server_address[1]
         probe.server_close()

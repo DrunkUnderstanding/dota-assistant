@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from dota_assistant import log as logs
+from dota_assistant.core import log as logs
 from dota_assistant import webui
 from dota_assistant.core.config import Config
 

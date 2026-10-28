@@ -32,12 +32,12 @@ import numpy as np
 
 from . import advisor as adv
 from . import brief, buyback, buybackscan, coach, data, death, gameplan, grid, itembuild, jungle, lanestate, llm, mates, roles, ultcd
-from . import log as logs
+from .core import log as logs
 from .core import config
 from .core.config import DATA_DIR, ROOT, Config
 from .engine import POSITION_NAMES
 from .gsi import SELECTION_STATE, STRATEGY_STATE, GSIServer, ensure_cfg, find_dota, is_dota_dir
-from .heroes import Hero
+from .core.heroes import Hero
 from .hotkeys import Hotkeys, vk_code
 from .speech import Speaker
 from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image

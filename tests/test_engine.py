@@ -2,7 +2,7 @@
 import unittest
 
 from dota_assistant.engine import Engine, pct
-from dota_assistant.heroes import Hero, HeroDB
+from dota_assistant.core.heroes import Hero, HeroDB
 
 AXE = Hero(2, "axe", "斧王", "Axe", ("Initiator", "Durable", "Carry"), "str")
 PL = Hero(12, "phantom_lancer", "幻影长矛手", "Phantom Lancer", ("Carry", "Escape"), "agi")

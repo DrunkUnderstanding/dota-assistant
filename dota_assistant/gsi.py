@@ -17,7 +17,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from .log import HTTPServer
+from .core.log import HTTPServer
 
 STRATEGY_STATE = "DOTA_GAMERULES_STATE_STRATEGY_TIME"   # 选完人到出门之间
 SELECTION_STATE = "DOTA_GAMERULES_STATE_HERO_SELECTION"
