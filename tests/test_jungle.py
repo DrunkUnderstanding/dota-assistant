@@ -1,7 +1,7 @@
 """野区计时提醒：谁提醒什么、哪几秒亮。"""
 import unittest
 
-from dota_assistant import jungle
+from dota_assistant.domain import jungle
 
 
 def bench(stacks10):

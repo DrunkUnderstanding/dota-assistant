@@ -356,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
         print(death_sim(cfg, args.files or sorted((config.ROOT / "shots" / "deaths").glob("*.json"))))
         return 0
     if args.cmd == "brief-sim":
-        from .brief import simulate
+        from .domain.brief import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid, ai=args.ai), end=chr(10) * 2)
         return 0

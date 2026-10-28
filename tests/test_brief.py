@@ -1,7 +1,7 @@
 """本局要点：强势期计算、猜位置、卡片结构。不联网。"""
 import unittest
 
-from dota_assistant import brief
+from dota_assistant.domain import brief
 from dota_assistant.ai import gameplan
 
 
