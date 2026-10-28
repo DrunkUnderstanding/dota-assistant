@@ -1,0 +1,42 @@
+# 项目元数据和工具配置。日常从源码跑仍然是「启动助手.bat」/ python -m dota_assistant；
+# requirements.txt 保留（.bat 和打包在用），requirements.lock 是当前能跑的版本（python tools/lock_deps.py 生成）。
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dota-assistant"
+version = "0.1.0"
+description = "Dota 2 选人助手（自用）：识别选人画面，按位置推荐英雄，局内提醒"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+# 和 requirements.txt 保持一致
+dependencies = [
+    "requests>=2.31",
+    "numpy>=1.26",
+    "opencv-python>=4.8",
+    "mss>=9.0",
+    "PySide6-Essentials>=6.6",
+    "anthropic>=2.0",
+]
+
+[project.scripts]
+dota-assistant = "dota_assistant.cli:main"
+
+[tool.setuptools.packages.find]
+# 只打包 dota_assistant 及其子包；tests / tools / packaging / electron / web 不进去
+where = ["."]
+include = ["dota_assistant*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 140
+extend-exclude = ["electron", "web", "build", "data", "shots", "logs"]
+
+[tool.ruff.lint]
+# 只开不改行为的检查：语法类（E9）、比较 / 语句类明显错误（F63 / F7）、未定义名字（F82）、未使用 import（F401）。
+# 不开格式类规则，也不要跑 ruff format。
+select = ["E9", "F63", "F7", "F82", "F401"]

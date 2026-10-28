@@ -1,0 +1,27 @@
+# 由 python tools/lock_deps.py 生成：requirements.txt 里的包及其传递依赖，当前能跑的版本
+# Python 3.12，win32
+annotated-types==0.8.0
+anthropic==2.1.0
+anyio==4.15.1
+certifi==2026.10.19
+charset-normalizer==3.5.2
+docstring_parser==0.18.0
+h11==0.16.0
+httpcore2==2.16.0
+httpx2==2.16.0
+idna==3.20
+jiter==0.17.0
+mss==10.2.0
+numpy==2.5.4
+opencv-python==5.0.0.93
+opentelemetry-api==1.45.1
+pydantic==2.14.1
+pydantic_core==2.50.1
+PySide6_Essentials==6.12.0
+requests==2.34.2
+shiboken6==6.12.0
+sniffio==1.3.1
+truststore==0.10.5
+typing_extensions==4.16.0
+typing-inspection==0.4.4
+urllib3==2.8.0
