@@ -12,7 +12,7 @@ from ...vision import grid
 from ...core.gsi_fields import SELECTION_STATE, STRATEGY_STATE
 from ...core.heroes import Hero
 from ...domain.engine import POSITION_NAMES
-from ...vision.recognize import EMPTY, DraftView, confident, feature, recognize
+from ...vision.recognize import EMPTY, DraftView, confident, feature, recognize, similarity
 from . import consts
 
 log = logging.getLogger(__name__)
@@ -273,6 +273,10 @@ class DraftMixin:
         if changed or force:
             log.info("识别结果%s：天辉 %s | 夜魇 %s | 禁用 %s", "变了" if changed else "（手动重识别）",
                      *consts._view_text(self.db, view))
+            if clash := sorted({s.guess for s in view.radiant + view.dire if s.clash}):
+                log.warning("同一个英雄认进了好几格（%s），这几格都不算；多半是学错了模板，看 %s 下这个英雄 id 的目录",
+                            "、".join(self.db.by_id[i].name_cn if i in self.db.by_id else str(i) for i in clash),
+                            self.bank.template_dir)
             self.fill_slots(view, only_empty=only_empty)
             self.refresh(force_speech=force)
 
@@ -288,7 +292,7 @@ class DraftMixin:
     def learn_slot(self, side: str, index: int, h: Hero) -> int:
         """玩家告诉我们顶栏这格是 h：把这局在这格裁到的头像记成 h 的模板，返回记了几张。
         不记的：和这局一开始（还没人选）一样的（那格根本没出头像，例如 2026-10-28 断线的那个人，记了会把空位认成他）、
-        两张一样的、本来就认得出的"""
+        两张一样的、本来就认得出的、像别的格子的（见 _like_other_slot）"""
         blank = self._crops["blank"].get((side, index))
         fb = feature(blank) if blank is not None else None
         seen, n = [], 0
@@ -303,12 +307,25 @@ class DraftMixin:
             hid, score, gap = self.bank.best(c)
             if hid == h.id and confident(score, gap, self.cfg.match_threshold):
                 continue
+            if (like := self._like_other_slot(side, index, c)) is not None:
+                log.debug("%s第 %d 格的%s裁图像空位（和别的格子像 %.2f），不记成%s", consts._side_cn(side), index + 1,
+                          "选人" if phase == "sel" else "策略时间", like, h.name_cn)
+                continue
             self.bank.learn(h.id, c)
             n += 1
         if n:
             log.info("记住%s第 %d 格是%s：存了 %d 张模板（共学习 %d 张）",
                      consts._side_cn(side), index + 1, h.name_cn, n, self.bank.learned)
         return n
+
+    def _like_other_slot(self, side: str, index: int, c) -> float | None:
+        """这张裁图和这局开局（还没人选）的任何一格、或者别的格子这局裁到的样子很像（EMPTY_LIKE 以上），返回相似度；不像返回 None。
+        一个英雄只在一格，像别的格子就是空位 / 没出头像那种通用的样子。只和这格开局那张比不够：
+        2026-10-29 实战那张开局裁图是切画面时裁的，和后来的空位样子对不上，一张空位裁图（段位旗 + 段位条）被记成了风行者"""
+        others = list(self._crops["blank"].values()) + [x for ph in ("sel", "strat") for k, x in self._crops[ph].items()
+                                                        if k != (side, index)]
+        best = max((similarity(c, x) for x in others), default=-1.0)
+        return best if best >= consts.EMPTY_LIKE else None
 
     def name_slot(self, side: str, index: int, hero_id: int) -> None:
         """顶栏「这格是谁」点了一个英雄：填进格子，顺手记成模板"""
@@ -372,7 +389,7 @@ class DraftMixin:
         """顶栏分数没过阈值、但最像的英雄在选人网格里确实已被选走（变暗没斜线）的，也算认出来。
         2026-10-23 实测：拉比克在顶栏只有 0.63（阈值 0.70），网格里已经变暗。"""
         for s in view.radiant + view.dire:
-            if s.hero_id is None and s.guess in self.grid.taken and s.score >= consts.GRID_CONFIRM_MIN:
+            if s.hero_id is None and not s.clash and s.guess in self.grid.taken and s.score >= consts.GRID_CONFIRM_MIN:
                 s.hero_id = s.guess
 
     def fill_slots(self, view: DraftView, only_empty: bool = False) -> None:

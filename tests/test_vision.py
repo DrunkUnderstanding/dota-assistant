@@ -65,6 +65,17 @@ class VisionTest(unittest.TestCase):
         self.assertGreater(score, 0.9)
         self.assertEqual(TemplateBank(template_dir=Path(self.tmp.name)).learned, 1)   # 落盘了
 
+    def test_same_hero_in_many_slots_not_counted(self):
+        # 2026-10-29 实战：一张空位裁图被学成了风行者，下一局空格全认成风行者。一个英雄只能在一格，认进好几格的都不算
+        hid = self.ids[5]
+        self.bank.learn(hid, crop(self.canvas, self.cal.dire[4]))
+        view = recognize(self.canvas, self.cal, self.bank, threshold=0.70)
+        for side in ("radiant", "dire"):
+            self.assertEqual([s.hero_id for s in getattr(view, side)], self.expect[side], side)   # 选了的照常认，空位不填
+        self.assertEqual([s.clash for s in (view.radiant[4], view.dire[3], view.dire[4])], [True] * 3)
+        self.assertEqual({view.radiant[4].guess, view.dire[3].guess, view.dire[4].guess}, {hid})
+        self.assertFalse(any(s.clash for s in view.radiant[:4] + view.dire[:3]))
+
     def test_noise_on_portrait(self):
         # 顶栏头像上盖的东西（vision.VIEWS）：右下角英雄徽章、天梯段位条（半透明红底白字）、底下颜色条；
         # 空位上也盖着段位旗 + 段位条，不能因为挖掉噪点就被认成谁
@@ -122,6 +133,18 @@ class RealShotTest(unittest.TestCase):
             if f == "20261022-231827":
                 got[:2] = [None, None]
             self.assertEqual(got, want, f"{f}：{REAL[f]}")
+
+    def test_real_bad_template(self):
+        # 2026-10-29 学坏的那张（夜魇第 5 格空位：段位旗「102」+ 超凡入圣I，被帮认成风行者），移到了 shots/bad-templates/
+        bad = next(iter((SHOTS / "bad-templates").glob("21-*.png")), None)
+        cal = Calibration.load()
+        if bad is None or not (cal and cal.ready):
+            self.skipTest("没有那张学坏的模板 / 没校准")
+        bank = TemplateBank(template_dir=Path(tempfile.mkdtemp()))
+        bank.learn(21, read_image(bad))
+        view = recognize(read_image(SHOTS / "20261023-004917.png"), cal, bank, threshold=0.70)
+        self.assertEqual([s.hero_id for s in view.radiant + view.dire], [None] * 10)
+        self.assertGreaterEqual(sum(s.clash for s in view.radiant + view.dire), 2)
 
 
 if __name__ == "__main__":

@@ -608,6 +608,35 @@ class CoachLiveTest(unittest.TestCase):
         self.assertEqual(sorted(self.live.pick_candidates("dire", 0)["order"]), sorted(h.id for h in HEROES))  # 什么都没裁到：全部英雄
         self.assertEqual({h["attr"] for h in self.live.heroes()}, {h.attr for h in HEROES})
 
+    def test_name_slot_skips_empty_look(self):
+        # 2026-10-29 实战：开局那张是切画面时裁的（和后来的空位不一样），帮认时把一张空位裁图（段位旗 + 段位条）记成了风行者，
+        # 下一局空格全认成风行者。像别的格子开局样子 / 别的格子裁图的不记，策略时间真出了头像的那张照记
+        from dota_assistant.vision.recognize import TemplateBank, write_image
+        rng = np.random.default_rng(3)
+        def rand_pic():
+            return cv2.resize(rng.integers(0, 255, (6, 8, 3), dtype=np.uint8), (64, 36), interpolation=cv2.INTER_NEAREST)
+        def jitter(img):
+            return np.clip(img.astype(int) + rng.integers(-12, 12, img.shape), 0, 255).astype(np.uint8)
+        pdir, tdir = Path(tempfile.mkdtemp(dir=TMP)), Path(tempfile.mkdtemp(dir=TMP))
+        for h in (AXE, CM, PL, TIDE):
+            write_image(pdir / f"{h.id}.png", rand_pic())
+        self.live.bank = TemplateBank(pdir, tdir)
+        empty = rand_pic()                                                # 空位的样子：每格差不多
+        c = self.live._crops
+        for sd in live_consts.SIDES:
+            for k in range(5):
+                c["blank"][(sd, k)] = jitter(empty)
+        c["blank"][("dire", 4)] = rand_pic()                              # 这格开局裁到的是切画面那一帧
+        c["sel"][("dire", 4)] = jitter(empty)                             # 选人结束时这格还空着
+        c["sel"][("radiant", 0)] = jitter(empty)
+        wk = rand_pic()
+        c["strat"][("dire", 4)] = wk                                      # 策略时间出了头像
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "dire", "index": 4, "hero_id": WK.id}))
+        self.assertEqual(self.live.slots["dire"][4], WK.name_cn)
+        self.assertEqual(self.live.bank.learned, 1)                       # 只记了策略时间那张
+        self.assertEqual(self.live.bank.match(wk)[0], WK.id)
+        self.assertNotEqual(self.live.bank.match(jitter(empty))[0], WK.id)
+
     def test_slots_view_marks_unrecognized(self):
         # 选人界面叠加层的「顶栏对照」：没认出的格子要让玩家看得出来（金色 ?），帮填的格子选人时识别也不冲掉
         from dota_assistant.vision.recognize import DraftView, Slot

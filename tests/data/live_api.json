@@ -91,6 +91,10 @@
   "kind": "method",
   "signature": "(self, st, key: 'str') -> 'None'"
  },
+ "_like_other_slot": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', c) -> 'float | None'"
+ },
  "_load_overlay_state": {
   "kind": "method",
   "signature": "(self) -> 'None'"

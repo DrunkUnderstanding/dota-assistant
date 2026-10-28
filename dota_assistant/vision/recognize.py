@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -105,6 +106,11 @@ def _feats(img: np.ndarray) -> list[np.ndarray]:
     return [feature(img, m) for m in VIEWS]
 
 
+def similarity(a: np.ndarray, b: np.ndarray) -> float:
+    """两张格子裁图像不像：几种挖噪点的比法（VIEWS）里最高的那个，和 TemplateBank.scores 一个算法"""
+    return max(float(x @ y) for x, y in zip(_feats(a), _feats(b)))
+
+
 def read_image(path: Path) -> np.ndarray:
     """读图（支持中文路径），带透明通道的铺到黑底上，返回 BGR"""
     img = cv2.imdecode(np.fromfile(str(path), dtype=np.uint8), cv2.IMREAD_UNCHANGED)
@@ -193,6 +199,7 @@ class Slot:
     guess: int                 # 最像的那个 id（哪怕低于阈值），方便调试
     image: np.ndarray | None = None
     gap: float = 0.0           # 比第二像的别的英雄高出多少（confident）
+    clash: bool = False        # 和别的格子认成了同一个英雄，都不算（见 recognize）
 
 
 @dataclass
@@ -217,4 +224,11 @@ def recognize(img: np.ndarray, cal: Calibration, bank: TemplateBank, threshold: 
         ok = hid != EMPTY and confident(score, gap, threshold)
         return Slot(hid if ok else None, score, hid, c.copy() if keep_images else None, gap)
 
-    return DraftView([one(r) for r in cal.radiant], [one(r) for r in cal.dire], [one(r) for r in cal.bans])
+    radiant, dire = [one(r) for r in cal.radiant], [one(r) for r in cal.dire]
+    # 一个英雄只能在一格：认进好几格说明模板学坏了，这几格都不算。2026-10-29 实战：帮认时一张空位样子的裁图被记成了风行者，
+    # 下一局选人 8 个空格全认成风行者（0.79~0.98），推荐按「对面 4 个风行者」算
+    seen = Counter(s.hero_id for s in radiant + dire if s.hero_id)
+    for s in radiant + dire:
+        if seen[s.hero_id] > 1:
+            s.hero_id, s.clash = None, True
+    return DraftView(radiant, dire, [one(r) for r in cal.bans])

@@ -10,3 +10,4 @@ logs/
 build/
 config.toml.bak
 *.egg-info/
+templates/
