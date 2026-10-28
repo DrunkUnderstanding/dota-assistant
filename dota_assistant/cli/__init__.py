@@ -33,11 +33,11 @@ import argparse
 import sys
 from pathlib import Path
 
-from .app import update
-from .core import config
-from .core import log as logs
-from .sources import assets, player
-from .sources import stats as stats_mod
+from ..app import update
+from ..core import config
+from ..core import log as logs
+from ..sources import assets, player
+from ..sources import stats as stats_mod
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
@@ -51,7 +51,7 @@ def _split(s: str | None) -> list[str]:
 
 
 def cmd_suggest(cfg: config.Config, args) -> int:
-    from .domain import advisor as adv
+    from ..domain import advisor as adv
     if args.all_roles:
         cfg.position_filter = False
     if args.top:
@@ -77,7 +77,7 @@ def cmd_suggest(cfg: config.Config, args) -> int:
 
 def cmd_recognize(cfg: config.Config, path: Path) -> int:
     import cv2
-    from .vision.recognize import SURE_GAP, SURE_SCORE, Calibration, TemplateBank, read_image, recognize, write_image
+    from ..vision.recognize import SURE_GAP, SURE_SCORE, Calibration, TemplateBank, read_image, recognize, write_image
     cal = Calibration.load()
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
@@ -108,7 +108,7 @@ def cmd_recognize(cfg: config.Config, path: Path) -> int:
 
 
 def cmd_label(cfg: config.Config, paths: list[Path]) -> int:
-    from .vision.recognize import EMPTY, Calibration, TemplateBank, read_image, recognize
+    from ..vision.recognize import EMPTY, Calibration, TemplateBank, read_image, recognize
     cal = Calibration.load()
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
@@ -144,7 +144,7 @@ def cmd_label(cfg: config.Config, paths: list[Path]) -> int:
 
 
 def cmd_kb(cfg: config.Config, args) -> int:
-    from . import kb
+    from .. import kb
     if args.action == "update":
         kb.update([h.id for h in assets.load_heroes()], force=args.force)
         return 0
@@ -175,7 +175,7 @@ def cmd_kb(cfg: config.Config, args) -> int:
 def _kb_mistake(base, mistakes, args) -> int:
     """没给 --wrong 就列出全部；给了就记一条。英雄 / 物品名换成知识库里的正式名，查不到会报错"""
     import datetime
-    from . import kb
+    from .. import kb
     if not args.wrong:
         for m in mistakes:
             about = "、".join(x for x in (m.hero, m.item) if x) or "通用"
@@ -295,16 +295,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "suggest":
         return cmd_suggest(cfg, args)
     if args.cmd == "start":
-        from .app.start import main as start
+        from ..app.start import main as start
         return start()
     if args.cmd == "run":
-        from .app.webui import run
+        from ..app.webui import run
         return run(cfg, browser=args.browser)
     if args.cmd == "demo":
-        from .app.demo import run as demo
+        from ..app.demo import run as demo
         return demo(cfg, args.step, browser=args.browser, game_speed=args.speed)
     if args.cmd == "calibrate":
-        from .vision.calibrate import calibrate
+        from ..vision.calibrate import calibrate
         return 0 if calibrate(args.image) else 1
     if args.cmd == "recognize":
         return cmd_recognize(cfg, args.image)
@@ -314,19 +314,19 @@ def main(argv: list[str] | None = None) -> int:
         paths = [Path(x) for pat in args.images for x in (glob.glob(str(pat)) or [str(pat)])]
         return cmd_label(cfg, paths)
     if args.cmd == "gsi-install":
-        from .game.gsi import install_cfg
+        from ..game.gsi import install_cfg
         path = install_cfg(args.dota_dir, cfg.gsi_port)
         config.save({"dota_dir": str(args.dota_dir)})   # 以后一键启动、导出网格图都用这个目录，不再自动找
         print(f"已写入 {path}（Dota 目录也记进了 config.toml）\n"
               "还需要在 Steam → Dota 2 → 属性 → 启动选项 里加上：-gamestateintegration，然后重开 Dota")
         return 0
     if args.cmd == "backtest":
-        from .research.backtest import run as backtest
+        from ..research.backtest import run as backtest
         print(backtest(cfg, args.matches, do_tune=args.tune))
         return 0
     if args.cmd == "lanes-test":
-        from .research import backtest
-        from .domain import lanes
+        from ..research import backtest
+        from ..domain import lanes
         stats = stats_mod.load_stats(cfg)
         if not (stats.get("hi_id") and cfg.stratz_token):
             print("需要统计数据（update）和 STRATZ token")
@@ -335,40 +335,40 @@ def main(argv: list[str] | None = None) -> int:
         print(lanes.evaluate(matches, stats_mod.load_positions(cfg)))
         return 0
     if args.cmd == "lane-test":
-        from .research.lanestate import run as lane_test
+        from ..research.lanestate import run as lane_test
         print(lane_test(cfg, args.matches))
         return 0
     if args.cmd == "lane-review":
-        from .research.lanestate import review
+        from ..research.lanestate import review
         print(review(cfg))
         return 0
     if args.cmd == "backtest-ai":
-        from .research.aibacktest import run as ai_run
+        from ..research.aibacktest import run as ai_run
         print(ai_run(cfg, args.moments, args.model, args.workers))
         return 0
     if args.cmd == "coach-sim":
-        from .domain.coach import simulate
+        from ..domain.coach import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid), end=chr(10) * 2)
         return 0
     if args.cmd == "death-sim":
-        from .domain.itembuild import death_sim
+        from ..domain.itembuild import death_sim
         print(death_sim(cfg, args.files or sorted((config.ROOT / "shots" / "deaths").glob("*.json"))))
         return 0
     if args.cmd == "brief-sim":
-        from .domain.brief import simulate
+        from ..domain.brief import simulate
         for mid in args.match_ids:
             print(simulate(cfg, mid, ai=args.ai), end=chr(10) * 2)
         return 0
     if args.cmd == "kb":
         return cmd_kb(cfg, args)
     if args.cmd == "gsi-dump":
-        from .game.gsi import dump
+        from ..game.gsi import dump
         dump(cfg.gsi_port, config.ROOT / "shots" / "gsi")
         return 0
     if args.cmd == "say":
         import time
-        from .game.speech import Speaker
+        from ..game.speech import Speaker
         s = Speaker(cfg.voice_rate)
         s.say(" ".join(args.text))
         time.sleep(max(2.0, len("".join(args.text)) * 0.25))
