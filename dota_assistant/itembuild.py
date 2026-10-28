@@ -334,11 +334,12 @@ def death_sim(cfg, paths: list) -> str:
     位置用这个英雄在本分段最常打的位置（推送里没有）；同一场（matchid）的死亡按顺序累计次数"""
     import json
     from pathlib import Path
-    from . import data, death
+    from . import death
+    from .sources import stats as stats_mod
     base = kb.KnowledgeBase.load()
     if base is None:
         return "还没有知识库，先运行 python -m dota_assistant kb update"
-    positions = data.load_positions(cfg) or {}
+    positions = stats_mod.load_positions(cfg) or {}
     const = assets.items_const()
     tree = coach.item_tree(const)
     coaches: dict[str, coach.Coach] = {}

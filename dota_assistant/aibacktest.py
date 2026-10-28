@@ -19,10 +19,11 @@ import random
 from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
-from . import backtest as bt, data, llm
+from . import backtest as bt, llm
 from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES, Engine
 from .sources import assets
+from .sources import stats as stats_mod
 
 OUT = DATA_DIR / "ai_backtest.jsonl"
 N_CANDIDATES = 12
@@ -47,9 +48,9 @@ SCHEMA = {
 
 def build_moments(cfg: Config, n: int, seed: int = 1) -> list[dict]:
     """从回测缓存的对局里抽选人时刻（不联网，回测缓存不够时先跑一次 backtest）"""
-    stats = data.load_stats(cfg)
+    stats = stats_mod.load_stats(cfg)
     matches = bt.fetch_matches(cfg, stats["hi_id"], 3000)
-    eng = Engine(assets.load_heroes(), stats, data.load_positions(cfg))
+    eng = Engine(assets.load_heroes(), stats, stats_mod.load_positions(cfg))
     t = bt.Tables(eng)
     rng = random.Random(seed)
     out = []

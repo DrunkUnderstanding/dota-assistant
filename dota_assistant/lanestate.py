@@ -22,9 +22,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import data
 from .core.config import DATA_DIR, Config
 from .sources import http
+from .sources import stats as stats_mod
 
 CACHE = DATA_DIR / "lane_matches.json"
 REPORT = DATA_DIR / "lane_report.txt"
@@ -80,7 +80,7 @@ def fetch(cfg: Config, n: int, log=print) -> list[dict]:
     """对局 id 用选人回测那批（backtest.fetch_matches，超凡～冠绝、统计数据之后的样本外对局），逐批去 STRATZ 取前 12 分钟。
     缓存可以接着取（中途断了再跑一次就行）"""
     from . import backtest
-    stats = data.load_stats(cfg)
+    stats = stats_mod.load_stats(cfg)
     if not (stats.get("hi_id") and cfg.stratz_token):
         raise RuntimeError("需要统计数据（update）和 STRATZ token")
     ids = [m["id"] for m in backtest.fetch_matches(cfg, stats["hi_id"], n, log)]

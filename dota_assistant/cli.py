@@ -37,6 +37,7 @@ from . import data
 from .core import config
 from .core import log as logs
 from .sources import assets
+from .sources import stats as stats_mod
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
@@ -325,12 +326,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "lanes-test":
         from . import backtest, lanes
-        stats = data.load_stats(cfg)
+        stats = stats_mod.load_stats(cfg)
         if not (stats.get("hi_id") and cfg.stratz_token):
             print("需要统计数据（update）和 STRATZ token")
             return 1
         matches = backtest.fetch_matches(cfg, stats["hi_id"], args.matches)
-        print(lanes.evaluate(matches, data.load_positions(cfg)))
+        print(lanes.evaluate(matches, stats_mod.load_positions(cfg)))
         return 0
     if args.cmd == "lane-test":
         from .lanestate import run as lane_test

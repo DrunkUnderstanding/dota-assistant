@@ -19,9 +19,9 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import data
 from .core.config import DATA_DIR, Config
 from .sources import assets, http
+from .sources import stats as stats_mod
 from . import engine as E
 from .engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
 
@@ -41,9 +41,9 @@ def fetch_matches(cfg: Config, after_id: int, n: int, log=print) -> list[dict]:
     if cached.get("after_id") == after_id and cached.get("requested", 0) >= n:
         return cached["matches"][:n]
 
-    bracket = data._bracket_sql(cfg)
+    bracket = stats_mod._bracket_sql(cfg)
     q = (f"SELECT match_id FROM public_matches WHERE match_id > {after_id} AND match_id <= {after_id + 3_000_000} "
-         f"AND game_mode = 22 AND lobby_type = 7 AND duration >= {data.MIN_DURATION} {bracket} "
+         f"AND game_mode = 22 AND lobby_type = 7 AND duration >= {stats_mod.MIN_DURATION} {bracket} "
          f"ORDER BY random() LIMIT {int(n * 1.4) + 20}")
     ids = [r["match_id"] for r in http._sql(q)]
     log(f"  OpenDota 抽到 {len(ids)} 场候选，去 STRATZ 取选人顺序和位置 …")
@@ -271,13 +271,13 @@ def report(rows: list[PickRow], drafts: dict, n_matches: int, train: dict) -> st
 
 
 def run(cfg: Config, n: int = 3000, log=print, do_tune: bool = False) -> str:
-    stats = data.load_stats(cfg)
+    stats = stats_mod.load_stats(cfg)
     after = stats.get("hi_id")
     if not after:
         raise RuntimeError("统计数据里没有 match_id 范围，先重新 update 一次")
     if not cfg.stratz_token:
         raise RuntimeError("回测需要 STRATZ token（取选人顺序和位置）")
-    eng = Engine(assets.load_heroes(), stats, data.load_positions(cfg))
+    eng = Engine(assets.load_heroes(), stats, stats_mod.load_positions(cfg))
     log(f"取样本外对局（match_id > {after}）…")
     matches = fetch_matches(cfg, after, n, log)
     random.Random(0).shuffle(matches)

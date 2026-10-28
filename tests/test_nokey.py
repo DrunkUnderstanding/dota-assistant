@@ -7,7 +7,7 @@ from unittest import mock
 
 from dota_assistant import brief, coach, data, gameplan, kb, live, llm, start
 from dota_assistant.core.config import Config
-from dota_assistant.sources import assets, http
+from dota_assistant.sources import assets, http, stats
 
 NO_KEY = dict(stratz_token="", ai_api_key="", ai_base_url="")
 SOURCE = "敌方斧王：反击螺旋，被攻击时有几率旋转"
@@ -76,13 +76,13 @@ class NoteTest(unittest.TestCase):
         self.assertTrue(live.plan_error(RuntimeError("超时")).startswith("AI 打法没做出来"))
 
     def test_start_note(self):
-        with mock.patch.object(data, "positions_source", return_value=None), mock.patch("shutil.which", return_value=None):
+        with mock.patch.object(stats, "positions_source", return_value=None), mock.patch("shutil.which", return_value=None):
             note = start.no_key_note(Config(ai_plan=True, ai_provider="claude_code", **NO_KEY))
         self.assertIn("没有分位置数据", note)
         self.assertIn("Claude Code", note)
-        with mock.patch.object(data, "positions_source", return_value="opendota"):
+        with mock.patch.object(stats, "positions_source", return_value="opendota"):
             self.assertIn("OpenDota 分路凑的", start.no_key_note(Config(ai_plan=False, **NO_KEY)))
-        with mock.patch.object(data, "positions_source", return_value="stratz"):      # 打包版带着 STRATZ 的分位置数据
+        with mock.patch.object(stats, "positions_source", return_value="stratz"):      # 打包版带着 STRATZ 的分位置数据
             note = start.no_key_note(Config(ai_plan=False, **NO_KEY))
         self.assertNotIn("分位置数据", note)
         self.assertIn("STRATZ token", note)
@@ -116,12 +116,12 @@ class OpenDotaPositionsTest(unittest.TestCase):
             od = d / "positions_opendota.json"
             od.write_text('{"heroes": {"1": {"1": [10, 5]}}}', encoding="utf-8")
             cfg = Config(rank_min=7, rank_max=8)
-            with mock.patch.object(data, "DATA_DIR", d), mock.patch.object(data, "OPENDOTA_POSITIONS", od):
-                self.assertEqual(data.positions_source(cfg), "opendota")
-                self.assertEqual(data.load_positions(cfg), {1: {1: (10, 5)}})
+            with mock.patch.object(stats, "DATA_DIR", d), mock.patch.object(stats, "OPENDOTA_POSITIONS", od):
+                self.assertEqual(stats.positions_source(cfg), "opendota")
+                self.assertEqual(stats.load_positions(cfg), {1: {1: (10, 5)}})
                 (d / "positions_r7-8.json").write_text('{"heroes": {"1": {"2": [7, 4]}}}', encoding="utf-8")
-                self.assertEqual(data.positions_source(cfg), "stratz")
-                self.assertEqual(data.load_positions(cfg), {1: {2: (7, 4)}})
+                self.assertEqual(stats.positions_source(cfg), "stratz")
+                self.assertEqual(stats.load_positions(cfg), {1: {2: (7, 4)}})
 
 
 class PlanLiveTest(unittest.TestCase):
@@ -168,7 +168,7 @@ class RealKBTest(unittest.TestCase):
     def build(self, positions):
         enemies = [self.ids[n] for n in ("幻影刺客", "斧王", "水晶室女")]
         with mock.patch.object(http, "_stratz", side_effect=no_stratz), \
-                mock.patch.object(data, "load_positions", return_value=positions):
+                mock.patch.object(stats, "load_positions", return_value=positions):
             b = brief.build(Config(**NO_KEY), self.ids["敌法师"], [self.ids["潮汐猎人"]], enemies, 1, base=self.base)
         return b, [t for t, _ in b.sections]
 

@@ -19,6 +19,7 @@ from . import data
 from .core import config
 from .core.config import DATA_DIR, ROOT
 from .sources import assets
+from .sources import stats as stats_mod
 
 FULL_UPDATE_DAYS = 3
 PLAYER_UPDATE_HOURS = 12
@@ -105,7 +106,7 @@ def _age_hours(p: Path) -> float:
 
 
 def ensure_data(cfg: config.Config) -> None:
-    stats = data.stats_path(cfg)
+    stats = stats_mod.stats_path(cfg)
     try:
         if _age_hours(stats) > FULL_UPDATE_DAYS * 24 or not (DATA_DIR / "heroes.json").exists():
             _say("更新数据（3 天一次，约 5 分钟）…")
@@ -130,7 +131,7 @@ def no_key_note(cfg: config.Config) -> str:
     if not cfg.stratz_token:
         out.append("没填 STRATZ token：选人推荐、机制提醒、出装针对装、各种计时照常用；"
                    "少了对线胜负、起手装、强势期、同分段出装节奏")
-        src = data.positions_source(cfg)
+        src = stats_mod.positions_source(cfg)
         if src == "opendota":
             out.append("  分位置数据是用 OpenDota 分路凑的，猜位置比 STRATZ 的准确度低一些")
         elif src is None:

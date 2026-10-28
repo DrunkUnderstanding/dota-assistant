@@ -32,8 +32,8 @@ MIN_TARGETS = 40            # 扫出来的（能解析的）目标至少这么�
 
 # (模块, 名字) → 理由。模块名跟着搬家改（只改模块路径，不许拿它把「搬走的名字留转发」洗白）
 IMPORTED_OK = {
-    ("dota_assistant.data", "DATA_DIR"):
-        "test_nokey patch 后调 positions_source / load_positions，它们在 data 里按全局名 DATA_DIR 查（从 config import 进来）",
+    ("dota_assistant.sources.stats", "DATA_DIR"):
+        "test_nokey patch 后调 positions_source / load_positions，它们在 sources.stats 里按全局名 DATA_DIR 查（从 config import 进来）",
     ("dota_assistant.webui", "HTTPServer"):
         "test_webui patch 后起 WebServer，webui 里按全局名 HTTPServer 查（从 log import 进来）",
     ("dota_assistant.live", "recognize"):

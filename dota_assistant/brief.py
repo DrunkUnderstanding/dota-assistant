@@ -18,10 +18,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, data, gameplan, itembuild, kb, lanes, teamfight
+from . import coach, gameplan, itembuild, kb, lanes, teamfight
 from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES
 from .sources import http
+from .sources import stats as stats_mod
 
 log = logging.getLogger(__name__)
 BRIEF_DIR = DATA_DIR / "brief"
@@ -236,7 +237,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
                                "下面是按双方技能 / 物品机制给的提醒（「设置」里填了就有）")])
 
     # 1. 对线：三路分路 → 我这路的对手 / 队友 → 对线数据 → 硬规则提示
-    lane = lanes.assign(enemy_ids, ally_ids, pos, side, data.load_positions(cfg), ally_pos)
+    lane = lanes.assign(enemy_ids, ally_ids, pos, side, stats_mod.load_positions(cfg), ally_pos)
     guessed = {g.hero: g.pos for g in lane.enemies}
     opp = [g.hero for g in lane.opponents()]
     partner = lane.partner()
