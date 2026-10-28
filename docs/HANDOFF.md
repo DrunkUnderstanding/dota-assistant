@@ -1410,6 +1410,11 @@ Aegis / 骷髅王复活：顶栏可能不变灰，变灰也只有几秒、倒计
 消息栏一行留几秒没量过（复活后 2 帧要在它消失前认到，10-26 截图里买活后 1~5 秒都还在）；游戏里关了消息栏就认不出；
 2 帧、0.7、5 帧都是实现假设。**下一局看 `shots/buyback/feed/` 和日志「买活自动记：消息栏 …」**。
 
+**GSI 有没有买活事件（2026-10-27 查过，结论：没有，截图方案不换）**：GSI 有个 `events` 分项（我们没订），社区解析库里能查到的类型只有 6 种：
+信使被杀 `courier_killed`、肉山被杀 `roshan_killed`、捡盾 `aegis_picked_up`、反盾 `aegis_denied`、打赏 `tip`、赏金符 `bounty_rune_pickup`，
+**没有买活**（Dota2GSI C# 的 `Nodes/EventsProvider/Event.cs` 枚举；MrBean355/dota2-gsi 2.3.0 起 `PlayingGameState` 也有 `events`，按字符串透传、不列类型）。
+Valve 没公开完整字段表，枚举可能落后于游戏，但没见到任何来源提过买活事件。顺带：`roshan_killed` / `aegis_picked_up` 玩家身份也推，以后做肉山计时可以直接用，不用截图。
+
 ## 32. 对面大招冷却：顶栏对面头像下面第二条（2026-10-26，`ultcd.py` + `web/topbar.html`）
 
 玩家要的（原话）：「敌方关键技能的CD，比如末日大招、骷髅王大招」，接着问「是否能够计算那些多余的减冷却机制」，选了「右键菜单勾选」。
