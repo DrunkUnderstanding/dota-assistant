@@ -1,5 +1,6 @@
 __pycache__/
 data/
+!tests/data/
 config.toml
 shots/
 *_识别.png

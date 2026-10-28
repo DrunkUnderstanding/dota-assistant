@@ -1,0 +1,422 @@
+{
+ "__init__": {
+  "kind": "method",
+  "signature": "(self, cfg: 'Config', screen_factory=None, use_gsi: 'bool' = True, use_hotkeys: 'bool' = True, speaker: 'Speaker | None' = None, advisor: 'adv.Advisor | None' = None, bank: 'TemplateBank | None' = None, calibration: 'Calibration | None' = None, overlay_file: 'Path | None' = None, coach_prepare: 'Callable | None' = None, brief_build: 'Callable | None' = None, plan_build: 'Callable | None' = None, ban_watcher: 'grid.BanWatcher | None' = None, read_roles: 'Callable | None' = None, ocr: 'Callable | None' = None, mate_fetch: 'Callable | None' = None)"
+ },
+ "_apply_dota_dir": {
+  "kind": "method",
+  "signature": "(self) -> 'str'"
+ },
+ "_brief_ready": {
+  "kind": "method",
+  "signature": "(self, key: 'str', res, err, ids: 'tuple' = ()) -> 'None'"
+ },
+ "_brief_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "_buyback_tick": {
+  "kind": "method",
+  "signature": "(self, st, key: 'str') -> 'None'"
+ },
+ "_check_feed": {
+  "kind": "method",
+  "signature": "(self, img, match, clock: 'float', me=None) -> 'None'"
+ },
+ "_close_card": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_coach_ready": {
+  "kind": "method",
+  "signature": "(self, key: 'str', res, err) -> 'None'"
+ },
+ "_confirm_with_grid": {
+  "kind": "method",
+  "signature": "(self, view: 'DraftView') -> 'None'"
+ },
+ "_death_recap": {
+  "kind": "method",
+  "signature": "(self, st) -> 'death.Recap | None'"
+ },
+ "_feed_done": {
+  "kind": "method",
+  "signature": "(self, c, bb: 'bool', why: 'str') -> 'None'"
+ },
+ "_feed_orphans": {
+  "kind": "method",
+  "signature": "(self, lines, checks, clock: 'float', me) -> 'None'"
+ },
+ "_feed_read": {
+  "kind": "method",
+  "signature": "(self, match, checks, lines, feed, clock: 'float' = 0.0, me=None) -> 'None'"
+ },
+ "_game_clock": {
+  "kind": "method",
+  "signature": "(self) -> 'float | None'"
+ },
+ "_grid_ready": {
+  "kind": "method",
+  "signature": "(self, gmap: 'grid.GridMap | None') -> 'None'"
+ },
+ "_hero": {
+  "kind": "method",
+  "signature": "(self, text: 'str') -> 'Hero | None'"
+ },
+ "_hero_icon": {
+  "kind": "method",
+  "signature": "(self, key: 'str', download: 'bool' = True)"
+ },
+ "_ids": {
+  "kind": "method",
+  "signature": "(self, ids) -> 'list[Hero]'"
+ },
+ "_jungle_tick": {
+  "kind": "method",
+  "signature": "(self, st) -> 'None'"
+ },
+ "_keep_crops": {
+  "kind": "method",
+  "signature": "(self, view: 'DraftView', phase: 'str') -> 'None'"
+ },
+ "_keep_game_crops": {
+  "kind": "method",
+  "signature": "(self, img) -> 'None'"
+ },
+ "_knowledge": {
+  "kind": "method",
+  "signature": "(self)"
+ },
+ "_lane_log": {
+  "kind": "method",
+  "signature": "(self, st, key: 'str') -> 'None'"
+ },
+ "_load_overlay_state": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_looks_picked": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'bool'"
+ },
+ "_loop": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_mate_ready": {
+  "kind": "method",
+  "signature": "(self, aid: 'int', res: 'dict | None', err: 'str') -> 'None'"
+ },
+ "_my_slot": {
+  "kind": "method",
+  "signature": "(self, st) -> 'tuple[str, int] | None'"
+ },
+ "_pick_plan_ready": {
+  "kind": "method",
+  "signature": "(self, key: 'tuple', plan, err) -> 'None'"
+ },
+ "_pick_ready": {
+  "kind": "method",
+  "signature": "(self, key: 'tuple', res, err, ids: 'tuple') -> 'None'"
+ },
+ "_pick_view": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'dict'"
+ },
+ "_plan_ready": {
+  "kind": "method",
+  "signature": "(self, key: 'str', plan, err) -> 'None'"
+ },
+ "_record_fix": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', before: 'str', h: 'Hero', learned: 'int', how: 'str') -> 'None'"
+ },
+ "_revived": {
+  "kind": "method",
+  "signature": "(self, rev) -> 'None'"
+ },
+ "_role_ready": {
+  "kind": "method",
+  "signature": "(self, draft: 'int', res) -> 'None'"
+ },
+ "_run": {
+  "kind": "method",
+  "signature": "(self, fn, args, fut: 'Future | None') -> 'None'"
+ },
+ "_save_overlay_state": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_scan_buyback": {
+  "kind": "method",
+  "signature": "(self, clock: 'float', me) -> 'None'"
+ },
+ "_show_coach": {
+  "kind": "method",
+  "signature": "(self, title: 'str', lines: 'list[tuple]', on_death: 'bool' = False) -> 'None'"
+ },
+ "_showing_brief": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
+ "_slot_name": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'str'"
+ },
+ "_stage_tick": {
+  "kind": "method",
+  "signature": "(self, minute: 'float') -> 'None'"
+ },
+ "_start_brief": {
+  "kind": "method",
+  "signature": "(self, key: 'str') -> 'None'"
+ },
+ "_start_coach": {
+  "kind": "method",
+  "signature": "(self, key: 'str') -> 'None'"
+ },
+ "_start_hotkeys": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_start_plan": {
+  "kind": "method",
+  "signature": "(self, key: 'str', b: 'brief.Brief', ids: 'tuple') -> 'None'"
+ },
+ "_take_death_shots": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "_timer_read": {
+  "kind": "method",
+  "signature": "(self, match, d, sec) -> 'None'"
+ },
+ "_ult_cd": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', ab, mods) -> 'tuple[int, bool, list, float]'"
+ },
+ "_ult_check": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int')"
+ },
+ "_ult_of": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int')"
+ },
+ "_ult_view": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', clock: 'float') -> 'dict | None'"
+ },
+ "action": {
+  "kind": "method",
+  "signature": "(self, a: 'dict') -> 'str | None'"
+ },
+ "buyback_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "clear": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "close": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "close_overlay": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "coach_tick": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "current_draft": {
+  "kind": "method",
+  "signature": "(self) -> 'adv.Draft'"
+ },
+ "current_snapshot": {
+  "kind": "property",
+  "signature": "(self) -> 'str'"
+ },
+ "draft_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "explain_pick": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int') -> 'None'"
+ },
+ "fill_slots": {
+  "kind": "method",
+  "signature": "(self, view: 'DraftView', only_empty: 'bool' = False) -> 'None'"
+ },
+ "grab": {
+  "kind": "method",
+  "signature": "(self)"
+ },
+ "heroes": {
+  "kind": "method",
+  "signature": "(self) -> 'list[dict]'"
+ },
+ "learn": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "learn_slot": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', h: 'Hero') -> 'int'"
+ },
+ "mark_buyback": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'None'"
+ },
+ "mark_ult": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'None'"
+ },
+ "mute_cue": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "name_slot": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', hero_id: 'int') -> 'None'"
+ },
+ "overlay_moved": {
+  "kind": "method",
+  "signature": "(self, x: 'float', y: 'float', width: 'int | None' = None) -> 'None'"
+ },
+ "overlay_style": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "overlay_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "overlay_visible": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
+ "pick_candidates": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int') -> 'dict'"
+ },
+ "pick_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict | None'"
+ },
+ "publish": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "query_mate": {
+  "kind": "method",
+  "signature": "(self, code, force: 'bool' = False) -> 'None'"
+ },
+ "refresh": {
+  "kind": "method",
+  "signature": "(self, force_speech: 'bool' = False) -> 'None'"
+ },
+ "save_settings": {
+  "kind": "method",
+  "signature": "(self, a: 'dict') -> 'None'"
+ },
+ "save_shot": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "scan": {
+  "kind": "method",
+  "signature": "(self, force: 'bool' = False, img=None) -> 'None'"
+ },
+ "scan_bans": {
+  "kind": "method",
+  "signature": "(self, img) -> 'None'"
+ },
+ "scan_role": {
+  "kind": "method",
+  "signature": "(self, img) -> 'None'"
+ },
+ "set_brief_page": {
+  "kind": "method",
+  "signature": "(self, page: 'str') -> 'None'"
+ },
+ "set_locked": {
+  "kind": "method",
+  "signature": "(self, locked: 'bool') -> 'None'"
+ },
+ "set_overlay_style": {
+  "kind": "method",
+  "signature": "(self, key: 'str', value, save: 'bool' = True) -> 'None'"
+ },
+ "set_ult": {
+  "kind": "method",
+  "signature": "(self, side: 'str', index: 'int', level=None, mod=None, on=None) -> 'None'"
+ },
+ "settings_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "should_scan": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
+ "should_scan_bans": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
+ "show_brief": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "show_notice": {
+  "kind": "method",
+  "signature": "(self, title: 'str', lines: 'list[tuple[str, str]]') -> 'None'"
+ },
+ "side": {
+  "kind": "method",
+  "signature": "(self) -> 'str | None'"
+ },
+ "slots_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "snapshot": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "start": {
+  "kind": "method",
+  "signature": "(self) -> 'Live'"
+ },
+ "status": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
+ "submit": {
+  "kind": "method",
+  "signature": "(self, fn: 'Callable', *args) -> 'Future'"
+ },
+ "subscribe": {
+  "kind": "method",
+  "signature": "(self) -> 'queue.Queue'"
+ },
+ "tick": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "toggle_lock": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "toggle_overlay": {
+  "kind": "method",
+  "signature": "(self) -> 'None'"
+ },
+ "unsubscribe": {
+  "kind": "method",
+  "signature": "(self, q: 'queue.Queue') -> 'None'"
+ }
+}
