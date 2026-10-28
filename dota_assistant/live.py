@@ -32,8 +32,8 @@ import numpy as np
 
 from .domain import advisor as adv
 from .domain import brief, jungle
-from .domain import buyback, ultcd
-from . import buybackscan, grid, lanestate, mates, roles
+from .domain import buyback, lanelog, ultcd
+from . import buybackscan, grid, mates, roles
 from .domain import coach, itembuild
 from .domain import death
 from .ai import gameplan, llm
@@ -1084,7 +1084,7 @@ class Live:
         """3:00 / 6:00 / 10:00 把自己的 GSI 数据原样记一笔，赛后 lane-review 对照 STRATZ 的对线结果。
         过了 20 秒才开助手的那个时刻不补记（数据已经不是那一刻的）"""
         clock = round(st.clock_minutes * 60)
-        for m in lanestate.LOG_MINUTES:
+        for m in lanelog.LOG_MINUTES:
             if m in self._lane_logged or not m * 60 <= clock <= m * 60 + 20:
                 continue
             self._lane_logged.add(m)
@@ -1099,7 +1099,7 @@ class Live:
                    "hp": ratio("health", "max_health"), "mana": ratio("mana", "max_mana"),
                    "items": sorted(st.items), "cue": self.jungle_cue.title if self.jungle_cue else None}
             try:
-                lanestate.log_moment(rec)
+                lanelog.log_moment(rec)
                 log.info("对线记录：%d:00 已记下（赛后 python -m dota_assistant lane-review 对照）", m)
             except OSError:
                 log.warning("对线记录没写进去", exc_info=True)

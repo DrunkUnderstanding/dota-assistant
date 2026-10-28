@@ -15,7 +15,8 @@ from dota_assistant.domain import advisor as adv
 from dota_assistant import grid
 from dota_assistant.core import config
 from dota_assistant.domain import brief
-from dota_assistant import buybackscan, lanestate
+from dota_assistant import buybackscan
+from dota_assistant.domain import lanelog
 from dota_assistant.domain import coach
 from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
@@ -60,7 +61,7 @@ def fake_advisor(cfg: Config) -> adv.Advisor:
 
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
-lanestate.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
+lanelog.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
 live_mod.FIX_FILE = TMP / "fixes.jsonl"                           # 帮认记录也不写本机 data/
 mates_mod.MATES_FILE = TMP / "mates.json"                         # 查过的队友也不读写本机 data/
 
@@ -744,7 +745,7 @@ class CoachLiveTest(unittest.TestCase):
     def test_lane_moments_logged(self):
         """3:00 / 6:00 / 10:00 各记一笔自己的 GSI 数据；同一刻不重复记；过了 20 秒才到的不补记"""
         log_file = TMP / f"lane-{time.monotonic_ns()}.jsonl"
-        old, lanestate.LOG_FILE = lanestate.LOG_FILE, log_file
+        old, lanelog.LOG_FILE = lanelog.LOG_FILE, log_file
         try:
             self.push(0)
             self.wait_coach()
@@ -755,7 +756,7 @@ class CoachLiveTest(unittest.TestCase):
             self.push(10)
             recs = [json.loads(x) for x in log_file.read_text(encoding="utf-8").splitlines()]
         finally:
-            lanestate.LOG_FILE = old
+            lanelog.LOG_FILE = old
         self.assertEqual([(r["minute"], r["clock"]) for r in recs], [(3, 185), (10, 600)])
         self.assertEqual((recs[0]["match"], recs[0]["pos"], recs[0]["hero_key"]), ("123", 1, "phantom_lancer"))
         self.assertEqual(recs[0]["player"]["last_hits"], 40)

@@ -9,6 +9,7 @@ import numpy as np
 
 from dota_assistant import lanestate as ls
 from dota_assistant.core.config import Config
+from dota_assistant.domain import lanelog
 from dota_assistant.sources import http
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-lane-"))
@@ -80,7 +81,7 @@ class ReviewTest(unittest.TestCase):
     def setUp(self):
         self.log = TMP / f"log-{id(self)}.jsonl"
         self.cache = TMP / f"cache-{id(self)}.json"
-        self.patches = [mock.patch.object(ls, "LOG_FILE", self.log), mock.patch.object(ls, "CACHE", self.cache)]
+        self.patches = [mock.patch.object(lanelog, "LOG_FILE", self.log), mock.patch.object(ls, "CACHE", self.cache)]
         for p in self.patches:
             p.start()
 
@@ -91,10 +92,10 @@ class ReviewTest(unittest.TestCase):
     def test_review_against_stratz(self):
         self.assertIn("还没有实战记录", ls.review(Config()))
         for minute in (3, 6):
-            ls.log_moment({"match": "777", "minute": minute, "hero_id": 1, "hero_name": "敌法师", "pos": 1,
+            lanelog.log_moment({"match": "777", "minute": minute, "hero_id": 1, "hero_name": "敌法师", "pos": 1,
                            "player": {"kills": 0, "deaths": 1, "assists": 0}, "hero": {"level": 2},
                            "hp": 0.4, "mana": 0.8, "cue": "屯野 2:53 / 抢莲花 3:00" if minute == 3 else None})
-        ls.log_moment({"match": "本地1", "minute": 3, "hero_name": "敌法师", "pos": 1})
+        lanelog.log_moment({"match": "本地1", "minute": 3, "hero_name": "敌法师", "pos": 1})
         matches = [ls.compact(raw_match(i, bottom)) for i, bottom in enumerate(["DIRE_VICTORY", "RADIANT_VICTORY", "TIE"] * 20)]
         self.cache.write_text(json.dumps({"tried": [], "matches": matches}), encoding="utf-8")
         with mock.patch.object(http, "_stratz", return_value={"match": raw_match(777)}):

@@ -23,18 +23,17 @@ from dataclasses import dataclass
 import numpy as np
 
 from .core.config import DATA_DIR, Config
+from .domain import lanelog
 from .sources import http
 from .sources import stats as stats_mod
 
 CACHE = DATA_DIR / "lane_matches.json"
 REPORT = DATA_DIR / "lane_report.txt"
-LOG_FILE = DATA_DIR / "lane_log.jsonl"
 BATCH = 10                   # 一次 GraphQL 请求查几场（每场数据不小）
 UNTIL = 12                   # 只存前 12 分钟
 INV_OFFSET = 2
 FAMANGOS = {4204, 4205, 4206}  # 治疗莲花 / 大 / 特大（OpenDota 常量 famango / great_famango / greater_famango）
 MINUTES = (3, 6)
-LOG_MINUTES = (3, 6, 10)     # 实战记录：两个选择时刻 + 对线快结束
 CLASSES = (-1, 0, 1)
 CLASS_NAMES = {-1: "劣", 0: "平", 1: "优"}
 SLOTS = ("item0", "item1", "item2", "item3", "item4", "item5", "backPack0", "backPack1", "backPack2")
@@ -321,13 +320,7 @@ def run(cfg: Config, n: int = 3000, log=print) -> str:
     return text
 
 
-# ---------- 实战记录：live 在 3:00 / 6:00 / 10:00 记一笔，赛后对照 ----------
-
-def log_moment(record: dict) -> None:
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with LOG_FILE.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
+# ---------- 实战记录：live 在 3:00 / 6:00 / 10:00 记一笔（domain/lanelog.py），赛后对照 ----------
 
 def own_features(rec: dict) -> dict | None:
     """实战记录里自己的 GSI 数据 → 「只看自己」那组特征；字段名按 Dota2GSI 的解析代码，真实推送里没有就是 None"""
@@ -356,10 +349,10 @@ def _guess(model: Model, f: dict, pos: int) -> str:
 def review(cfg: Config, log=print) -> str:
     """把 data/lane_log.jsonl 里记下的对局去 STRATZ 取赛后数据，逐个时刻对照：
     当时只看自己能猜成什么、看全本路击杀 / 等级能猜成什么、实际对线结果、屯了野 / 拿了莲花没有"""
-    if not LOG_FILE.exists():
-        return f"还没有实战记录（{LOG_FILE}）：开着助手打一局，3:00 / 6:00 / 10:00 会自动记"
+    if not lanelog.LOG_FILE.exists():
+        return f"还没有实战记录（{lanelog.LOG_FILE}）：开着助手打一局，3:00 / 6:00 / 10:00 会自动记"
     recs: dict[str, list[dict]] = {}
-    for line in LOG_FILE.read_text(encoding="utf-8").splitlines():
+    for line in lanelog.LOG_FILE.read_text(encoding="utf-8").splitlines():
         if line.strip():
             r = json.loads(line)
             recs.setdefault(str(r.get("match")), []).append(r)
