@@ -18,9 +18,8 @@ import logging
 import time
 from dataclasses import dataclass, field
 
-from . import coach, itembuild
 from .. import kb
-from . import lanes, teamfight
+from . import coach, itembuild, lanes, teamfight
 from ..ai import gameplan
 from ..core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES

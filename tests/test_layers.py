@@ -274,6 +274,19 @@ class LayersTest(unittest.TestCase):
         self.assertEqual(layer_of(f"{PKG}.__main__", PKG, legacy, modules), MAIN)
         edges = edges_of(f"{PKG}.kb", modules[f"{PKG}.kb"], modules, PKG)
         self.assertIn(f"{PKG}.kb.cd_ops", {e.dst for e in edges})        # kb._update_cd_ops 里的延迟 import
+        # P3 搬完的层：每层挑一个模块核对认得出层
+        for mod, layer in (("ai.llm", "ai"), ("domain.lanelog", "domain"), ("vision.recognize", "vision"),
+                           ("game.gsi", "game"), ("research.lanestate", "research")):
+            self.assertEqual(layer_of(f"{PKG}.{mod}", PKG, legacy, modules), LAYERS[layer], mod)
+        edges = edges_of(f"{PKG}.domain.coach", modules[f"{PKG}.domain.coach"], modules, PKG)
+        self.assertIn(f"{PKG}.domain.itembuild", {e.dst for e in edges})  # coach 函数里对 itembuild 的延迟 import
+
+    def test_lower_layers_moved(self):
+        """P3 起：app 以下各层的模块都已经在子包里，包根目录下还平铺的旧模块只能去 app / cli（P4 再搬）"""
+        modules = module_files(REPO / PKG, PKG)
+        legacy = legacy_layers(load_entries(), modules, PKG)
+        low = sorted(m for m, lg in legacy.items() if lg.low < LAYERS["app"])
+        self.assertFalse(low, f"这些平铺模块还有名字要去 app 以下的层：{low}")
 
 
 class SelfCheckTest(unittest.TestCase):

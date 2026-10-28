@@ -30,16 +30,10 @@ from typing import Callable
 import cv2
 import numpy as np
 
-from .domain import advisor as adv
-from .domain import brief, jungle
-from .domain import buyback, lanelog, ultcd
-from .vision import buybackscan
-from .vision import roles
-from .vision import grid
-from .domain import mates
-from .domain import coach, itembuild
-from .domain import death
 from .ai import gameplan, llm
+from .domain import advisor as adv
+from .domain import brief, buyback, coach, death, itembuild, jungle, lanelog, mates, ultcd
+from .vision import buybackscan, grid, roles
 from .core import config
 from .core import log as logs
 from .core.config import DATA_DIR, ROOT, Config
