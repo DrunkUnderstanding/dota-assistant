@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .core.config import DATA_DIR, ROOT
+from ..core.config import DATA_DIR, ROOT
 
 KB_DIR = DATA_DIR / "kb"
 RULES_PATH = ROOT / "knowledge" / "rules.toml"
@@ -178,7 +178,7 @@ def update(hero_ids: list[int], log=_say, force: bool = False) -> bool:
 
 def _update_cd_ops(log) -> None:
     """大招神杖 / 魔晶减冷却的符号（datafeed 里没有，从游戏文件取，见 ultcd.py）；取不到不影响知识库"""
-    from . import ultcd
+    from .. import ultcd
     try:
         ultcd.update_ops(log=log)
     except Exception as e:
