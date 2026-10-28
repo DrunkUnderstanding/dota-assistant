@@ -5518,9 +5518,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._confirm_with_grid",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5578,9 +5578,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._grid_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5608,9 +5608,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._ids",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5628,9 +5628,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._keep_crops",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5678,9 +5678,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._looks_picked",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5738,9 +5738,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._pick_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5758,9 +5758,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._record_fix",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5778,9 +5778,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._role_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -5978,9 +5978,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.clear",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6018,9 +6018,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.current_draft",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6038,9 +6038,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.draft_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6058,9 +6058,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.fill_slots",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6068,9 +6068,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.grab",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6088,9 +6088,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.learn",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6098,9 +6098,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.learn_slot",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6138,9 +6138,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.name_slot",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6188,9 +6188,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.pick_candidates",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6228,9 +6228,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.refresh",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6258,9 +6258,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.scan",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6268,9 +6268,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.scan_bans",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6278,9 +6278,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.scan_role",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6338,9 +6338,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.should_scan",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6348,9 +6348,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.should_scan_bans",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6368,9 +6368,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.show_notice",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6388,9 +6388,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.slots_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]
@@ -6448,9 +6448,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.tick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.draft",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/draft.py",
    "tags": [
     "live_method"
    ]

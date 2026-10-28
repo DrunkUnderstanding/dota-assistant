@@ -21,7 +21,7 @@ from dota_assistant.domain import coach
 from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
 from dota_assistant.app.live import consts as live_consts
-from dota_assistant.app.live import core as live_core
+from dota_assistant.app.live import draft as live_draft
 from dota_assistant.domain import mates as mates_mod
 from dota_assistant.core.config import Config
 from dota_assistant.domain.engine import Engine, Suggestion
@@ -525,8 +525,8 @@ class CoachLiveTest(unittest.TestCase):
         from dota_assistant.vision.recognize import DraftView, Slot
         junk = DraftView([Slot(WK.id, 0.73, WK.id)] + [Slot(None, 0.3, 0)] * 4,
                          [Slot(None, 0.3, 0), Slot(CM.id, 0.71, CM.id)] + [Slot(None, 0.3, 0)] * 3, [])
-        orig, live_core.recognize = live_core.recognize, lambda *a, **kw: junk
-        self.addCleanup(setattr, live_core, "recognize", orig)
+        orig, live_draft.recognize = live_draft.recognize, lambda *a, **kw: junk
+        self.addCleanup(setattr, live_draft, "recognize", orig)
         self.live.cal = SimpleNamespace(ready=True)
         self.live.slots["dire"][:3] = ["斧王", "潮汐猎人", ""]
         st = self.live.gsi.state
@@ -645,8 +645,8 @@ class CoachLiveTest(unittest.TestCase):
         self.assertTrue(self.live.snapshot()["overlay"]["view"]["slots"]["dire"][2]["manual"])
         empty = [Slot(None, 0.3, 0)] * 5
         view = DraftView(empty, [Slot(None, 0.3, 0)] * 3 + [Slot(CM.id, 0.8, CM.id), Slot(None, 0.3, 0)], [])
-        orig, live_core.recognize = live_core.recognize, lambda *a, **kw: view
-        self.addCleanup(setattr, live_core, "recognize", orig)
+        orig, live_draft.recognize = live_draft.recognize, lambda *a, **kw: view
+        self.addCleanup(setattr, live_draft, "recognize", orig)
         self.live.cal = SimpleNamespace(ready=True)
         wait(self.live.submit(self.live.scan, True, object()))
         self.assertEqual(self.live.slots["dire"], ["", "", TIDE.name_cn, CM.name_cn, ""])
