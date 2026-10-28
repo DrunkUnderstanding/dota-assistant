@@ -17,7 +17,9 @@ def tracked_files() -> list[Path]:
 
 
 def python_files() -> list[Path]:
-    return [p for d in ("dota_assistant", "tests", "packaging") for p in (ROOT / d).glob("*.py")]
+    """递归查（子包里的也算），跳过 __pycache__"""
+    return [p for d in ("dota_assistant", "tests", "packaging", "tools") for p in (ROOT / d).rglob("*.py")
+            if "__pycache__" not in p.parts]
 
 
 class TextFileTest(unittest.TestCase):
