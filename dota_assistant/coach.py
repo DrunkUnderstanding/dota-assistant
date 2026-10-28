@@ -20,11 +20,10 @@ from dataclasses import dataclass, field
 
 from . import kb
 from .core.config import DATA_DIR, Config
-from .sources import http
+from .sources import assets, http
 
 log = logging.getLogger(__name__)
 BENCH_DIR = DATA_DIR / "bench"
-ITEMS_CONST = DATA_DIR / "opendota_items.json"
 
 # 以下阈值是实现假设（玩家未确认），用模拟结果和玩家反馈再调
 BKB_CONTROL_MIN = 3          # 对面至少几个英雄有控制，才提醒黑皇杖
@@ -114,18 +113,9 @@ def item_quantile(bench: dict, item_id: int | None, q: float) -> float | None:
 
 # ---------- 装备 ----------
 
-def items_const() -> dict:
-    """OpenDota 装备常量：key → {cost, components, …}"""
-    if not ITEMS_CONST.exists():
-        import requests
-        ITEMS_CONST.write_text(requests.get("https://api.opendota.com/api/constants/items", timeout=60).text,
-                               encoding="utf-8")
-    return json.loads(ITEMS_CONST.read_text(encoding="utf-8"))
-
-
 def item_tree(raw: dict | None = None) -> dict[str, set[str]]:
     """装备 → 所有直接或间接用到它的成品（买了飓风长戟就等于「有魔龙枪的能力」）"""
-    raw = raw if raw is not None else items_const()
+    raw = raw if raw is not None else assets.items_const()
     parents: dict[str, set[str]] = {}
     for k, v in raw.items():
         for c in v.get("components") or []:
@@ -466,7 +456,7 @@ def prepare(cfg: Config, my_id: int, enemy_ids: list[int], pos: int) -> tuple[Co
         notes.append("没有对面阵容（选人时没识别 / 没填），这局只看出装节奏")
     needs, hero_notes = plan(me, enemies, base, kb.load_rules(), bench, pos)
     from . import itembuild
-    const = items_const()
+    const = assets.items_const()
     return Coach(needs, bench, item_tree(const), base, itembuild.make(needs, bench, base), const), hero_notes + notes
 
 
@@ -502,7 +492,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None) -> str:
     enemies = [heroes[p["hero_id"]] for p in m["players"] if p["isRadiant"] != me["isRadiant"]]
     pos = _stratz_position(cfg, match_id, account_id) or cfg.position
     bench = fetch_bench(cfg, my.id, pos) if cfg.stratz_token else None
-    const = items_const()
+    const = assets.items_const()
     tree = item_tree(const)
     needs, notes = plan(my, enemies, base, rules, bench, pos)
     from . import itembuild

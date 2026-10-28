@@ -57,13 +57,14 @@ def prefetch() -> None:
     say("== 补全头像、装备、顶栏图标 …")
     sys.path.insert(0, str(ROOT))
     from dota_assistant import data, kb
+    from dota_assistant.sources import assets
     if kb.KnowledgeBase.load() is None or not (data.DATA_DIR / "heroes.json").exists():
         sys.exit("还没有英雄表 / 知识库：先运行 python -m dota_assistant update")
-    data.fetch_portraits(say)
-    data.fetch_items_const(say)
-    data.fetch_item_icons(say)
+    assets.fetch_portraits(say)
+    assets.fetch_items_const(say)
+    assets.fetch_item_icons(say)
     data.fetch_icons(say)
-    if not data.ICONS_DONE.exists():
+    if not assets.ICONS_DONE.exists():
         sys.exit("顶栏图标没下到（断网？），停止")
 
 

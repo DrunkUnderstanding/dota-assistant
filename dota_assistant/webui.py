@@ -81,7 +81,7 @@ class WebServer:
                 elif path.startswith("/items/"):
                     self._file(ITEM_ICON_DIR, path.removeprefix("/items/"))
                 elif path.startswith("/icons/"):
-                    from .data import ICON_DIR, fetch_icon
+                    from .sources.assets import ICON_DIR, fetch_icon
                     rel = path.removeprefix("/icons/")
                     if fetch_icon(rel):
                         self._file(ICON_DIR, rel)

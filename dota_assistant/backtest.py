@@ -21,7 +21,7 @@ import numpy as np
 
 from . import data
 from .core.config import DATA_DIR, Config
-from .sources import http
+from .sources import assets, http
 from . import engine as E
 from .engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
 
@@ -277,7 +277,7 @@ def run(cfg: Config, n: int = 3000, log=print, do_tune: bool = False) -> str:
         raise RuntimeError("统计数据里没有 match_id 范围，先重新 update 一次")
     if not cfg.stratz_token:
         raise RuntimeError("回测需要 STRATZ token（取选人顺序和位置）")
-    eng = Engine(data.load_heroes(), stats, data.load_positions(cfg))
+    eng = Engine(assets.load_heroes(), stats, data.load_positions(cfg))
     log(f"取样本外对局（match_id > {after}）…")
     matches = fetch_matches(cfg, after, n, log)
     random.Random(0).shuffle(matches)

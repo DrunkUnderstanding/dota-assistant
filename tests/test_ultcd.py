@@ -160,6 +160,7 @@ class PrefetchTest(unittest.TestCase):
         from unittest import mock
         from dota_assistant import data
         from dota_assistant.core.heroes import Hero, HeroDB
+        from dota_assistant.sources import assets
         db = HeroDB([Hero(1, "doom_bringer", "末日使者", "Doom", (), "str"), Hero(2, "pudge", "帕吉", "Pudge", (), "str")])
         base = mock.Mock(patch="7.41f", heroes={1: hero(ab("doom_bringer_doom", "140/130/120")),
                                                 2: hero(ab("pudge_dismember", "30/25/20"))})
@@ -168,8 +169,8 @@ class PrefetchTest(unittest.TestCase):
         def fake(rel):
             asked.append(rel)
             return fetch(rel)
-        with (mock.patch.object(data, "ICON_DIR", d), mock.patch.object(data, "ICONS_DONE", d / "done.txt"),
-              mock.patch.object(data, "load_heroes", return_value=db), mock.patch.object(data, "fetch_icon", fake),
+        with (mock.patch.object(assets, "ICON_DIR", d), mock.patch.object(assets, "ICONS_DONE", d / "done.txt"),
+              mock.patch.object(assets, "load_heroes", return_value=db), mock.patch.object(assets, "fetch_icon", fake),
               mock.patch.object(kb.KnowledgeBase, "load", return_value=base)):
             data.fetch_icons(log=lambda *_: None)
         return asked

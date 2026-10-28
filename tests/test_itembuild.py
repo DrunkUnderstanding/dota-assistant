@@ -8,6 +8,7 @@ from types import SimpleNamespace
 
 from dota_assistant import coach, itembuild, kb
 from dota_assistant.gsi import GameState
+from dota_assistant.sources import assets
 
 CONST = {
     "ogre_axe": {"cost": 1000}, "mithril_hammer": {"cost": 1600},
@@ -185,7 +186,7 @@ class DeathPickTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.base = kb.KnowledgeBase.load()
-        cls.tree = coach.item_tree(coach.items_const())
+        cls.tree = coach.item_tree(assets.items_const())
 
     def rec(self, cause="", **kw):
         from dota_assistant import death
@@ -226,7 +227,7 @@ class DeathPickTest(unittest.TestCase):
 
     def test_repeat_death_tip(self):
         b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
-        c = coach.Coach([], None, self.tree, self.base, b, coach.items_const())
+        c = coach.Coach([], None, self.tree, self.base, b, assets.items_const())
         st = coach.State(20, set(), gold=0)
         rec = self.rec("control", secs={"stunned": 3})
         unused = self.rec("control", secs={"stunned": 3}, saves={"unused": ["blink"]})

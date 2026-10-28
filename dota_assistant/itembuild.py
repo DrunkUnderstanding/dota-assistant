@@ -11,7 +11,7 @@
 
 不按胜率排：买得晚的大件（蝴蝶、撒旦）胜率天然高——买得起说明这局已经领先，不能说明装备本身好。
 
-界面上装备显示成图标（data/items/<key>.png，data.fetch_item_icons）：带装备的一行写成「片段」列表（parts），
+界面上装备显示成图标（data/items/<key>.png，assets.fetch_item_icons）：带装备的一行写成「片段」列表（parts），
 str 原样显示，chip() 是一件装备，group() 是并列的几件；text() 拼回文字版（语音 / 日志 / 命令行 / 给 AI 的资料）。
 """
 from __future__ import annotations
@@ -22,6 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from . import coach, kb
+from .sources import assets
 
 # 以下阈值是实现假设（玩家未确认），看回放和反馈再调
 COMMON_SHARE = 0.15          # 同分段 15%~40% 的局会买的算「之后常见」
@@ -338,7 +339,7 @@ def death_sim(cfg, paths: list) -> str:
     if base is None:
         return "还没有知识库，先运行 python -m dota_assistant kb update"
     positions = data.load_positions(cfg) or {}
-    const = coach.items_const()
+    const = assets.items_const()
     tree = coach.item_tree(const)
     coaches: dict[str, coach.Coach] = {}
     L = []

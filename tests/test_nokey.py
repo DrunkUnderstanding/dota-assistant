@@ -7,7 +7,7 @@ from unittest import mock
 
 from dota_assistant import brief, coach, data, gameplan, kb, live, llm, start
 from dota_assistant.core.config import Config
-from dota_assistant.sources import http
+from dota_assistant.sources import assets, http
 
 NO_KEY = dict(stratz_token="", ai_api_key="", ai_base_url="")
 SOURCE = "敌方斧王：反击螺旋，被攻击时有几率旋转"
@@ -186,7 +186,7 @@ class RealKBTest(unittest.TestCase):
         lane = lambda r: [{"lane_role": r, "games": "1000", "wins": "500"}]
         lane_roles = {self.ids["幻影刺客"]: lane(1), self.ids["斧王"]: lane(3), self.ids["水晶室女"]: lane(1),
                       self.ids["潮汐猎人"]: lane(3)}
-        raw = data.positions_from_lane_roles(data.load_heroes(), lane_roles)
+        raw = data.positions_from_lane_roles(assets.load_heroes(), lane_roles)
         b, titles = self.build({int(h): {int(p): tuple(gw) for p, gw in v.items()} for h, v in raw.items()})
         self.assertIn("对线", titles)
         self.assertIn("你这路对面：斧王", b.text())

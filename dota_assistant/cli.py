@@ -36,6 +36,7 @@ from pathlib import Path
 from . import data
 from .core import config
 from .core import log as logs
+from .sources import assets
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
@@ -80,7 +81,7 @@ def cmd_recognize(cfg: config.Config, path: Path) -> int:
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
         return 1
-    db = data.load_heroes()
+    db = assets.load_heroes()
     bank = TemplateBank()
     img = read_image(path)
     view = recognize(img, cal, bank, cfg.match_threshold)
@@ -111,7 +112,7 @@ def cmd_label(cfg: config.Config, paths: list[Path]) -> int:
     if not (cal and cal.ready):
         print("还没校准：先运行 python -m dota_assistant calibrate <截图>")
         return 1
-    db = data.load_heroes()
+    db = assets.load_heroes()
     bank = TemplateBank()
     print("每个格子：直接回车 = 认同猜测；输入英雄名 = 纠正；输入 0 = 空位；输入 - = 跳过这个格子")
     saved = 0
@@ -144,7 +145,7 @@ def cmd_label(cfg: config.Config, paths: list[Path]) -> int:
 def cmd_kb(cfg: config.Config, args) -> int:
     from . import kb
     if args.action == "update":
-        kb.update([h.id for h in data.load_heroes()], force=args.force)
+        kb.update([h.id for h in assets.load_heroes()], force=args.force)
         return 0
     base = kb.KnowledgeBase.load()
     if base is None:
@@ -154,7 +155,7 @@ def cmd_kb(cfg: config.Config, args) -> int:
     q = " ".join(args.query)
     try:
         if args.action == "hero":
-            print(kb.render_hero(base.heroes[data.load_heroes().find(q).id], rules, base.patch, mistakes))
+            print(kb.render_hero(base.heroes[assets.load_heroes().find(q).id], rules, base.patch, mistakes))
         elif args.action == "item":
             print(kb.render_item(base.item(q), rules, base.patch, mistakes))
         elif args.action == "mistake":
@@ -186,11 +187,11 @@ def _kb_mistake(base, mistakes, args) -> int:
     m = kb.Mistake(args.wrong, args.right, who=args.who, date=datetime.date.today().isoformat(),
                    evidence=args.evidence, has_tag=args.has_tag)
     if args.hero:
-        m.hero = base.heroes[data.load_heroes().find(args.hero).id].name
+        m.hero = base.heroes[assets.load_heroes().find(args.hero).id].name
     if args.item:
         m.item = base.item(args.item).name
     if m.has_tag:
-        tags = base.heroes[data.load_heroes().find(m.hero).id].tags() if m.hero else base.item(m.item).tags() if m.item else {}
+        tags = base.heroes[assets.load_heroes().find(m.hero).id].tags() if m.hero else base.item(m.item).tags() if m.item else {}
         if m.has_tag not in tags:
             print(f"「{m.hero or m.item or '通用'}」没有「{m.has_tag}」标签，没记。现有标签：{'、'.join(tags) or '无'}")
             return 1

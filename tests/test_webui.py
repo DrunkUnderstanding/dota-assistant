@@ -1210,9 +1210,9 @@ class WebServerTest(unittest.TestCase):
     def test_icons_cached_and_rejected(self):
         """顶栏小条的图标：本地有就直接给（不联网）；路径不对一律 404，不去下"""
         from unittest import mock
-        from dota_assistant import data
-        with (tempfile.TemporaryDirectory() as d, mock.patch.object(data, "ICON_DIR", Path(d)),
-              mock.patch.object(data, "_download_icon", side_effect=AssertionError("不该联网"))):
+        from dota_assistant.sources import assets
+        with (tempfile.TemporaryDirectory() as d, mock.patch.object(assets, "ICON_DIR", Path(d)),
+              mock.patch.object(assets, "_download_icon", side_effect=AssertionError("不该联网"))):
             (Path(d) / "icons").mkdir()
             (Path(d) / "icons" / "gold.png").write_bytes(b"fake png")
             code, ctype, body = self.get("/icons/icons/gold.png")

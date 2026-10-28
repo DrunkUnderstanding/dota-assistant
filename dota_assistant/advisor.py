@@ -7,6 +7,7 @@ from . import data, explain, kb, lanes
 from .core.config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .core.heroes import Hero, HeroDB
+from .sources import assets
 
 TARGETED_TITLE = "针对这局"
 TEAM_TOP, TEAM_TARGETED = 3, 3   # 剩余位置每个空位置：推荐几个 + 针对这局几个（玩家要求 3 + 3，不跟 config 的 top / top_other）
@@ -63,7 +64,7 @@ class Advice:
 class Advisor:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.db: HeroDB = data.load_heroes()
+        self.db: HeroDB = assets.load_heroes()
         self.engine = Engine(self.db, data.load_stats(cfg), data.load_positions(cfg))
         self.me = data.load_player(cfg)
         self.pool = self.db.find_many(cfg.pool)

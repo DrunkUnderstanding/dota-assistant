@@ -106,11 +106,11 @@ class RealShotTest(unittest.TestCase):
     """真实选人截图（只在有 shots/ 的电脑上跑）：盖着噪点的认得出，空位 / 预选不乱认"""
 
     def test_real_draft_noise(self):
-        from dota_assistant import data
+        from dota_assistant.sources import assets
         cal = Calibration.load()
         if not (cal and cal.ready):
             self.skipTest("没校准")
-        key = {h.key: h.id for h in data.load_heroes()}
+        key = {h.key: h.id for h in assets.load_heroes()}
         bank = TemplateBank(template_dir=Path(tempfile.mkdtemp()))    # 只用官方头像，不受本机学过的模板影响
         expect = {"20261023-014347": [None] * 8 + [key["rubick"], None],
                   "20261022-231827": [None, None, None, key["slark"]] + [None] * 6,

@@ -22,6 +22,7 @@ import numpy as np
 from . import backtest as bt, data, llm
 from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES, Engine
+from .sources import assets
 
 OUT = DATA_DIR / "ai_backtest.jsonl"
 N_CANDIDATES = 12
@@ -48,7 +49,7 @@ def build_moments(cfg: Config, n: int, seed: int = 1) -> list[dict]:
     """从回测缓存的对局里抽选人时刻（不联网，回测缓存不够时先跑一次 backtest）"""
     stats = data.load_stats(cfg)
     matches = bt.fetch_matches(cfg, stats["hi_id"], 3000)
-    eng = Engine(data.load_heroes(), stats, data.load_positions(cfg))
+    eng = Engine(assets.load_heroes(), stats, data.load_positions(cfg))
     t = bt.Tables(eng)
     rng = random.Random(seed)
     out = []
@@ -111,7 +112,7 @@ def ask(prompt: str, model: str) -> tuple[dict | None, float, str]:
 
 
 def run(cfg: Config, n: int = 300, model: str = "claude-opus-5-5", workers: int = 3, log=print) -> str:
-    db = data.load_heroes()
+    db = assets.load_heroes()
     done = {}
     if OUT.exists():
         for line in OUT.read_text(encoding="utf-8").splitlines():

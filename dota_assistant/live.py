@@ -41,7 +41,7 @@ from .core.heroes import Hero
 from .engine import POSITION_NAMES
 from .gsi import GSIServer, ensure_cfg
 from .hotkeys import Hotkeys, vk_code
-from .sources import http
+from .sources import assets, http
 from .speech import Speaker
 from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
 
@@ -1194,9 +1194,9 @@ class Live:
         第一次可能要联网下，只在后台线程里调。download=False：本地没有就算了（不在局内挨个下 127 张）"""
         if key not in self._hero_icons:
             rel = buybackscan.HERO_ICON.format(key)
-            if not download and not (data.ICON_DIR / rel).is_file():
+            if not download and not (assets.ICON_DIR / rel).is_file():
                 return None
-            self._hero_icons[key] = buybackscan.load_icon(data.fetch_icon(rel))
+            self._hero_icons[key] = buybackscan.load_icon(assets.fetch_icon(rel))
         return self._hero_icons[key]
 
     def _check_feed(self, img, match, clock: float, me=None) -> None:
