@@ -1,7 +1,7 @@
 """回测重放逻辑：人造数据，不联网。"""
 import unittest
 
-from dota_assistant.backtest import Tables, replay_picks, usable
+from dota_assistant.research.backtest import Tables, replay_picks, usable
 from dota_assistant.domain.engine import Engine
 from dota_assistant.core.heroes import HeroDB
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats

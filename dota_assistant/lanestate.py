@@ -78,7 +78,7 @@ def compact(m: dict | None) -> dict | None:
 def fetch(cfg: Config, n: int, log=print) -> list[dict]:
     """对局 id 用选人回测那批（backtest.fetch_matches，超凡～冠绝、统计数据之后的样本外对局），逐批去 STRATZ 取前 12 分钟。
     缓存可以接着取（中途断了再跑一次就行）"""
-    from . import backtest
+    from .research import backtest
     stats = stats_mod.load_stats(cfg)
     if not (stats.get("hi_id") and cfg.stratz_token):
         raise RuntimeError("需要统计数据（update）和 STRATZ token")

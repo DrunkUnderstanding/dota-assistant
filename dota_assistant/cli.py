@@ -321,11 +321,11 @@ def main(argv: list[str] | None = None) -> int:
               "还需要在 Steam → Dota 2 → 属性 → 启动选项 里加上：-gamestateintegration，然后重开 Dota")
         return 0
     if args.cmd == "backtest":
-        from .backtest import run as backtest
+        from .research.backtest import run as backtest
         print(backtest(cfg, args.matches, do_tune=args.tune))
         return 0
     if args.cmd == "lanes-test":
-        from . import backtest
+        from .research import backtest
         from .domain import lanes
         stats = stats_mod.load_stats(cfg)
         if not (stats.get("hi_id") and cfg.stratz_token):
@@ -343,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
         print(review(cfg))
         return 0
     if args.cmd == "backtest-ai":
-        from .aibacktest import run as ai_run
+        from .research.aibacktest import run as ai_run
         print(ai_run(cfg, args.moments, args.model, args.workers))
         return 0
     if args.cmd == "coach-sim":

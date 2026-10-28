@@ -20,11 +20,11 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from . import backtest as bt
-from .ai import llm
-from .core.config import DATA_DIR, Config
-from .domain.engine import POSITION_NAMES, Engine
-from .sources import assets
-from .sources import stats as stats_mod
+from ..ai import llm
+from ..core.config import DATA_DIR, Config
+from ..domain.engine import POSITION_NAMES, Engine
+from ..sources import assets
+from ..sources import stats as stats_mod
 
 OUT = DATA_DIR / "ai_backtest.jsonl"
 N_CANDIDATES = 12
