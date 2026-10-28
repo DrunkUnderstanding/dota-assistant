@@ -5448,9 +5448,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._apply_dota_dir",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.settings",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/settings.py",
    "tags": [
     "live_method"
    ]
@@ -5878,9 +5878,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._start_hotkeys",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.settings",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/settings.py",
    "tags": [
     "live_method"
    ]
@@ -6238,9 +6238,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.save_settings",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.settings",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/settings.py",
    "tags": [
     "live_method"
    ]
@@ -6328,9 +6328,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.settings_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.settings",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/settings.py",
    "tags": [
     "live_method"
    ]
