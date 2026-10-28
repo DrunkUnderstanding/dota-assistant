@@ -43,15 +43,16 @@ from ...domain.engine import POSITION_NAMES
 from ...game.gsi import GSIServer, ensure_cfg
 from ...game.hotkeys import Hotkeys
 from ...kb import cd_ops
-from ...sources import assets, http
+from ...sources import assets
 from ...game.speech import Speaker
 from ...vision.recognize import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
+from .mates import MatesMixin
 from . import consts
 
 log = logging.getLogger(__name__)
 
 
-class Live:
+class Live(MatesMixin):
     def __init__(self, cfg: Config, screen_factory=None, use_gsi: bool = True, use_hotkeys: bool = True,
                  speaker: Speaker | None = None, advisor: adv.Advisor | None = None,
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
@@ -1490,39 +1491,6 @@ class Live:
         self.user_hidden = False
 
     # ---------- 选人时「如果选它」 ----------
-
-    def query_mate(self, code, force: bool = False) -> None:
-        """查队友战绩：后台线程联网，查完排进工作线程写回。20 分钟内查过的不重查（force = 面板上点了「刷新」）"""
-        aid = mates.parse_code(code)
-        e = self.mates.touch(aid)
-        if e["busy"]:
-            return
-        if not force and mates.Mates.fresh(e):
-            self.mates.save()
-            self.message = f"{e['data']['name']} 刚查过，要重查点「刷新」"
-            return
-        e["busy"], e["error"] = True, ""
-        self.message = f"正在查好友代码 {aid} 的战绩…"
-
-        def work():
-            t0 = time.monotonic()
-            try:
-                res, err = self._mate_fetch(self.cfg, aid), ""
-                log.info("队友战绩 %s 查好了（%.1f 秒）", aid, time.monotonic() - t0)
-            except LookupError as ex:
-                res, err = None, str(ex)
-            except http.NETWORK_ERRORS as ex:     # 断网 / 限速：一行就够，不记堆栈
-                log.warning("队友战绩 %s 没查到：%s", aid, ex)
-                res, err = None, f"联网失败：{ex}"
-            except Exception as ex:
-                log.exception("队友战绩 %s 出错", aid)
-                res, err = None, f"出错：{ex}（详情见日志）"
-            self.submit(self._mate_ready, aid, res, err)
-        threading.Thread(target=work, daemon=True, name="mate").start()
-
-    def _mate_ready(self, aid: int, res: dict | None, err: str) -> None:
-        self.mates.done(aid, res, err)
-        self.message = err or (f"{res['name']} 的战绩查好了" if res else "")
 
     def explain_pick(self, hero_id: int) -> None:
         """点了某个推荐英雄：按当前局面做「如果选它」的要点（联网，后台），做好再让 AI 写打法"""

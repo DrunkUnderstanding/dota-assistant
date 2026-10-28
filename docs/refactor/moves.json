@@ -5698,9 +5698,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._mate_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.mates",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/mates.py",
    "tags": [
     "live_method"
    ]
@@ -6218,9 +6218,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.query_mate",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.mates",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/mates.py",
    "tags": [
     "live_method"
    ]
