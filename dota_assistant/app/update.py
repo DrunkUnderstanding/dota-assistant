@@ -52,7 +52,7 @@ ROLE_SPLIT = 0.9
 
 
 def positions_from_lane_roles(db: HeroDB, lane_roles: dict[int, list[dict]]) -> dict[str, dict[str, list[int]]]:
-    from ..engine import Engine
+    from ..domain.engine import Engine
     out = {}
     for h in db:
         lane = defaultdict(int)

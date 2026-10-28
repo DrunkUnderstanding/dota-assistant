@@ -18,7 +18,7 @@ from dota_assistant.ai import gameplan
 from dota_assistant import live as live_mod
 from dota_assistant import mates as mates_mod
 from dota_assistant.core.config import Config
-from dota_assistant.engine import Engine, Suggestion
+from dota_assistant.domain.engine import Engine, Suggestion
 from dota_assistant.gsi import GameState
 from pathlib import Path
 from dota_assistant.core.heroes import HeroDB
@@ -111,7 +111,8 @@ class RenderViewTest(unittest.TestCase):
         self.assertEqual(adv.best(advice), picks)                             # 播报只念综合推荐
 
     def test_lanes_view(self):
-        from dota_assistant import explain, lanes
+        from dota_assistant.domain import explain
+        from dota_assistant import lanes
         positions = {AXE.id: {3: (900, 0)}, CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}}
         ln = lanes.assign([AXE.id, PL.id], [CM.id], 1, None, positions)
         tip = explain.Why("bad", "小心斧王", "斧王·狂战士之吼：…")

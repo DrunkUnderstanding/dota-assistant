@@ -22,8 +22,8 @@ import numpy as np
 from .core.config import DATA_DIR, Config
 from .sources import assets, http
 from .sources import stats as stats_mod
-from . import engine as E
-from .engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
+from .domain import engine as E
+from .domain.engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
 
 CACHE = DATA_DIR / "backtest_matches.json"
 STRATZ_BATCH = 20          # 一次 GraphQL 请求里用别名查几场（每场是单独的 match(id:)）

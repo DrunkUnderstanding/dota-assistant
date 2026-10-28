@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from . import kb
+from .. import kb
 
 # (我方标签们, 对面标签们, 说法)：任一对上就算，一个敌人每组只说一次；{me} = 我方技能，{who} = 对面英雄，{ab} = 对面技能
 GOOD = (

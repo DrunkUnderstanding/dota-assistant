@@ -1,7 +1,8 @@
 """推荐理由里的机制对位（explain.py）。不联网；有本地知识库时再抽查真实英雄。"""
 import unittest
 
-from dota_assistant import explain, kb
+from dota_assistant.domain import explain
+from dota_assistant import kb
 
 
 def hero(name: str, *abilities: kb.Entry) -> kb.HeroKB:

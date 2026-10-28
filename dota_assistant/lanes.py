@@ -16,8 +16,8 @@ from dataclasses import dataclass, field
 
 from . import kb
 from .death import SAVE_EXCLUDE
-from .engine import POSITION_NAMES
-from .explain import Why
+from .domain.engine import POSITION_NAMES
+from .domain.explain import Why
 
 # 对线对手：我打几号位 → 对面哪些位置和我同路
 LANE_VS = {1: (3, 4), 5: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5)}

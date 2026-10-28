@@ -2,7 +2,7 @@
 import unittest
 
 from dota_assistant.backtest import Tables, replay_picks, usable
-from dota_assistant.engine import Engine
+from dota_assistant.domain.engine import Engine
 from dota_assistant.core.heroes import HeroDB
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
 
@@ -32,7 +32,7 @@ class BacktestTest(unittest.TestCase):
 
     def test_tables_match_engine(self):
         # 回测用的矩阵打分必须和 Engine.suggest 一致（含对线加权、反制风险），不然回测测的不是同一个东西
-        from dota_assistant import engine as E
+        from dota_assistant.domain import engine as E
         positions = {AXE.id: {3: (900, 450), 1: (100, 50)}, PL.id: {1: (1000, 520)}, TIDE.id: {3: (1000, 530)},
                      CM.id: {5: (1000, 500)}, WK.id: {1: (500, 260), 3: (500, 240)}}
         eng = Engine(HeroDB(HEROES), make_stats({(TIDE.id, PL.id): (20000, 0.58), (AXE.id, CM.id): (3000, 0.53)}),

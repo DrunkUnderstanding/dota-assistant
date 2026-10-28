@@ -1,7 +1,7 @@
 """打分引擎回归：用人造数据，不联网。python -m unittest"""
 import unittest
 
-from dota_assistant.engine import Engine, pct
+from dota_assistant.domain.engine import Engine, pct
 from dota_assistant.core.heroes import Hero, HeroDB
 
 AXE = Hero(2, "axe", "斧王", "Axe", ("Initiator", "Durable", "Carry"), "str")

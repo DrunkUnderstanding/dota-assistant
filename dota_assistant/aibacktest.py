@@ -22,7 +22,7 @@ import numpy as np
 from . import backtest as bt
 from .ai import llm
 from .core.config import DATA_DIR, Config
-from .engine import POSITION_NAMES, Engine
+from .domain.engine import POSITION_NAMES, Engine
 from .sources import assets
 from .sources import stats as stats_mod
 

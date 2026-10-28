@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from . import coach, itembuild, kb, lanes, teamfight
 from .ai import gameplan
 from .core.config import DATA_DIR, Config
-from .engine import POSITION_NAMES
+from .domain.engine import POSITION_NAMES
 from .sources import http
 from .sources import stats as stats_mod
 
