@@ -12,7 +12,7 @@ import time
 
 import requests
 
-from .core.config import Config
+from ..core.config import Config
 
 # 比赛 9054096051 的真实选人顺序（OpenDota picks_bans），玩家在天辉打一号位
 DEMO_MATCH = 9054096051
@@ -61,7 +61,7 @@ def gsi_frames(m: dict, me: dict, hero_key: str, speed: float, hold=lambda: Fals
 
 
 def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_speed: float = 60) -> int:
-    from .live import Live
+    from ..live import Live
     from .webui import serve
 
     live = Live(cfg)

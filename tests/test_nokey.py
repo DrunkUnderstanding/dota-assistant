@@ -6,7 +6,8 @@ from pathlib import Path
 from unittest import mock
 
 from dota_assistant.domain import brief
-from dota_assistant import kb, live, start
+from dota_assistant import kb, live
+from dota_assistant.app import start
 from dota_assistant.domain import coach
 from dota_assistant.ai import gameplan, llm
 from dota_assistant.app import update

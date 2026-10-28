@@ -34,7 +34,7 @@ MIN_TARGETS = 40            # 扫出来的（能解析的）目标至少这么�
 IMPORTED_OK = {
     ("dota_assistant.sources.stats", "DATA_DIR"):
         "test_nokey patch 后调 positions_source / load_positions，它们在 sources.stats 里按全局名 DATA_DIR 查（从 config import 进来）",
-    ("dota_assistant.webui", "HTTPServer"):
+    ("dota_assistant.app.webui", "HTTPServer"):
         "test_webui patch 后起 WebServer，webui 里按全局名 HTTPServer 查（从 log import 进来）",
     ("dota_assistant.live", "recognize"):
         "test_webui 直接赋值换掉 live 里的 recognize（从 vision import 进来，Live.scan 按全局名查）；"

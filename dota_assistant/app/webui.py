@@ -29,8 +29,8 @@ from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .core.config import DATA_DIR, ROOT, Config
-from .core.log import HTTPServer
+from ..core.config import DATA_DIR, ROOT, Config
+from ..core.log import HTTPServer
 
 log = logging.getLogger(__name__)
 elog = logging.getLogger("dota_assistant.electron")      # Electron 主进程 / 页面的输出
@@ -81,7 +81,7 @@ class WebServer:
                 elif path.startswith("/items/"):
                     self._file(ITEM_ICON_DIR, path.removeprefix("/items/"))
                 elif path.startswith("/icons/"):
-                    from .sources.assets import ICON_DIR, fetch_icon
+                    from ..sources.assets import ICON_DIR, fetch_icon
                     rel = path.removeprefix("/icons/")
                     if fetch_icon(rel):
                         self._file(ICON_DIR, rel)
@@ -232,5 +232,5 @@ def _pipe_electron(stream) -> None:
 
 
 def run(cfg: Config, browser: bool = False) -> int:
-    from .live import Live
+    from ..live import Live
     return serve(Live(cfg), browser)

@@ -295,13 +295,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "suggest":
         return cmd_suggest(cfg, args)
     if args.cmd == "start":
-        from .start import main as start
+        from .app.start import main as start
         return start()
     if args.cmd == "run":
-        from .webui import run
+        from .app.webui import run
         return run(cfg, browser=args.browser)
     if args.cmd == "demo":
-        from .demo import run as demo
+        from .app.demo import run as demo
         return demo(cfg, args.step, browser=args.browser, game_speed=args.speed)
     if args.cmd == "calibrate":
         from .vision.calibrate import calibrate

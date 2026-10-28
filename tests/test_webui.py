@@ -29,7 +29,7 @@ from pathlib import Path
 from dota_assistant.core.heroes import HeroDB
 from dota_assistant.live import Live
 from dota_assistant.vision.recognize import Calibration
-from dota_assistant.webui import WebServer, overlay_config
+from dota_assistant.app.webui import WebServer, overlay_config
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
 
 
@@ -1190,7 +1190,7 @@ class WebServerTest(unittest.TestCase):
     def test_skips_chromium_unsafe_port(self):
         """随机端口分到 Chromium 拒绝的端口（例如 6669）就换一个，不然 Electron 界面打不开"""
         from unittest import mock
-        from dota_assistant import webui
+        from dota_assistant.app import webui
         from dota_assistant.core.log import HTTPServer
         probe = HTTPServer(("127.0.0.1", 0), None)
         bad = probe.server_address[1]

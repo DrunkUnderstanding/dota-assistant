@@ -15,11 +15,11 @@ import subprocess
 import time
 from pathlib import Path
 
-from .app import update
-from .core import config
-from .core.config import DATA_DIR, ROOT
-from .sources import assets, player
-from .sources import stats as stats_mod
+from . import update
+from ..core import config
+from ..core.config import DATA_DIR, ROOT
+from ..sources import assets, player
+from ..sources import stats as stats_mod
 
 FULL_UPDATE_DAYS = 3
 PLAYER_UPDATE_HOURS = 12
@@ -65,8 +65,8 @@ def ensure_electron() -> bool:
 
 
 def ensure_gsi(cfg: config.Config) -> None:
-    from .core.dota_install import find_dota
-    from .game.gsi import ensure_cfg
+    from ..core.dota_install import find_dota
+    from ..game.gsi import ensure_cfg
     dota = find_dota(cfg.dota_dir)
     if dota is None:
         _say("没找到 Dota 2 安装目录（要有 game\\dota\\pak01_dir.vpk），GSI 没法自动配：\n"
@@ -86,8 +86,8 @@ def ensure_gsi(cfg: config.Config) -> None:
 
 def ensure_grid_portraits(cfg: config.Config) -> None:
     """选人网格认禁用要用游戏自己的英雄图（gamefiles.py）；游戏更新了才重新导出"""
-    from .vision import gamefiles
-    from .core.dota_install import find_dota
+    from ..vision import gamefiles
+    from ..core.dota_install import find_dota
     dota = find_dota(cfg.dota_dir)
     heroes_file = DATA_DIR / "heroes.json"
     if dota is None or not heroes_file.exists():
@@ -126,7 +126,7 @@ def ensure_data(cfg: config.Config) -> None:
 
 def no_key_note(cfg: config.Config) -> str:
     """没填 STRATZ token / 调不了 AI 时，启动窗口里说一句哪些照常、少了哪些（不填也能用，只是提醒）"""
-    from .ai import llm
+    from ..ai import llm
     out = []
     if not cfg.stratz_token:
         out.append("没填 STRATZ token：选人推荐、机制提醒、出装针对装、各种计时照常用；"
