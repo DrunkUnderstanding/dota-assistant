@@ -1,0 +1,8090 @@
+{
+ "version": 1,
+ "generated_by": "tools/refactor/export_names.py --write-moves",
+ "notes": {
+  "格式": "entries 每条：old 旧模块、name 名字（Live 的方法写 Live.方法名）、new 新模块、old_file / new_file 源文件、tags 为什么进清单（public 公开名 / split 拆分模块的全部名字 / live_method / test_patch / test_assign / test_ref / cross_module）、imported=true 表示旧模块里这个名字是 import 进来的（测试 patch 它）、per_module=true 表示每个拆出来的新文件各自定义一份（logger），不查「旧文件不能再定义」。由 tools/refactor/export_names.py --write-moves 生成。表只追加不删：已有条目不删、不挪顺序（test_moves 核对前 770 条的摘要），名字搬走以后条目照样留着；新名字追加到末尾。没搬的名字改放法：改脚本里的 SPLIT / LIVE_GROUPS 再跑 --write-moves（会更新那一条的 new / new_file），或手工改这一条，并在 notes 里写原因。imported 只许 data.DATA_DIR、webui.HTTPServer 两条。",
+  "ultcd 调整": "MIN_CD、cooldowns、pick 从 PLAN 表的 domain/ultcd 改放到 kb/cd_ops：kb/cd_ops.update_ops 要用 pick 挑「对面会给小条的大招」，pick 又要 cooldowns / MIN_CD；按表放会变成 kb → domain 往上导入。三个都是只读知识库条目的纯函数，domain/ultcd（cooldown、mods）和 app（live、app/update.fetch_icons）往下引用 cd_ops 即可。",
+  "data 调整": "PLAN 表没写到的名字按调用方放：VALVE_HEROLIST / CDN / PORTRAIT_DIR / ICON_PATH / _icon_locks / _icon_failed / ITEM_ICON_DIR → sources/assets；IDS_PER_DAY / CHUNK_IDS / MIN_DURATION / _bracket_sql / _chunk_queries / _POSITIONS → sources/stats（_POSITIONS 也被 sources/player 用，同层引用 stats._POSITIONS）；MEDALS / MAIN_POSITION_SHARE → sources/player；ROLE_SPLIT 只有 positions_from_lane_roles 用 → app/update；_STRATZ_BRACKETS 跟着 _stratz_brackets → sources/http；logger → sources/http（其它新模块各自 logging.getLogger(__name__)）。",
+  "data.DATA_DIR": "test_nokey 里 mock.patch.object(data, 'DATA_DIR', d) 之后调 positions_source / load_positions：这三个都在 sources/stats，patch 目标改成 stats.DATA_DIR（stats 要 from ..core.config import DATA_DIR）。",
+  "patch 目标": "测试 patch 的名字搬家后，调用方必须用「新模块.名字」形式取（不能 from 新模块 import 名字），patch 才生效：http._get / http._stratz（mates、sources/*、brief、coach、research/lanestate 都要这样调）、assets.ICON_DIR / ICONS_DONE / load_heroes / fetch_icon（app/update.fetch_icons 里，test_ultcd patch）、assets._download_icon、player._player_matches_stratz（mates 调）、stats.positions_source / load_positions、cd_ops.OPS_PATH（test_ultcd 赋值）、lanelog.LOG_FILE（test_webui 赋值；research/lanestate.review 也要用 lanelog.LOG_FILE）、app.live.consts.FIX_FILE / DEATH_MIN_SHOW（test_webui 赋值；Live.__init__ 里 self.fix_file = consts.FIX_FILE）。",
+  "log / logger": "每个拆出来的新文件各自定义 log = logging.getLogger(__name__)（日志前缀变化是 PLAN 允许的唯一可见差异）。清单里 log 只记一个主去处：gsi.log → game/gsi、gamefiles.log → vision/gamefiles、ultcd.log → domain/ultcd、live.log → app/live/core。",
+  "live 模块级": "PLAN P4：模块级常量和小函数一律 app/live/consts（包括 PLAN 表里写在 settings 的 _check_hotkeys / _check_dota_dir，它们是模块级函数不是方法），各 mixin 用 consts.NAME 访问；class Live 和 log 在 core。",
+  "kb 与 cli": "kb.py → kb/__init__.py、cli.py → cli/__init__.py：新旧模块名相同，靠 old_file / new_file 区分。"
+ },
+ "entries": [
+  {
+   "old": "dota_assistant.advisor",
+   "name": "Advice",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "Advisor",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "Draft",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "TARGETED_TITLE",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "TEAM_TARGETED",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "TEAM_TOP",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "TeamSlot",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "best",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "groups",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "hero_ref",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "render_lines",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "render_view",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "speech",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "split_targeted",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "team_line",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.advisor",
+   "name": "team_view",
+   "new": "dota_assistant.domain.advisor",
+   "old_file": "dota_assistant/advisor.py",
+   "new_file": "dota_assistant/domain/advisor.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "BATCH",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "N_CANDIDATES",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "OUT",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "SCHEMA",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "SYSTEM",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "ask",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "build_moments",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "prompt_for",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "report",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.aibacktest",
+   "name": "run",
+   "new": "dota_assistant.research.aibacktest",
+   "old_file": "dota_assistant/aibacktest.py",
+   "new_file": "dota_assistant/research/aibacktest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "CACHE",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "PickRow",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "STRATZ_BATCH",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "Tables",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "fetch_matches",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "predict_drafts",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "replay_picks",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "report",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "run",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "separation",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "tune",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.backtest",
+   "name": "usable",
+   "new": "dota_assistant.research.backtest",
+   "old_file": "dota_assistant/backtest.py",
+   "new_file": "dota_assistant/research/backtest.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "BRIEF_DIR",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "Brief",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "CACHE_DAYS",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "LANE_GAP",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "LANE_MIN_GAMES",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "LANE_TIPS_SHOWN",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "LANE_VS",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "PHASES",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "PHASE_GAP",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "PLAN_PAGES",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "SECTION_STAGE",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "SHOW_MAX",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "STAGES",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "STAGE_START",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "START_SHARE",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "build",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "fetch_curves",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "fetch_hero",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "guess_positions",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "log",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "phase_delta",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "simulate",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "stage_at",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.brief",
+   "name": "team_phases",
+   "new": "dota_assistant.domain.brief",
+   "old_file": "dota_assistant/brief.py",
+   "new_file": "dota_assistant/domain/brief.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buyback",
+   "name": "COOLDOWN",
+   "new": "dota_assistant.domain.buyback",
+   "old_file": "dota_assistant/buyback.py",
+   "new_file": "dota_assistant/domain/buyback.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buyback",
+   "name": "READY_SHOW",
+   "new": "dota_assistant.domain.buyback",
+   "old_file": "dota_assistant/buyback.py",
+   "new_file": "dota_assistant/domain/buyback.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buyback",
+   "name": "SELF_RESYNC",
+   "new": "dota_assistant.domain.buyback",
+   "old_file": "dota_assistant/buyback.py",
+   "new_file": "dota_assistant/domain/buyback.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buyback",
+   "name": "SIDES",
+   "new": "dota_assistant.domain.buyback",
+   "old_file": "dota_assistant/buyback.py",
+   "new_file": "dota_assistant/domain/buyback.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buyback",
+   "name": "Tracker",
+   "new": "dota_assistant.domain.buyback",
+   "old_file": "dota_assistant/buyback.py",
+   "new_file": "dota_assistant/domain/buyback.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "AGREE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ALIVE_SAT",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "BUYBACK_MARGIN",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "BUYBACK_TEXT",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "CENTER0",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "DEAD_FRAMES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "DEAD_SAT",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "Death",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FEED",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FEED_AGREE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FEED_SCALE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FEED_TEXT_X",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FEED_TRIES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FeedCheck",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "FeedLine",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "HERO_ICON",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_DY",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_MARGIN",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_MIN",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_REFINE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_SIZE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_SIZES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "ICON_X",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "MIN_HEIGHT",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "MIN_INK",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "OCR_TEXT_H",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "OCR_TILE",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "OCR_TRIES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "PITCH",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "PORTRAIT",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "PORTRAIT_BOTTOM",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "REVIVE_FRAMES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "Revival",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "SAMPLES_DIR",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_assign",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "SAMPLES_KEEP",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "SIDES",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "TIMER",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "Watcher",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "_box",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "feed_crop",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "for_ocr",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "icon_score",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "load_icon",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "parse_seconds",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "portrait_crop",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "read_feed",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "read_timer",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "saturation",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "save_sample",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.buybackscan",
+   "name": "timer_crop",
+   "new": "dota_assistant.vision.buybackscan",
+   "old_file": "dota_assistant/buybackscan.py",
+   "new_file": "dota_assistant/vision/buybackscan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.calibrate",
+   "name": "COLORS",
+   "new": "dota_assistant.vision.calibrate",
+   "old_file": "dota_assistant/calibrate.py",
+   "new_file": "dota_assistant/vision/calibrate.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.calibrate",
+   "name": "CalibrateWindow",
+   "new": "dota_assistant.vision.calibrate",
+   "old_file": "dota_assistant/calibrate.py",
+   "new_file": "dota_assistant/vision/calibrate.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.calibrate",
+   "name": "STEPS",
+   "new": "dota_assistant.vision.calibrate",
+   "old_file": "dota_assistant/calibrate.py",
+   "new_file": "dota_assistant/vision/calibrate.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.calibrate",
+   "name": "calibrate",
+   "new": "dota_assistant.vision.calibrate",
+   "old_file": "dota_assistant/calibrate.py",
+   "new_file": "dota_assistant/vision/calibrate.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.capture",
+   "name": "DOTA_TITLE",
+   "new": "dota_assistant.vision.capture",
+   "old_file": "dota_assistant/capture.py",
+   "new_file": "dota_assistant/vision/capture.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.capture",
+   "name": "PW_CLIENTONLY_FULLCONTENT",
+   "new": "dota_assistant.vision.capture",
+   "old_file": "dota_assistant/capture.py",
+   "new_file": "dota_assistant/vision/capture.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.capture",
+   "name": "Screen",
+   "new": "dota_assistant.vision.capture",
+   "old_file": "dota_assistant/capture.py",
+   "new_file": "dota_assistant/vision/capture.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.capture",
+   "name": "WindowGrabber",
+   "new": "dota_assistant.vision.capture",
+   "old_file": "dota_assistant/capture.py",
+   "new_file": "dota_assistant/vision/capture.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.capture",
+   "name": "log",
+   "new": "dota_assistant.vision.capture",
+   "old_file": "dota_assistant/capture.py",
+   "new_file": "dota_assistant/vision/capture.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "FILE_LOG_COMMANDS",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "cmd_kb",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "cmd_label",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "cmd_logs",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "cmd_recognize",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "cmd_suggest",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.cli",
+   "name": "main",
+   "new": "dota_assistant.cli",
+   "old_file": "dota_assistant/cli.py",
+   "new_file": "dota_assistant/cli/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BENCH_DIR",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BENCH_MAX_MIN",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BENCH_VERSION",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BKB_CONTROL_MIN",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BKB_EARLY_MIN",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "BKB_FALLBACK_MIN",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "CHECKPOINTS",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "CORE_LATE",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "CORE_MIN_COST",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "CORE_SHARE",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "COUNTERS",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "COUNTER_FALLBACK_MIN",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "Coach",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "Counter",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "ILLUSION_RE",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "ILLUSION_SKIP",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "ITEMS_CONST",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "MAX_PER_MOMENT",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "MENU_SHARE",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "NO_DATA",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "Need",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "PER_MIN_MIN_MATCHES",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "REPEAT_AFTER",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "RHYTHM_RATIO",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "SUPPORT_POSITIONS",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "State",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "_illusions",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "_mmss",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "cross_module"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "check",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "fetch_bench",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "has",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "item_quantile",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "item_timings",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "item_tree",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "items_const",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "log",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "plan",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "prepare",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.coach",
+   "name": "simulate",
+   "new": "dota_assistant.domain.coach",
+   "old_file": "dota_assistant/coach.py",
+   "new_file": "dota_assistant/domain/coach.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "Config",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "DATA_DIR",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "FROZEN",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "ROOT",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "load",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.config",
+   "name": "save",
+   "new": "dota_assistant.core.config",
+   "old_file": "dota_assistant/config.py",
+   "new_file": "dota_assistant/core/config.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "APIError",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "CDN",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "CHUNK_IDS",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "DATA_DIR",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "test_patch"
+   ],
+   "imported": true
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "ICONS_DONE",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "ICON_DIR",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "ICON_PATH",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "IDS_PER_DAY",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "ITEM_ICON_DIR",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "MAIN_POSITION_SHARE",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "MEDALS",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "MIN_DURATION",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "NETWORK_ERRORS",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "OPENDOTA",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "OPENDOTA_POSITIONS",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "PORTRAIT_DIR",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "POSITION_MIN_MINUTES",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "ROLE_SPLIT",
+   "new": "dota_assistant.app.update",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/app/update.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "STRATZ",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "VALVE_HEROLIST",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_POSITIONS",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_STRATZ_BRACKETS",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_bracket_sql",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "cross_module",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_chunk_queries",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_download_icon",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_get",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "cross_module",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_icon_failed",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_icon_locks",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_main_position",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_player_matches_opendota",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_player_matches_stratz",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "cross_module",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_say",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_session",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_sql",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "cross_module",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_stratz",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "cross_module",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "_stratz_brackets",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "cross_module",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_heroes",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_icon",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_icons",
+   "new": "dota_assistant.app.update",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/app/update.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_item_icons",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_items_const",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_player",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_portraits",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_positions",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_positions_opendota",
+   "new": "dota_assistant.app.update",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/app/update.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "fetch_stats",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "load_heroes",
+   "new": "dota_assistant.sources.assets",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/assets.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "load_player",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "load_positions",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "load_stats",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "logger",
+   "new": "dota_assistant.sources.http",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/http.py",
+   "tags": [
+    "public",
+    "split"
+   ],
+   "per_module": true
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "player_history",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "positions_from_lane_roles",
+   "new": "dota_assistant.app.update",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/app/update.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "positions_path",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "positions_source",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "rank_name",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "stats_path",
+   "new": "dota_assistant.sources.stats",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/stats.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "update",
+   "new": "dota_assistant.app.update",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/app/update.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.data",
+   "name": "update_player",
+   "new": "dota_assistant.sources.player",
+   "old_file": "dota_assistant/data.py",
+   "new_file": "dota_assistant/sources/player.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "BLINKS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "BLINK_LOCK",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "BURST",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "CONTROL_SHARE",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "DUMP_DIR",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public",
+    "test_assign",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "FLAGS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "HARD",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "LOW_HP",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "LOW_HP_LONG",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "LOW_MANA",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "LOW_START",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "NO_ITEMS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "REGEN_TOL",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "Recap",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "SAVE_EXCLUDE",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "SAVE_ITEMS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "SAVE_RE",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "USABLE_SLOTS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "WANDS",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "WAND_CHARGES",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "WINDOW",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "analyze",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "dump",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "names_from_kb",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.death",
+   "name": "region",
+   "new": "dota_assistant.domain.death",
+   "old_file": "dota_assistant/death.py",
+   "new_file": "dota_assistant/domain/death.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "DEMO_BANS",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "DEMO_MATCH",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "DEMO_PICKS",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "FRAME_SECONDS",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "RESPAWN",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "STRATEGY_MAX",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "STRATEGY_SECONDS",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "gsi_frames",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.demo",
+   "name": "run",
+   "new": "dota_assistant.app.demo",
+   "old_file": "dota_assistant/demo.py",
+   "new_file": "dota_assistant/app/demo.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "Engine",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "FAMILIAR_BONUS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "FAMILIAR_FULL",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "FAMILIAR_MIN",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "K_ME",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "K_PICKS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "K_POS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "K_SYN",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "K_VS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "LANE_OPPONENTS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "MIN_GAMES",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "POOL_BONUS",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "POSITION_NAMES",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "POS_SHARE_MIN",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "RISK_HINT",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "RISK_TOP",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "Suggestion",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "W_LANE",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "W_ME",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "W_RISK",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "W_SYN",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "logit",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "pct",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.engine",
+   "name": "sigmoid",
+   "new": "dota_assistant.domain.engine",
+   "old_file": "dota_assistant/engine.py",
+   "new_file": "dota_assistant/domain/engine.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.explain",
+   "name": "BAD",
+   "new": "dota_assistant.domain.explain",
+   "old_file": "dota_assistant/explain.py",
+   "new_file": "dota_assistant/domain/explain.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.explain",
+   "name": "CONTROL_SAY",
+   "new": "dota_assistant.domain.explain",
+   "old_file": "dota_assistant/explain.py",
+   "new_file": "dota_assistant/domain/explain.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.explain",
+   "name": "GOOD",
+   "new": "dota_assistant.domain.explain",
+   "old_file": "dota_assistant/explain.py",
+   "new_file": "dota_assistant/domain/explain.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.explain",
+   "name": "Why",
+   "new": "dota_assistant.domain.explain",
+   "old_file": "dota_assistant/explain.py",
+   "new_file": "dota_assistant/domain/explain.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.explain",
+   "name": "matchups",
+   "new": "dota_assistant.domain.explain",
+   "old_file": "dota_assistant/explain.py",
+   "new_file": "dota_assistant/domain/explain.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "GRID_PORTRAIT_DIR",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "SELECTION",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "STAMP",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "VPK",
+   "new": "dota_assistant.core.vpk",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/core/vpk.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "_rgb565",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "_texture_info",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "decode_vtex",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "dxt5",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "extract_selection",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "log",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split"
+   ],
+   "per_module": true
+  },
+  {
+   "old": "dota_assistant.gamefiles",
+   "name": "ycocg_to_bgr",
+   "new": "dota_assistant.vision.gamefiles",
+   "old_file": "dota_assistant/gamefiles.py",
+   "new_file": "dota_assistant/vision/gamefiles.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "MIN_QUOTE",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "PHASES",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "PLAN_DIR",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "Plan",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "SCHEMA",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "SYSTEM",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "Tip",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "facts",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "generate",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gameplan",
+   "name": "parse",
+   "new": "dota_assistant.ai.gameplan",
+   "old_file": "dota_assistant/gameplan.py",
+   "new_file": "dota_assistant/ai/gameplan.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "BanWatcher",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "Box",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "CLEAN_MAX_DIM",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "CellState",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "DIM_STD",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "GRID_PATH",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "GridBank",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "GridMap",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "MAX_MAPS",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "MIN_CELLS",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "MIN_SCORE",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "MIN_SCORE_DIM",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "ROI",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "Rect",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "SCALES",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "SLASH_MIN",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "assign",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "background",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "banned",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "dimness",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "find_cells",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "load_maps",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "log",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "save_maps",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "slash",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.grid",
+   "name": "states",
+   "new": "dota_assistant.vision.grid",
+   "old_file": "dota_assistant/grid.py",
+   "new_file": "dota_assistant/vision/grid.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "CFG_NAME",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "CFG_TEMPLATE",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "DRAFT_STATES",
+   "new": "dota_assistant.core.gsi_fields",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/gsi_fields.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "GSIServer",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "GameState",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "HISTORY_SECONDS",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "MATCH_STATES",
+   "new": "dota_assistant.core.gsi_fields",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/gsi_fields.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "SELECTION_STATE",
+   "new": "dota_assistant.core.gsi_fields",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/gsi_fields.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "STRATEGY_STATE",
+   "new": "dota_assistant.core.gsi_fields",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/gsi_fields.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "buyback_left",
+   "new": "dota_assistant.core.gsi_fields",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/gsi_fields.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "cfg_path",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "dump",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "ensure_cfg",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "find_dota",
+   "new": "dota_assistant.core.dota_install",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/dota_install.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "install_cfg",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "is_dota_dir",
+   "new": "dota_assistant.core.dota_install",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/dota_install.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "log",
+   "new": "dota_assistant.game.gsi",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/game/gsi.py",
+   "tags": [
+    "public",
+    "split"
+   ],
+   "per_module": true
+  },
+  {
+   "old": "dota_assistant.gsi",
+   "name": "steam_libraries",
+   "new": "dota_assistant.core.dota_install",
+   "old_file": "dota_assistant/gsi.py",
+   "new_file": "dota_assistant/core/dota_install.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.heroes",
+   "name": "ALIASES",
+   "new": "dota_assistant.core.heroes",
+   "old_file": "dota_assistant/heroes.py",
+   "new_file": "dota_assistant/core/heroes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.heroes",
+   "name": "Hero",
+   "new": "dota_assistant.core.heroes",
+   "old_file": "dota_assistant/heroes.py",
+   "new_file": "dota_assistant/core/heroes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.heroes",
+   "name": "HeroDB",
+   "new": "dota_assistant.core.heroes",
+   "old_file": "dota_assistant/heroes.py",
+   "new_file": "dota_assistant/core/heroes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.hotkeys",
+   "name": "Hotkeys",
+   "new": "dota_assistant.game.hotkeys",
+   "old_file": "dota_assistant/hotkeys.py",
+   "new_file": "dota_assistant/game/hotkeys.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.hotkeys",
+   "name": "MOD_NOREPEAT",
+   "new": "dota_assistant.game.hotkeys",
+   "old_file": "dota_assistant/hotkeys.py",
+   "new_file": "dota_assistant/game/hotkeys.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.hotkeys",
+   "name": "WM_HOTKEY",
+   "new": "dota_assistant.game.hotkeys",
+   "old_file": "dota_assistant/hotkeys.py",
+   "new_file": "dota_assistant/game/hotkeys.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.hotkeys",
+   "name": "log",
+   "new": "dota_assistant.game.hotkeys",
+   "old_file": "dota_assistant/hotkeys.py",
+   "new_file": "dota_assistant/game/hotkeys.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.hotkeys",
+   "name": "vk_code",
+   "new": "dota_assistant.game.hotkeys",
+   "old_file": "dota_assistant/hotkeys.py",
+   "new_file": "dota_assistant/game/hotkeys.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "BUYBACK_FROM",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "Build",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "COMMON_MAX",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "COMMON_SHARE",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DEATH_HARD",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DEATH_MIN",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DEATH_RULES",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DEATH_SILENCE",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DeathPick",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "DeathRule",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "MARK",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "NEXT_SHOW",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "Step",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "brief_lines",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "chip",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "death_cause",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "death_pick",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "death_sim",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "group",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "late_lines",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "line_view",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "make",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "next_line",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "next_parts",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "remaining_cost",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "sell_pick",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.itembuild",
+   "name": "text",
+   "new": "dota_assistant.domain.itembuild",
+   "old_file": "dota_assistant/itembuild.py",
+   "new_file": "dota_assistant/domain/itembuild.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "BLOCK_FROM",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "Cue",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "FIRST_SPAWN",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LABELS",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LEAD",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LINGER",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LOTUS_LEAD",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LOTUS_LINGER",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LOTUS_MINUTES",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "LOTUS_POSITIONS",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "PULL_UNTIL",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "Plan",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "STACK_MIN_AVG",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "STACK_UNTIL",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "SUPPORTS",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.jungle",
+   "name": "make",
+   "new": "dota_assistant.domain.jungle",
+   "old_file": "dota_assistant/jungle.py",
+   "new_file": "dota_assistant/domain/jungle.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "BEHAVIOR_CHANNELLED",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "BEHAVIOR_UNIT_TARGET",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "CONTROL_TAGS",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "Entry",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "FEED",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "HeroKB",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "ITEM_ALIASES",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "KB_DIR",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "KnowledgeBase",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "MISTAKES_PATH",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "Mistake",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "NOTES_OK",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "NOT_NEUTRAL",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "RULES_PATH",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "Rule",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "STAT_LABELS",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "TAGS",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "TARGET_TEAM_ENEMY",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "_entry",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "add_mistake",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "current_patch",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "fetch",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "fill",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "hero_brief",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "load_mistakes",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "load_rules",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "logger",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "render_hero",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "render_item",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "tag_sentences",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.kb",
+   "name": "update",
+   "new": "dota_assistant.kb",
+   "old_file": "dota_assistant/kb.py",
+   "new_file": "dota_assistant/kb/__init__.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "ENEMY_LANES",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "ESCAPE_EXCLUDE",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "ESCAPE_RE",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "Guess",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "INTERRUPT_TAGS",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "LANE_VS",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "Lane",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "Lanes",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "MAX_TIPS",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "PARTNER",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "RANGED_GAP",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "SURE",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "UNTOUCHABLE",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "_hits",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "assign",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "evaluate",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "guess",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "lane_line",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "share",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "tips",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanes",
+   "name": "view",
+   "new": "dota_assistant.domain.lanes",
+   "old_file": "dota_assistant/lanes.py",
+   "new_file": "dota_assistant/domain/lanes.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "BATCH",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "BUCKETS",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "CACHE",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "CLASSES",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "CLASS_NAMES",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "FAMANGOS",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "FEATURE_SETS",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "INV_OFFSET",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "LANE_SET",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "LOG_FILE",
+   "new": "dota_assistant.domain.lanelog",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/domain/lanelog.py",
+   "tags": [
+    "public",
+    "split",
+    "test_assign",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "LOG_MINUTES",
+   "new": "dota_assistant.domain.lanelog",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/domain/lanelog.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "MINUTES",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "Model",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "OWN_SET",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "REPORT",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "Row",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "SLOTS",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "UNTIL",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_FIELDS",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_bucket_table",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_dist",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_guess",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_matrix",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_models",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_n",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "_pct",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "choices",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "compact",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "cross_proba",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "evaluate",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "fetch",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "lane_of",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "log_moment",
+   "new": "dota_assistant.domain.lanelog",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/domain/lanelog.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "outcome",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "own_features",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "report",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "review",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "rows",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.lanestate",
+   "name": "run",
+   "new": "dota_assistant.research.lanestate",
+   "old_file": "dota_assistant/lanestate.py",
+   "new_file": "dota_assistant/research/lanestate.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "CLOCK_SLACK",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "DEATH_MIN_SHOW",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split",
+    "test_assign",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "DEATH_SHOT_DELAYS",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "FIX_FILE",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split",
+    "test_assign"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "GRID_CONFIRM_MIN",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "HOTKEY_ACTIONS",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.__init__",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._apply_dota_dir",
+   "new": "dota_assistant.app.live.settings",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/settings.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._brief_ready",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._brief_view",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._buyback_tick",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._check_feed",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._close_card",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._coach_ready",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._confirm_with_grid",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._death_recap",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._feed_done",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._feed_orphans",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._feed_read",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._game_clock",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._grid_ready",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._hero",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._hero_icon",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._ids",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._jungle_tick",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._keep_crops",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._keep_game_crops",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._knowledge",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._lane_log",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._load_overlay_state",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._looks_picked",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._loop",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._mate_ready",
+   "new": "dota_assistant.app.live.mates",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/mates.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._my_slot",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._pick_plan_ready",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._pick_ready",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._pick_view",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._plan_ready",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._record_fix",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._revived",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._role_ready",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._run",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._save_overlay_state",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._scan_buyback",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._show_coach",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._showing_brief",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._slot_name",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._stage_tick",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._start_brief",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._start_coach",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._start_hotkeys",
+   "new": "dota_assistant.app.live.settings",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/settings.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._start_plan",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._take_death_shots",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._timer_read",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._ult_cd",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._ult_check",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._ult_of",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live._ult_view",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.action",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.buyback_view",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.clear",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.close",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.close_overlay",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.coach_tick",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.current_draft",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.current_snapshot",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.draft_view",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.explain_pick",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.fill_slots",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.grab",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.heroes",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.learn",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.learn_slot",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.mark_buyback",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.mark_ult",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.mute_cue",
+   "new": "dota_assistant.app.live.ingame",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.name_slot",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.overlay_moved",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.overlay_style",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.overlay_view",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.overlay_visible",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.pick_candidates",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.pick_view",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.publish",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.query_mate",
+   "new": "dota_assistant.app.live.mates",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/mates.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.refresh",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.save_settings",
+   "new": "dota_assistant.app.live.settings",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/settings.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.save_shot",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.scan",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.scan_bans",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.scan_role",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.set_brief_page",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.set_locked",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.set_overlay_style",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.set_ult",
+   "new": "dota_assistant.app.live.timers",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/timers.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.settings_view",
+   "new": "dota_assistant.app.live.settings",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/settings.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.should_scan",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.should_scan_bans",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.show_brief",
+   "new": "dota_assistant.app.live.cards",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/cards.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.show_notice",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.side",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.slots_view",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.snapshot",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.start",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.status",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.submit",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.subscribe",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.tick",
+   "new": "dota_assistant.app.live.draft",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/draft.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.toggle_lock",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.toggle_overlay",
+   "new": "dota_assistant.app.live.overlay",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/overlay.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "Live.unsubscribe",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "live_method"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "OPACITY_MIN",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "ORPHAN_WINDOW",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "OVERLAY_FILE",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "OVERLAY_WIDTH",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "PICKED_COLOR_GAIN",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "ROLE_RETRY",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SAME_CROP",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SCAN_MODES",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SECRET_FIELDS",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SHOTS_DIR",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SIDES",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SIDE_FALLBACK",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "SIDE_MODES",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_check_dota_dir",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_check_hotkeys",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_colorful",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_mask",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_names",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_next_stage",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_side_cn",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_slot_text",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "_view_text",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "log",
+   "new": "dota_assistant.app.live.core",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/core.py",
+   "tags": [
+    "public",
+    "split"
+   ],
+   "per_module": true
+  },
+  {
+   "old": "dota_assistant.live",
+   "name": "plan_error",
+   "new": "dota_assistant.app.live.consts",
+   "old_file": "dota_assistant/live.py",
+   "new_file": "dota_assistant/app/live/consts.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "NO_CLAUDE",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "PROVIDERS",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "Unavailable",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "ask_json",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "claude_exe",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "log",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "options",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.llm",
+   "name": "unavailable",
+   "new": "dota_assistant.ai.llm",
+   "old_file": "dota_assistant/llm.py",
+   "new_file": "dota_assistant/ai/llm.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "BACKUPS",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "HTTPServer",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "KEEP",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "LOG_DIR",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "MAX_BYTES",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "PKG",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "_git_rev",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "_handlers",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "current",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "latest",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "log",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "open_dir",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.log",
+   "name": "setup",
+   "new": "dota_assistant.core.log",
+   "old_file": "dota_assistant/log.py",
+   "new_file": "dota_assistant/core/log.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "FRESH",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "KEEP",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "MATES_FILE",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_assign"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "Mates",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "RECENT",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "SAMPLE",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "STEAM64_BASE",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "TOP_HEROES",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "fetch",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "parse_code",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "BAND",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "OCR_SCRIPT",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "ROLE_WORDS",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "UPSCALE",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "Word",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "find_name",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "find_roles",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "log",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "ocr",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.roles",
+   "name": "read_roles",
+   "new": "dota_assistant.vision.roles",
+   "old_file": "dota_assistant/roles.py",
+   "new_file": "dota_assistant/vision/roles.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.speech",
+   "name": "Speaker",
+   "new": "dota_assistant.game.speech",
+   "old_file": "dota_assistant/speech.py",
+   "new_file": "dota_assistant/game/speech.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.speech",
+   "name": "log",
+   "new": "dota_assistant.game.speech",
+   "old_file": "dota_assistant/speech.py",
+   "new_file": "dota_assistant/game/speech.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "FIRST_RUN_MARK",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "FULL_UPDATE_DAYS",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "PLAYER_UPDATE_HOURS",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "ensure_config",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "ensure_data",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "ensure_electron",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "ensure_grid_portraits",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "ensure_gsi",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "log",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "main",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.start",
+   "name": "no_key_note",
+   "new": "dota_assistant.app.start",
+   "old_file": "dota_assistant/start.py",
+   "new_file": "dota_assistant/app/start.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "AOE_RE",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "CORE_POSITIONS",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "KEY_ULT_CD",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "MAX_TIPS",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "OFFENSIVE_RE",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "POS_NAMES",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "REVIVE_RE",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "SAVE_ALLY_RE",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "_cd",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "key_ults",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.teamfight",
+   "name": "tips",
+   "new": "dota_assistant.domain.teamfight",
+   "old_file": "dota_assistant/teamfight.py",
+   "new_file": "dota_assistant/domain/teamfight.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "HERO_FILE",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "MIN_CD",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "MIRROR",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "Mod",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "OCTARINE",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "OPS_PATH",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_assign",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "READY_SHOW",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "Tracker",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "ULT_LEVELS",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "_at",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "_describe",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "_find",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "_read_ops_file",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "_reader",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "cd_ops",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "cooldown",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "cooldowns",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "guess_level",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "load_ops",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "log",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split"
+   ],
+   "per_module": true
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "mods",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "parse_kv",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "parse_op",
+   "new": "dota_assistant.domain.ultcd",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/domain/ultcd.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "pick",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.ultcd",
+   "name": "update_ops",
+   "new": "dota_assistant.kb.cd_ops",
+   "old_file": "dota_assistant/ultcd.py",
+   "new_file": "dota_assistant/kb/cd_ops.py",
+   "tags": [
+    "public",
+    "split",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "CALIBRATION_PATH",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "Calibration",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "DraftView",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "EMPTY",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "FEAT_H",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "FEAT_W",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "Rect",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "SURE_GAP",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "SURE_SCORE",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "Slot",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "TEMPLATE_DIR",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "TemplateBank",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "VIEWS",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "confident",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "crop",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "feature",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "interpolate",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "read_image",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "recognize",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.vision",
+   "name": "write_image",
+   "new": "dota_assistant.vision.recognize",
+   "old_file": "dota_assistant/vision.py",
+   "new_file": "dota_assistant/vision/recognize.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "ELECTRON_DIR",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "HTTPServer",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "test_patch"
+   ],
+   "imported": true
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "ITEM_ICON_DIR",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "JSON_TYPE",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "PORTRAIT_DIR",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "UI_DIR",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "UNSAFE_PORTS",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "WEB_DIR",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "WebServer",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "_pipe_electron",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "electron_command",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "elog",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "find_electron",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "log",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "overlay_config",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "run",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.webui",
+   "name": "serve",
+   "new": "dota_assistant.app.webui",
+   "old_file": "dota_assistant/webui.py",
+   "new_file": "dota_assistant/app/webui.py",
+   "tags": [
+    "public"
+   ]
+  }
+ ]
+}
