@@ -844,6 +844,30 @@ class FrontApiTest(unittest.TestCase):
         self.assertEqual(self.ops, {"query", "remove"}, "mates.js 发的 op 变了（新 op 要确认 webui 认，再改这里）")
         self.assertEqual(self.ops - set(HANDLED_OP.findall(self.src)), set(), "mates.js 发了、webui 不认的 op")
 
+    def test_match_network_error_502(self):
+        """GET /api/match 联网失败走 502 分支（test_mates / 回放都没走到）：
+        webui 里的 `except http.NETWORK_ERRORS` 要真指向 sources.http，断网 / 数据源报错都回 502「联网失败」"""
+        import urllib.error
+        import urllib.request
+
+        import requests
+
+        from dota_assistant.app.webui import WebServer
+        from dota_assistant.sources import http
+
+        for err in (requests.ConnectionError("断网了"), http.APIError("数据源报错")):
+            svc = types.SimpleNamespace(match=mock.Mock(side_effect=err), list=lambda: [])
+            srv = WebServer(types.SimpleNamespace(cfg=None), mates_service=svc).start()
+            try:
+                with self.assertLogs("dota_assistant.app.webui", "WARNING"):
+                    with self.assertRaises(urllib.error.HTTPError) as cm:
+                        urllib.request.urlopen(srv.url + "/api/match/77?p=5", timeout=5)
+                body = json.loads(cm.exception.read())
+            finally:
+                srv.stop()
+            self.assertEqual((cm.exception.code, body), (502, {"ok": False, "message": f"联网失败：{err}"}))
+            svc.match.assert_called_once_with(77, 5)
+
 
 if __name__ == "__main__":
     unittest.main()
