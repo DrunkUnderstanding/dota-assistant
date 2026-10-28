@@ -7,6 +7,7 @@ from unittest import mock
 
 from dota_assistant import brief, coach, data, gameplan, kb, live, llm, start
 from dota_assistant.core.config import Config
+from dota_assistant.sources import http
 
 NO_KEY = dict(stratz_token="", ai_api_key="", ai_base_url="")
 SOURCE = "敌方斧王：反击螺旋，被攻击时有几率旋转"
@@ -166,7 +167,7 @@ class RealKBTest(unittest.TestCase):
 
     def build(self, positions):
         enemies = [self.ids[n] for n in ("幻影刺客", "斧王", "水晶室女")]
-        with mock.patch.object(data, "_stratz", side_effect=no_stratz), \
+        with mock.patch.object(http, "_stratz", side_effect=no_stratz), \
                 mock.patch.object(data, "load_positions", return_value=positions):
             b = brief.build(Config(**NO_KEY), self.ids["敌法师"], [self.ids["潮汐猎人"]], enemies, 1, base=self.base)
         return b, [t for t, _ in b.sections]
@@ -191,7 +192,7 @@ class RealKBTest(unittest.TestCase):
         self.assertIn("你这路对面：斧王", b.text())
 
     def test_coach_without_token(self):
-        with mock.patch.object(data, "_stratz", side_effect=no_stratz):
+        with mock.patch.object(http, "_stratz", side_effect=no_stratz):
             c, notes = coach.prepare(Config(**NO_KEY), self.ids["敌法师"], [self.ids["幻影刺客"]], 1)
         self.assertIsNone(c.bench)
         self.assertIsInstance(notes, list)

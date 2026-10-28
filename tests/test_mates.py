@@ -13,6 +13,7 @@ import requests
 from dota_assistant import data, mates
 from dota_assistant.core.config import Config
 from dota_assistant.core.heroes import HeroDB
+from dota_assistant.sources import http
 from tests.test_engine import AXE, HEROES, PL
 from tests.test_webui import make_live
 
@@ -63,7 +64,7 @@ class FetchTest(unittest.TestCase):
         get = fake_get(ms, peers=[{"account_id": 7, "with_games": 99, "with_win": 50},
                                   {"account_id": ME, "with_games": 10, "with_win": 7, "against_games": 40}])
         ranked = [(AXE.id, 3, True)] * 6 + [(PL.id, 1, False)] * 2 + [(AXE.id, 0, True)] * 2
-        with mock.patch.object(data, "_get", get), \
+        with mock.patch.object(http, "_get", get), \
                 mock.patch.object(data, "_player_matches_stratz", return_value=ranked) as st:
             d = mates.fetch(Config(account_id=ME, stratz_token="t"), MATE)
         self.assertEqual(st.call_args.args[1:], (MATE, mates.SAMPLE))
@@ -75,34 +76,34 @@ class FetchTest(unittest.TestCase):
         self.assertEqual(d["positions_sample"], 10)
 
     def test_private_no_token_self(self):
-        with mock.patch.object(data, "_get", fake_get([])):
+        with mock.patch.object(http, "_get", fake_get([])):
             d = mates.fetch(Config(account_id=MATE), MATE)
         self.assertEqual(d["matches"], [])
         self.assertIsNone(d["with_me"])
-        with mock.patch.object(data, "_get", fake_get([m(AXE.id, True)])):
+        with mock.patch.object(http, "_get", fake_get([m(AXE.id, True)])):
             d = mates.fetch(Config(account_id=MATE), MATE)                 # 查自己：不查「和我一起」
         self.assertIsNone(d["with_me"])
         self.assertIn("STRATZ token", d["positions_note"])
-        with mock.patch.object(data, "_get", fake_get([m(AXE.id, True)])):
+        with mock.patch.object(http, "_get", fake_get([m(AXE.id, True)])):
             d = mates.fetch(Config(account_id=ME), MATE)                   # 没一起打过
         self.assertEqual(d["with_me"], [0, 0])
 
     def test_unknown_account(self):
-        with mock.patch.object(data, "_get", fake_get([], profile=False)), self.assertRaises(LookupError):
+        with mock.patch.object(http, "_get", fake_get([], profile=False)), self.assertRaises(LookupError):
             mates.fetch(Config(), MATE)
 
     def test_unknown_account_404(self):
         r = requests.Response()
         r.status_code = 404
-        with mock.patch.object(data, "_get", side_effect=requests.HTTPError(response=r)),                 self.assertRaises(LookupError):
+        with mock.patch.object(http, "_get", side_effect=requests.HTTPError(response=r)),                 self.assertRaises(LookupError):
             mates.fetch(Config(), MATE)
         r.status_code = 503                                                 # 别的 HTTP 错误照常当联网失败
-        with mock.patch.object(data, "_get", side_effect=requests.HTTPError(response=r)),                 self.assertRaises(requests.HTTPError):
+        with mock.patch.object(http, "_get", side_effect=requests.HTTPError(response=r)),                 self.assertRaises(requests.HTTPError):
             mates.fetch(Config(), MATE)
 
     def test_stratz_down(self):
-        with mock.patch.object(data, "_get", fake_get([m(AXE.id, True)])), \
-                mock.patch.object(data, "_player_matches_stratz", side_effect=data.APIError("NPGSQL TIMEOUT")):
+        with mock.patch.object(http, "_get", fake_get([m(AXE.id, True)])), \
+                mock.patch.object(data, "_player_matches_stratz", side_effect=http.APIError("NPGSQL TIMEOUT")):
             d = mates.fetch(Config(stratz_token="t"), MATE)
         self.assertIsNone(d["positions"])
         self.assertIn("NPGSQL TIMEOUT", d["positions_note"])
@@ -145,7 +146,7 @@ class LiveMateTest(unittest.TestCase):
             if aid == 404:
                 raise LookupError("OpenDota 上没有好友代码 404")
             if aid == 500:
-                raise data.APIError("断网")
+                raise http.APIError("断网")
             return {"account_id": aid, "name": "阿强", "rank_tier": 55, "fetched_at": int(time.time()),
                     "matches": [], "heroes": [], "with_me": None, "positions": None, "positions_note": ""}
         self.live._mate_fetch = fetch

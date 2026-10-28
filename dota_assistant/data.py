@@ -17,14 +17,12 @@ from collections import defaultdict
 from pathlib import Path
 
 import requests
-from urllib3.util.retry import Retry
 
 from .core.config import DATA_DIR, Config
 from .core.heroes import Hero, HeroDB
+from .sources import http
 
-OPENDOTA = "https://api.opendota.com/api"
 VALVE_HEROLIST = "https://www.dota2.com/datafeed/herolist?language=schinese"
-STRATZ = "https://api.stratz.com/graphql"
 
 IDS_PER_DAY = 1_550_000   # match_id 每天大约增长这么多（2026-10 实测）
 CHUNK_IDS = 1_000_000     # 单次 explorer 查询的 match_id 跨度（约 30 万局，6~9 秒）；超时会自动对半拆
@@ -32,67 +30,12 @@ MIN_DURATION = 15 * 60    # 少于 15 分钟的局多半是掉线 / 秒退，不
 logger = logging.getLogger(__name__)  # 不叫 log：下面不少函数有 log 参数（进度提示）
 
 
-class APIError(RuntimeError):
-    """数据源自己报错（STRATZ errors / explorer err）：和断网、503 一样算网络问题"""
-
-
-NETWORK_ERRORS = (requests.RequestException, APIError)   # 日志里只记一行，不记堆栈（不是程序 bug）
-
-
-def _say(msg: str) -> None:
-    """进度提示：打印出来，同时记进日志"""
-    print(msg, flush=True)
-    logger.info(msg.strip())
-
-_session = requests.Session()
-# 网络不稳时 STRATZ / OpenDota 偶尔直接断连接（SSL EOF / 10054）：连接层自动重试，HTTP 状态码仍由下面自己处理
-_session.mount("https://", requests.adapters.HTTPAdapter(max_retries=Retry(
-    total=6, backoff_factor=1, allowed_methods=None, status_forcelist=(), raise_on_status=False)))
-
-
-def _get(url: str, **params):
-    for attempt in range(4):
-        r = _session.get(url, params=params, timeout=120)
-        if r.status_code == 429:
-            logger.warning("OpenDota 限速（429），%d 秒后重试：%s", 5 * (attempt + 1), url)
-            time.sleep(5 * (attempt + 1))
-            continue
-        if r.status_code == 400 and "explorer" in url:
-            return r.json()   # explorer 把 SQL 错误 / 超时放在 400 的 err 字段里
-        r.raise_for_status()
-        return r.json()
-    r.raise_for_status()
-
-
-def _stratz(cfg: Config, query: str, **variables) -> dict:
-    for attempt in range(5):
-        r = _session.post(STRATZ, json={"query": query, "variables": variables}, timeout=60,
-                          headers={"Authorization": f"Bearer {cfg.stratz_token}", "User-Agent": "STRATZ_API"})
-        if r.status_code != 429:
-            break
-        logger.warning("STRATZ 限速（429），%d 秒后重试", 3 * (attempt + 1))
-        time.sleep(3 * (attempt + 1))      # 免费 token 有每秒 / 每分钟限速
-    r.raise_for_status()
-    res = r.json()
-    if res.get("errors"):
-        logger.warning("STRATZ 返回错误：%s", res["errors"])
-        raise APIError(f"STRATZ 出错：{res['errors'][0].get('message')}")
-    return res["data"]
-
-
-def _sql(q: str) -> list[dict]:
-    res = _get(f"{OPENDOTA}/explorer", sql=q)
-    if res.get("err"):
-        raise APIError(f"OpenDota explorer 出错：{res['err']}")
-    return res["rows"]
-
-
 # ---------- 英雄表 ----------
 
 def fetch_heroes() -> list[dict]:
-    cn = {h["id"]: h["name_loc"] for h in _get(VALVE_HEROLIST)["result"]["data"]["heroes"]}
+    cn = {h["id"]: h["name_loc"] for h in http._get(VALVE_HEROLIST)["result"]["data"]["heroes"]}
     out = []
-    for h in _get(f"{OPENDOTA}/heroStats"):
+    for h in http._get(f"{http.OPENDOTA}/heroStats"):
         out.append({
             "id": h["id"],
             "key": h["name"].removeprefix("npc_dota_hero_"),
@@ -109,7 +52,7 @@ CDN = "https://cdn.cloudflare.steamstatic.com"
 PORTRAIT_DIR = DATA_DIR / "portraits"
 
 
-def fetch_portraits(log=_say) -> None:
+def fetch_portraits(log=http._say) -> None:
     """下载每个英雄的横版头像（256×144），屏幕识别的初始模板。已有的跳过。"""
     PORTRAIT_DIR.mkdir(parents=True, exist_ok=True)
     heroes = json.loads((DATA_DIR / "heroes.json").read_text(encoding="utf-8"))
@@ -118,7 +61,7 @@ def fetch_portraits(log=_say) -> None:
         out = PORTRAIT_DIR / f"{h['id']}.png"
         if out.exists():
             continue
-        r = _session.get(CDN + h["img"], timeout=60)
+        r = http._session.get(CDN + h["img"], timeout=60)
         r.raise_for_status()
         out.write_bytes(r.content)
         n += 1
@@ -165,7 +108,7 @@ def _download_icon(rel: str, out: Path) -> None:
 ICONS_DONE = ICON_DIR / "prefetched.txt"   # 预下过一遍的标记（写的是知识库版本），start 看它决定要不要补下
 
 
-def fetch_icons(log=_say) -> None:
+def fetch_icons(log=http._say) -> None:
     """顶栏 / 买活自动记要的图标一次下全，局内不用临时下：金币、每个英雄的小图标、每个对面会给小条的大招图标。
     已有的跳过；第一张就下不到（断网）就不试剩下的、不写标记，下次再补；个别 CDN 没有的照样写标记（运行时按需再试）"""
     from concurrent.futures import ThreadPoolExecutor
@@ -187,16 +130,16 @@ def fetch_icons(log=_say) -> None:
 ITEM_ICON_DIR = DATA_DIR / "items"
 
 
-def fetch_items_const(log=_say) -> None:
+def fetch_items_const(log=http._say) -> None:
     """OpenDota 装备常量（价格 / 合成 / 图标地址，coach.items_const 读）。以前只在没有时下一次、之后不再更新，
     版本改了价格 / 出了新装备跟不上；现在跟全量更新一起刷新"""
     from .coach import ITEMS_CONST
-    raw = _get(f"{OPENDOTA}/constants/items")
+    raw = http._get(f"{http.OPENDOTA}/constants/items")
     ITEMS_CONST.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
     log(f"  装备常量：{len(raw)} 件")
 
 
-def fetch_item_icons(log=_say) -> None:
+def fetch_item_icons(log=http._say) -> None:
     """下载装备图标（88×64，出装推荐显示成图标）：OpenDota 装备常量里的图片地址，配方共用一张不下。已有的跳过"""
     from concurrent.futures import ThreadPoolExecutor
     from .coach import items_const
@@ -205,7 +148,7 @@ def fetch_item_icons(log=_say) -> None:
             if v.get("img") and not k.startswith("recipe_") and not (ITEM_ICON_DIR / f"{k}.png").exists()]
 
     def get(job: tuple[Path, str]) -> None:
-        r = _session.get(CDN + job[1], timeout=60)
+        r = http._session.get(CDN + job[1], timeout=60)
         r.raise_for_status()
         job[0].write_bytes(r.content)
     with ThreadPoolExecutor(8) as pool:
@@ -244,8 +187,8 @@ def _chunk_queries(lo_id: int, hi_id: int, bracket: str) -> tuple[str, str]:
     return vs, syn
 
 
-def fetch_stats(cfg: Config, log=_say) -> dict:
-    latest = max(m["match_id"] for m in _get(f"{OPENDOTA}/publicMatches"))
+def fetch_stats(cfg: Config, log=http._say) -> dict:
+    latest = max(m["match_id"] for m in http._get(f"{http.OPENDOTA}/publicMatches"))
     start = latest - cfg.days * IDS_PER_DAY
     bracket = _bracket_sql(cfg)
 
@@ -257,7 +200,7 @@ def fetch_stats(cfg: Config, log=_say) -> dict:
         nonlocal total
         q_vs, q_syn = _chunk_queries(lo, hi, bracket)
         try:
-            rows_vs, rows_syn = _sql(q_vs), _sql(q_syn)
+            rows_vs, rows_syn = http._sql(q_vs), http._sql(q_syn)
         except RuntimeError:
             if hi - lo <= CHUNK_IDS // 8:
                 raise
@@ -301,19 +244,10 @@ def stats_path(cfg: Config) -> Path:
 
 # ---------- 英雄分位置数据（STRATZ） ----------
 
-# STRATZ 的段位只分到两档一组
-_STRATZ_BRACKETS = {1: "HERALD_GUARDIAN", 2: "HERALD_GUARDIAN", 3: "CRUSADER_ARCHON", 4: "CRUSADER_ARCHON",
-                    5: "LEGEND_ANCIENT", 6: "LEGEND_ANCIENT", 7: "DIVINE_IMMORTAL", 8: "DIVINE_IMMORTAL"}
 _POSITIONS = ("1", "2", "3", "4", "5")
 # 分位置胜率只算打到第几分钟还没结束的局。玩家 2026-10-26 定 30：速推局（一号位拉席克 35 分钟内结束的赢 72%）不算，
 # 回测区分度 0.0666（全部局 0.0673、≥25 分钟 0.0676、≥35 分钟 0.0651），在噪声内。见 HANDOFF 第 29 节
 POSITION_MIN_MINUTES = 30
-
-
-def _stratz_brackets(cfg: Config) -> list[str]:
-    if not (cfg.rank_min and cfg.rank_max):
-        return ["ALL"]
-    return sorted({_STRATZ_BRACKETS[m] for m in range(cfg.rank_min, cfg.rank_max + 1)})
 
 
 def fetch_positions(cfg: Config) -> dict:
@@ -323,11 +257,11 @@ def fetch_positions(cfg: Config) -> dict:
     q = """query($b: [RankBracketBasicEnum], $mx: Int) { heroStats { stats(bracketBasicIds: $b, groupByPosition: true, maxTime: $mx) {
              heroId position matchCount winCount } } }"""
     out: dict[str, dict[str, list[int]]] = defaultdict(dict)
-    for r in _stratz(cfg, q, b=_stratz_brackets(cfg), mx=POSITION_MIN_MINUTES)["heroStats"]["stats"]:
+    for r in http._stratz(cfg, q, b=http._stratz_brackets(cfg), mx=POSITION_MIN_MINUTES)["heroStats"]["stats"]:
         pos = (r["position"] or "").removeprefix("POSITION_")
         if pos in _POSITIONS:
             out[str(r["heroId"])][pos] = [r["matchCount"], r["winCount"]]
-    return {"fetched_at": int(time.time()), "brackets": _stratz_brackets(cfg), "min_minutes": POSITION_MIN_MINUTES,
+    return {"fetched_at": int(time.time()), "brackets": http._stratz_brackets(cfg), "min_minutes": POSITION_MIN_MINUTES,
             "heroes": out}
 
 
@@ -365,10 +299,10 @@ def positions_from_lane_roles(db: HeroDB, lane_roles: dict[int, list[dict]]) -> 
     return out
 
 
-def fetch_positions_opendota(db: HeroDB, log=_say) -> dict:
+def fetch_positions_opendota(db: HeroDB, log=http._say) -> dict:
     lane_roles = {}
     for i, h in enumerate(db, 1):
-        lane_roles[h.id] = _get(f"{OPENDOTA}/scenarios/laneRoles", hero_id=h.id)
+        lane_roles[h.id] = http._get(f"{http.OPENDOTA}/scenarios/laneRoles", hero_id=h.id)
         if i % 30 == 0:
             log(f"  {i} 个英雄 …")
         time.sleep(0.5)                    # OpenDota 免费接口每分钟 60 次
@@ -414,7 +348,7 @@ def _player_matches_stratz(cfg: Config, account_id: int | None = None, limit: in
                players(steamAccountId: $id) { heroId position isVictory } } } }"""
     out = []
     for skip in range(0, limit, 100):
-        page = _stratz(cfg, q, id=account_id, skip=skip)["player"]["matches"] or []
+        page = http._stratz(cfg, q, id=account_id, skip=skip)["player"]["matches"] or []
         for m in page:
             pl = m["players"][0]
             pos = (pl["position"] or "").removeprefix("POSITION_")
@@ -425,15 +359,15 @@ def _player_matches_stratz(cfg: Config, account_id: int | None = None, limit: in
 
 
 def _player_matches_opendota(cfg: Config) -> list[tuple[int, int, bool]]:
-    matches = _get(f"{OPENDOTA}/players/{cfg.account_id}/matches", limit=cfg.history_matches,
+    matches = http._get(f"{http.OPENDOTA}/players/{cfg.account_id}/matches", limit=cfg.history_matches,
                    lobby_type=7, project=["hero_id", "player_slot", "radiant_win"])
     return [(m["hero_id"], 0, (m["player_slot"] < 128) == m["radiant_win"]) for m in matches]
 
 
-def fetch_player(cfg: Config, log=_say) -> dict:
+def fetch_player(cfg: Config, log=http._say) -> dict:
     """段位 + 最近 cfg.history_matches 局天梯每个英雄在每个位置的局数 / 胜场。
     有 STRATZ token 时带位置（未解析的局记为位置 0），否则全部记为位置 0。需要游戏里开了「公开比赛数据」。"""
-    prof = _get(f"{OPENDOTA}/players/{cfg.account_id}")
+    prof = http._get(f"{http.OPENDOTA}/players/{cfg.account_id}")
     matches = None
     if cfg.stratz_token:
         try:
@@ -457,7 +391,7 @@ def fetch_player(cfg: Config, log=_say) -> dict:
     }
 
 
-def update_player(cfg: Config, log=_say) -> None:
+def update_player(cfg: Config, log=http._say) -> None:
     if not cfg.account_id:
         return
     DATA_DIR.mkdir(exist_ok=True)
@@ -514,7 +448,7 @@ def _main_position(positions: dict[int, dict[int, tuple[int, int]]], hero: int) 
 
 # ---------- 汇总 ----------
 
-def update(cfg: Config, log=_say) -> None:
+def update(cfg: Config, log=http._say) -> None:
     DATA_DIR.mkdir(exist_ok=True)
     log("拉取英雄表 …")
     heroes = fetch_heroes()
@@ -539,7 +473,7 @@ def update(cfg: Config, log=_say) -> None:
         log("没填 STRATZ token：用 OpenDota 的分路数据凑分位置数据（约 2 分钟）…")
         try:
             pos = fetch_positions_opendota(load_heroes(), log)
-        except NETWORK_ERRORS as e:
+        except http.NETWORK_ERRORS as e:
             log(f"  没拉到（{e}），{'沿用上次的' if OPENDOTA_POSITIONS.exists() else '推荐先按定位标签粗筛位置'}")
         else:
             OPENDOTA_POSITIONS.write_text(json.dumps(pos), encoding="utf-8")

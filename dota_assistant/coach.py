@@ -18,8 +18,9 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from . import data, kb
+from . import kb
 from .core.config import DATA_DIR, Config
+from .sources import http
 
 log = logging.getLogger(__name__)
 BENCH_DIR = DATA_DIR / "bench"
@@ -63,13 +64,13 @@ def fetch_bench(cfg: Config, hero_id: int, pos: int) -> dict:
         cached = json.loads(p.read_text(encoding="utf-8"))
         if cached.get("v") == BENCH_VERSION:
             return cached
-    br = data._stratz_brackets(cfg)
+    br = http._stratz_brackets(cfg)
     q = """query($h: Short!, $hs: [Short], $p: [MatchPlayerPositionType], $b: [RankBracketBasicEnum], $mx: Int) { heroStats {
              stats(heroIds: $hs, positionIds: $p, bracketBasicIds: $b, groupByTime: true, maxTime: $mx) {
                time matchCount cs networth campsStacked }
              itemFullPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b, matchLimit: 0) { itemId instance time matchCount }
              itemBootPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b) { itemId instance matchCount } } }"""
-    d = data._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br, mx=BENCH_MAX_MIN)["heroStats"]
+    d = http._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br, mx=BENCH_MAX_MIN)["heroStats"]
     per_min = {str(r["time"]): {"cs": r["cs"], "networth": r["networth"], "stacks": r["campsStacked"]}
                for r in d["stats"] if r["matchCount"] >= PER_MIN_MIN_MATCHES}
     # 第 0 分钟的局数 = 全部局数。不分时间的 stats 其实给的是「打到 maxTime（默认 35）分钟的局数」，不能当总数
@@ -459,7 +460,7 @@ def prepare(cfg: Config, my_id: int, enemy_ids: list[int], pos: int) -> tuple[Co
         try:
             bench = fetch_bench(cfg, my_id, pos)
         except Exception as e:                   # 没网也照样提醒对抗装，只是没有节奏对比
-            log.warning("局内提醒：同分段数据没拉到：%s", e, exc_info=not isinstance(e, data.NETWORK_ERRORS))
+            log.warning("局内提醒：同分段数据没拉到：%s", e, exc_info=not isinstance(e, http.NETWORK_ERRORS))
             notes.append(f"同分段数据没拉到（{e}），这局只提醒对抗装")
     if not enemies:
         notes.append("没有对面阵容（选人时没识别 / 没填），这局只看出装节奏")
@@ -476,7 +477,7 @@ def _stratz_position(cfg: Config, match_id: int, account_id: int) -> int | None:
         return None
     q = "query($id: Long!) { match(id: $id) { players { steamAccountId position } } }"
     try:
-        players = data._stratz(cfg, q, id=match_id)["match"]["players"]
+        players = http._stratz(cfg, q, id=match_id)["match"]["players"]
     except Exception:
         return None
     pos = next((p["position"] for p in players if p["steamAccountId"] == account_id), None)

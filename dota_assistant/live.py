@@ -41,6 +41,7 @@ from .core.heroes import Hero
 from .engine import POSITION_NAMES
 from .gsi import GSIServer, ensure_cfg
 from .hotkeys import Hotkeys, vk_code
+from .sources import http
 from .speech import Speaker
 from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
 
@@ -1612,7 +1613,7 @@ class Live:
                 log.info("队友战绩 %s 查好了（%.1f 秒）", aid, time.monotonic() - t0)
             except LookupError as ex:
                 res, err = None, str(ex)
-            except data.NETWORK_ERRORS as ex:     # 断网 / 限速：一行就够，不记堆栈
+            except http.NETWORK_ERRORS as ex:     # 断网 / 限速：一行就够，不记堆栈
                 log.warning("队友战绩 %s 没查到：%s", aid, ex)
                 res, err = None, f"联网失败：{ex}"
             except Exception as ex:

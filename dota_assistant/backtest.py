@@ -21,6 +21,7 @@ import numpy as np
 
 from . import data
 from .core.config import DATA_DIR, Config
+from .sources import http
 from . import engine as E
 from .engine import LANE_OPPONENTS, MIN_GAMES, RISK_TOP, W_SYN, Engine, sigmoid
 
@@ -44,14 +45,14 @@ def fetch_matches(cfg: Config, after_id: int, n: int, log=print) -> list[dict]:
     q = (f"SELECT match_id FROM public_matches WHERE match_id > {after_id} AND match_id <= {after_id + 3_000_000} "
          f"AND game_mode = 22 AND lobby_type = 7 AND duration >= {data.MIN_DURATION} {bracket} "
          f"ORDER BY random() LIMIT {int(n * 1.4) + 20}")
-    ids = [r["match_id"] for r in data._sql(q)]
+    ids = [r["match_id"] for r in http._sql(q)]
     log(f"  OpenDota 抽到 {len(ids)} 场候选，去 STRATZ 取选人顺序和位置 …")
     out = []
     for i in range(0, len(ids), STRATZ_BATCH):
         chunk = ids[i:i + STRATZ_BATCH]
         query = "{ " + " ".join(f"m{j}: match(id: {mid}) {{ {_FIELDS} }}" for j, mid in enumerate(chunk)) + " }"
         try:
-            res = data._stratz(cfg, query)
+            res = http._stratz(cfg, query)
         except Exception as e:                      # 个别批次失败不影响整体
             log(f"  第 {i // STRATZ_BATCH + 1} 批失败：{e}")
             continue

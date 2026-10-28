@@ -24,6 +24,7 @@ import numpy as np
 
 from . import data
 from .core.config import DATA_DIR, Config
+from .sources import http
 
 CACHE = DATA_DIR / "lane_matches.json"
 REPORT = DATA_DIR / "lane_report.txt"
@@ -91,7 +92,7 @@ def fetch(cfg: Config, n: int, log=print) -> list[dict]:
         chunk = todo[k:k + BATCH]
         q = "{ " + " ".join(f"m{j}: match(id: {mid}) {{ {_FIELDS} }}" for j, mid in enumerate(chunk)) + " }"
         try:
-            res = data._stratz(cfg, q)
+            res = http._stratz(cfg, q)
         except Exception as e:                   # 个别批次失败不影响整体，下次再取
             log(f"  第 {k // BATCH + 1} 批失败：{e}")
             continue
@@ -374,7 +375,7 @@ def review(cfg: Config, log=print) -> str:
         m = None
         if cfg.stratz_token:
             try:
-                m = compact(data._stratz(cfg, f"{{ match(id: {mid}) {{ {_FIELDS} }} }}")["match"])
+                m = compact(http._stratz(cfg, f"{{ match(id: {mid}) {{ {_FIELDS} }} }}")["match"])
             except Exception as e:
                 out.append(f"{title}：STRATZ 没取到（{e}）")
                 continue

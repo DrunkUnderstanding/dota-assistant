@@ -9,6 +9,7 @@ import numpy as np
 
 from dota_assistant import lanestate as ls
 from dota_assistant.core.config import Config
+from dota_assistant.sources import http
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-lane-"))
 
@@ -96,14 +97,14 @@ class ReviewTest(unittest.TestCase):
         ls.log_moment({"match": "本地1", "minute": 3, "hero_name": "敌法师", "pos": 1})
         matches = [ls.compact(raw_match(i, bottom)) for i, bottom in enumerate(["DIRE_VICTORY", "RADIANT_VICTORY", "TIE"] * 20)]
         self.cache.write_text(json.dumps({"tried": [], "matches": matches}), encoding="utf-8")
-        with mock.patch.object(ls.data, "_stratz", return_value={"match": raw_match(777)}):
+        with mock.patch.object(http, "_stratz", return_value={"match": raw_match(777)}):
             text = ls.review(Config(stratz_token="x", account_id=42))
         self.assertIn("比赛 777 · 敌法师 · 1 号位 · 输 · 对线结果：劣", text)
         self.assertIn("3:00 你：击杀 0 死亡 1 助攻 0 等级 2 血 40% 蓝 80% · 当时提醒「屯野 2:53 / 抢莲花 3:00」", text)
         self.assertIn("只看自己：猜", text)
         self.assertIn("看全本路（击杀差 -2、等级差 -1.0）", text)
         self.assertIn("本地 / 机器人局", text)
-        with mock.patch.object(ls.data, "_stratz", return_value={"match": {**raw_match(777), "bottomLaneOutcome": None}}):
+        with mock.patch.object(http, "_stratz", return_value={"match": {**raw_match(777), "bottomLaneOutcome": None}}):
             self.assertIn("还没解析完", ls.review(Config(stratz_token="x")))
 
 

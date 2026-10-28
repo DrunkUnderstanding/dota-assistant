@@ -16,6 +16,7 @@ import requests
 
 from . import data
 from .core.config import DATA_DIR, Config
+from .sources import http
 
 MATES_FILE = DATA_DIR / "mates.json"
 KEEP = 8                         # 最多记几个人（新查的排最前，挤掉最久没查的）
@@ -40,9 +41,9 @@ def parse_code(text) -> int:
 
 
 def fetch(cfg: Config, account_id: int) -> dict:
-    """联网查一个人。好友代码不存在抛 LookupError；网络问题抛 data.NETWORK_ERRORS 里的异常"""
+    """联网查一个人。好友代码不存在抛 LookupError；网络问题抛 http.NETWORK_ERRORS 里的异常"""
     try:
-        prof = data._get(f"{data.OPENDOTA}/players/{account_id}")
+        prof = http._get(f"{http.OPENDOTA}/players/{account_id}")
     except requests.HTTPError as e:                  # 没这个号 OpenDota 回 404
         if e.response is None or e.response.status_code != 404:
             raise
@@ -54,7 +55,7 @@ def fetch(cfg: Config, account_id: int) -> dict:
            "rank_tier": prof.get("rank_tier"), "leaderboard_rank": prof.get("leaderboard_rank"),
            "fetched_at": int(time.time()), "matches": [], "heroes": [], "with_me": None,
            "positions": None, "positions_note": ""}
-    matches = data._get(f"{data.OPENDOTA}/players/{account_id}/matches", limit=SAMPLE,
+    matches = http._get(f"{http.OPENDOTA}/players/{account_id}/matches", limit=SAMPLE,
                         project=["hero_id", "player_slot", "radiant_win", "start_time", "lobby_type",
                                  "kills", "deaths", "assists"])
     if not matches:
@@ -70,7 +71,7 @@ def fetch(cfg: Config, account_id: int) -> dict:
     out["sample"] = len(matches)
     if cfg.account_id and cfg.account_id != account_id:
         # 不用 /wl?included_account_id：那个把对面的局也算进去；peers 分开了同队（with_）和对面（against_）
-        me = next((p for p in data._get(f"{data.OPENDOTA}/players/{account_id}/peers")
+        me = next((p for p in http._get(f"{http.OPENDOTA}/players/{account_id}/peers")
                    if p.get("account_id") == cfg.account_id), {})
         out["with_me"] = [me.get("with_games", 0), me.get("with_win", 0)]
     if not cfg.stratz_token:
@@ -78,7 +79,7 @@ def fetch(cfg: Config, account_id: int) -> dict:
         return out
     try:
         ranked = data._player_matches_stratz(cfg, account_id, SAMPLE)
-    except data.NETWORK_ERRORS as e:                  # STRATZ 偶尔整体超时：别的照样显示
+    except http.NETWORK_ERRORS as e:                  # STRATZ 偶尔整体超时：别的照样显示
         out["positions_note"] = f"STRATZ 没查到位置（{e}）"
         return out
     pos: dict[int, list[int]] = {}

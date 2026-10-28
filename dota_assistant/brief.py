@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from . import coach, data, gameplan, itembuild, kb, lanes, teamfight
 from .core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES
+from .sources import http
 
 log = logging.getLogger(__name__)
 BRIEF_DIR = DATA_DIR / "brief"
@@ -68,14 +69,14 @@ def _cached(name: str, fetch):
 def fetch_curves(cfg: Config) -> dict[str, dict[str, list[int]]]:
     """{英雄 id: {"n": [...], "w": [...]}}：第 t 个数 = 打到第 t 分钟还没结束的局数 / 其中赢的局数（t = 0~60）。
     不分位置（对面的位置是猜的，统一口径）。"""
-    br = data._stratz_brackets(cfg)
+    br = http._stratz_brackets(cfg)
 
     def fetch():
         q = """query($b: [RankBracketBasicEnum], $lo: Int, $hi: Int) { heroStats {
                  stats(bracketBasicIds: $b, groupByTime: true, minTime: $lo, maxTime: $hi) { heroId time matchCount winCount } } }"""
         out: dict[str, dict[str, list[int]]] = {}
         for lo, hi in ((0, 30), (31, 60)):          # 一次拉全部英雄 × 61 分钟太大，分两段
-            for r in data._stratz(cfg, q, b=br, lo=lo, hi=hi)["heroStats"]["stats"]:
+            for r in http._stratz(cfg, q, b=br, lo=lo, hi=hi)["heroStats"]["stats"]:
                 c = out.setdefault(str(r["heroId"]), {"n": [0] * 61, "w": [0] * 61})
                 if 0 <= r["time"] <= 60:
                     c["n"][r["time"]], c["w"][r["time"]] = r["matchCount"], r["winCount"]
@@ -85,7 +86,7 @@ def fetch_curves(cfg: Config) -> dict[str, dict[str, list[int]]]:
 
 def fetch_hero(cfg: Config, hero_id: int, pos: int) -> dict:
     """你这个英雄这个位置：对线（按对面英雄）+ 起手装"""
-    br = data._stratz_brackets(cfg)
+    br = http._stratz_brackets(cfg)
 
     def fetch():
         q = """query($h: Short!, $hs: [Short], $p: [MatchPlayerPositionType], $b: [RankBracketBasicEnum]) { heroStats {
@@ -93,7 +94,7 @@ def fetch_hero(cfg: Config, hero_id: int, pos: int) -> dict:
                    heroId2 winCount drawCount lossCount }
                  itemStartingPurchase(heroId: $h, positionIds: $p, bracketBasicIds: $b) { itemId instance matchCount }
                  total: stats(heroIds: $hs, positionIds: $p, bracketBasicIds: $b, maxTime: 0) { matchCount } } }"""
-        d = data._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br)["heroStats"]
+        d = http._stratz(cfg, q, h=hero_id, hs=[hero_id], p=[f"POSITION_{pos}"], b=br)["heroStats"]
         # total 要写 maxTime: 0：不写时 STRATZ 给的是「打到 35 分钟的局数」，起手装比例会被算大（2026-10-26 实测）
         start: dict[str, int] = {}
         for r in d["itemStartingPurchase"]:          # 同一件的第几份（instance）分开算；送的 / 买的合起来
@@ -225,7 +226,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
             try:
                 v = fn()
             except Exception as e:
-                log.warning("本局要点：STRATZ %s 没拉到：%s", what, e, exc_info=not isinstance(e, data.NETWORK_ERRORS))
+                log.warning("本局要点：STRATZ %s 没拉到：%s", what, e, exc_info=not isinstance(e, http.NETWORK_ERRORS))
                 b.add("说明", [("dim", f"STRATZ 数据没拉到（{what}：{e}）")])
                 continue
             hero, bench, curves = (v, bench, curves) if what == "hero" else (hero, v, curves) if what == "bench" \
@@ -330,7 +331,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None, ai: bool
     if cfg.stratz_token:
         try:
             q = "query($id: Long!) { match(id: $id) { players { heroId position } } }"
-            actual = {p["heroId"]: int(p["position"][-1]) for p in data._stratz(cfg, q, id=match_id)["match"]["players"]
+            actual = {p["heroId"]: int(p["position"][-1]) for p in http._stratz(cfg, q, id=match_id)["match"]["players"]
                       if (p.get("position") or "")[-1:].isdigit()}
         except Exception:
             pass
