@@ -2,14 +2,15 @@
  "version": 1,
  "generated_by": "tools/refactor/export_names.py --write-moves",
  "notes": {
-  "格式": "entries 每条：old 旧模块、name 名字（Live 的方法写 Live.方法名）、new 新模块、old_file / new_file 源文件、tags 为什么进清单（public 公开名 / split 拆分模块的全部名字 / live_method / test_patch / test_assign / test_ref / cross_module）、imported=true 表示旧模块里这个名字是 import 进来的（测试 patch 它）、per_module=true 表示每个拆出来的新文件各自定义一份（logger），不查「旧文件不能再定义」。由 tools/refactor/export_names.py --write-moves 生成。表只追加不删：已有条目不删、不挪顺序（test_moves 核对前 770 条的摘要），名字搬走以后条目照样留着；新名字追加到末尾。没搬的名字改放法：改脚本里的 SPLIT / LIVE_GROUPS 再跑 --write-moves（会更新那一条的 new / new_file），或手工改这一条，并在 notes 里写原因。imported 只许 data.DATA_DIR、webui.HTTPServer 两条。",
+  "格式": "entries 每条：old 旧模块、name 名字（Live 的方法写 Live.方法名）、new 新模块、old_file / new_file 源文件、tags 为什么进清单（public 公开名 / split 拆分模块的全部名字 / live_method / test_patch / test_assign / test_ref / cross_module）、imported=true 表示旧模块里这个名字是 import 进来的（测试 patch 它）、per_module=true 表示每个拆出来的新文件各自定义一份（logger），不查「旧文件不能再定义」。由 tools/refactor/export_names.py --write-moves 生成。表只追加不删：已有条目不删、不挪顺序（test_moves 核对前 791 条的摘要），名字搬走以后条目照样留着；新名字追加到末尾。没搬的名字改放法：改脚本里的 SPLIT / LIVE_GROUPS 再跑 --write-moves（会更新那一条的 new / new_file），或手工改这一条，并在 notes 里写原因。imported 只许 data.DATA_DIR、webui.HTTPServer 两条。",
   "ultcd 调整": "MIN_CD、cooldowns、pick 从 PLAN 表的 domain/ultcd 改放到 kb/cd_ops：kb/cd_ops.update_ops 要用 pick 挑「对面会给小条的大招」，pick 又要 cooldowns / MIN_CD；按表放会变成 kb → domain 往上导入。三个都是只读知识库条目的纯函数，domain/ultcd（cooldown、mods）和 app（live、app/update.fetch_icons）往下引用 cd_ops 即可。",
   "data 调整": "PLAN 表没写到的名字按调用方放：VALVE_HEROLIST / CDN / PORTRAIT_DIR / ICON_PATH / _icon_locks / _icon_failed / ITEM_ICON_DIR → sources/assets；IDS_PER_DAY / CHUNK_IDS / MIN_DURATION / _bracket_sql / _chunk_queries / _POSITIONS → sources/stats（_POSITIONS 也被 sources/player 用，同层引用 stats._POSITIONS）；MEDALS / MAIN_POSITION_SHARE → sources/player；ROLE_SPLIT 只有 positions_from_lane_roles 用 → app/update；_STRATZ_BRACKETS 跟着 _stratz_brackets → sources/http；logger → sources/http（其它新模块各自 logging.getLogger(__name__)）。",
   "data.DATA_DIR": "test_nokey 里 mock.patch.object(data, 'DATA_DIR', d) 之后调 positions_source / load_positions：这三个都在 sources/stats，patch 目标改成 stats.DATA_DIR（stats 要 from ..core.config import DATA_DIR）。",
   "patch 目标": "测试 patch 的名字搬家后，调用方必须用「新模块.名字」形式取（不能 from 新模块 import 名字），patch 才生效：http._get / http._stratz（mates、sources/*、brief、coach、research/lanestate 都要这样调）、assets.ICON_DIR / ICONS_DONE / load_heroes / fetch_icon（app/update.fetch_icons 里，test_ultcd patch）、assets._download_icon、player._player_matches_stratz（mates 调）、stats.positions_source / load_positions、cd_ops.OPS_PATH（test_ultcd 赋值）、lanelog.LOG_FILE（test_webui 赋值；research/lanestate.review 也要用 lanelog.LOG_FILE）、app.live.consts.FIX_FILE / DEATH_MIN_SHOW（test_webui 赋值；Live.__init__ 里 self.fix_file = consts.FIX_FILE）。",
   "log / logger": "每个拆出来的新文件各自定义 log = logging.getLogger(__name__)（日志前缀变化是 PLAN 允许的唯一可见差异）。清单里 log 只记一个主去处：gsi.log → game/gsi、gamefiles.log → vision/gamefiles、ultcd.log → domain/ultcd、live.log → app/live/core。",
   "live 模块级": "PLAN P4：模块级常量和小函数一律 app/live/consts（包括 PLAN 表里写在 settings 的 _check_hotkeys / _check_dota_dir，它们是模块级函数不是方法），各 mixin 用 consts.NAME 访问；class Live 和 log 在 core。",
-  "kb 与 cli": "kb.py → kb/__init__.py、cli.py → cli/__init__.py：新旧模块名相同，靠 old_file / new_file 区分。"
+  "kb 与 cli": "kb.py → kb/__init__.py、cli.py → cli/__init__.py：新旧模块名相同，靠 old_file / new_file 区分。",
+  "合并 d1bfef6": "重构期间 main 多了 d1bfef6（队友战绩改成独立页）：Live.query_mate / Live._mate_ready 删了（app/live/mates.py 和 MatesMixin 跟着删），这两条从表里去掉；mates.py 新加的名字（Service、表现分、整局、STRATZ 评分等 23 个）按 WHOLE 规则去 domain/mates，追加在末尾。test_moves 的基线跟着换成 d1bfef6：前 791 条。"
  },
  "entries": [
   {
@@ -5697,16 +5698,6 @@
   },
   {
    "old": "dota_assistant.live",
-   "name": "Live._mate_ready",
-   "new": "dota_assistant.app.live.mates",
-   "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/mates.py",
-   "tags": [
-    "live_method"
-   ]
-  },
-  {
-   "old": "dota_assistant.live",
    "name": "Live._my_slot",
    "new": "dota_assistant.app.live.timers",
    "old_file": "dota_assistant/live.py",
@@ -6211,16 +6202,6 @@
    "new": "dota_assistant.app.live.core",
    "old_file": "dota_assistant/live.py",
    "new_file": "dota_assistant/app/live/core.py",
-   "tags": [
-    "live_method"
-   ]
-  },
-  {
-   "old": "dota_assistant.live",
-   "name": "Live.query_mate",
-   "new": "dota_assistant.app.live.mates",
-   "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/mates.py",
    "tags": [
     "live_method"
    ]
@@ -8084,6 +8065,251 @@
    "new_file": "dota_assistant/app/webui.py",
    "tags": [
     "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "ANONYMOUS",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "AWARDS",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "BENCH_DAYS",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "BENCH_DIR",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "GAME_MODES",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "MATCH_DIR",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "MATCH_FIELDS",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "MATCH_KEEP",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "SCORE_PARTS",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "STRATZ_RETRY",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "Service",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "benchmarks_for",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "fetch_match",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "hero_benchmarks",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "log",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "mode_name",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "per_min",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "percentile",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "rank_text",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "save_match",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_patch"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "score",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "stratz_match",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_ref"
+   ]
+  },
+  {
+   "old": "dota_assistant.mates",
+   "name": "stratz_ratings",
+   "new": "dota_assistant.domain.mates",
+   "old_file": "dota_assistant/mates.py",
+   "new_file": "dota_assistant/domain/mates.py",
+   "tags": [
+    "public",
+    "test_patch",
+    "test_ref"
    ]
   }
  ]

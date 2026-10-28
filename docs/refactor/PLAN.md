@@ -2,6 +2,7 @@
 
 > 写于 2026-10-28，基线提交 `b1113e8`（main，已推送）。写给执行重构的 AI agent。
 > 先读完本文件、[CLAUDE.md](../../CLAUDE.md)、[HANDOFF.md](../HANDOFF.md) 第 2～4 节再动手。
+> **后来的变化**：重构期间 main 多了 `d1bfef6`（队友战绩改成独立页 `web/mates.html`，走 webui 的 `/api/mates`、`/api/match`），已合并进本分支，行为基线换成 `d1bfef6`。因此第 1 节的网页动作少了 `mate_query` / `mate_remove`（剩 22 个），P4 表里的 `mates.py`（`query_mate` / `_mate_ready`）和 `MatesMixin` 不存在了；第 5 节「控制面板队友战绩」那项改成在 `mates.html` 里点。
 
 ## 0. 先读这一节
 

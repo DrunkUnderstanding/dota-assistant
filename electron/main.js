@@ -11,6 +11,7 @@
 //   买活 / 大招计时条：和叠加层一样透明、置顶、不抢焦点，盖在屏幕最上面一条（游戏顶栏），每个英雄头像下面一个买活小条、对面的再加一个大招小条；
 //           只有小条接鼠标（页面报区域，同上），不能拖，位置按屏幕高度换算（web/topbar.html）。
 //   控制面板：普通窗口，关掉它 = 退出助手。
+//   队友战绩：控制面板点「队友战绩」window.open 开的普通窗口（web/mates.html），可以单独关。
 // 日志：往 stdout 写「级别 内容」一行，Python（webui._pipe_electron）收进 logs/ 下的日志文件；页面脚本报错也转过去。
 const path = require('path');
 // 页面是本机服务的固定文件，不需要 Electron 开发模式的 CSP 安全提示（打包后本来也不显示），免得每次启动刷两条警告
@@ -283,6 +284,13 @@ function createPanel() {
     show: false,
   });
   watch(panel, '控制面板');
+  // 控制面板 window.open 的本机页面（队友战绩 mates.html）开成普通窗口；别的网址一律不开
+  panel.webContents.setWindowOpenHandler(({ url }) => (url.startsWith(`${SERVER}/`)
+    ? { action: 'allow', overrideBrowserWindowOptions: {
+      width: 1240, height: 860, minWidth: 900, minHeight: 560,
+      backgroundColor: '#0b0e13', autoHideMenuBar: true } }
+    : { action: 'deny' }));
+  panel.webContents.on('did-create-window', (win) => watch(win, '队友战绩'));
   panel.loadURL(`${SERVER}/panel.html`);
   panel.once('ready-to-show', () => panel.show());
   panel.on('closed', () => { panel = null; app.quit(); });

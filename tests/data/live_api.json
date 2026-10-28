@@ -1,7 +1,7 @@
 {
  "__init__": {
   "kind": "method",
-  "signature": "(self, cfg: 'Config', screen_factory=None, use_gsi: 'bool' = True, use_hotkeys: 'bool' = True, speaker: 'Speaker | None' = None, advisor: 'adv.Advisor | None' = None, bank: 'TemplateBank | None' = None, calibration: 'Calibration | None' = None, overlay_file: 'Path | None' = None, coach_prepare: 'Callable | None' = None, brief_build: 'Callable | None' = None, plan_build: 'Callable | None' = None, ban_watcher: 'grid.BanWatcher | None' = None, read_roles: 'Callable | None' = None, ocr: 'Callable | None' = None, mate_fetch: 'Callable | None' = None)"
+  "signature": "(self, cfg: 'Config', screen_factory=None, use_gsi: 'bool' = True, use_hotkeys: 'bool' = True, speaker: 'Speaker | None' = None, advisor: 'adv.Advisor | None' = None, bank: 'TemplateBank | None' = None, calibration: 'Calibration | None' = None, overlay_file: 'Path | None' = None, coach_prepare: 'Callable | None' = None, brief_build: 'Callable | None' = None, plan_build: 'Callable | None' = None, ban_watcher: 'grid.BanWatcher | None' = None, read_roles: 'Callable | None' = None, ocr: 'Callable | None' = None)"
  },
  "_apply_dota_dir": {
   "kind": "method",
@@ -102,10 +102,6 @@
  "_loop": {
   "kind": "method",
   "signature": "(self) -> 'None'"
- },
- "_mate_ready": {
-  "kind": "method",
-  "signature": "(self, aid: 'int', res: 'dict | None', err: 'str') -> 'None'"
  },
  "_my_slot": {
   "kind": "method",
@@ -310,10 +306,6 @@
  "publish": {
   "kind": "method",
   "signature": "(self) -> 'None'"
- },
- "query_mate": {
-  "kind": "method",
-  "signature": "(self, code, force: 'bool' = False) -> 'None'"
  },
  "refresh": {
   "kind": "method",

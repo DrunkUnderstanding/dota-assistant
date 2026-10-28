@@ -2,13 +2,15 @@
 
 怎么造 Live：参照 tests/test_webui.py（use_gsi=False、use_hotkeys=False，GSI 换成一个 GameState 直接改推送内容），
 其余全用真的：推荐（data/ 统计）、头像识别（data/portraits + calibration.json）、选人网格、知识库、本局要点 / 局内提醒
-（联网走 cassette）、队友战绩（cassette）、认位置 / 买活 OCR（OCR cassette）。只有这些换成假的：
+（联网走 cassette）、队友战绩（mates.Service + 本地 HTTP 接口，cassette）、认位置 / 买活 OCR（OCR cassette）。只有这些换成假的：
   - 屏幕：FakeScreen，按剧本换帧（选人截图 → 局内截图 → 合成的「顶栏某格变灰」「消息栏买活了」帧）
   - 语音：只记下要念什么
   - AI 打法：直接抛 llm.Unavailable（不调 Claude；走「AI 打法用不了」那条路）
 确定性：
   - 不起 Live 的工作线程：本进程主线程就是「工作线程」，submit 的任务按顺序在这里跑（Live._run，和工作线程里一样）；
-  - Live 开的后台线程（本局要点 / 局内提醒 / 网格 / 认位置 / 买活 OCR / 队友战绩）就地同步跑完，结果排进队列的顺序固定；
+  - Live 开的后台线程（本局要点 / 局内提醒 / 网格 / 认位置 / 买活 OCR）就地同步跑完，结果排进队列的顺序固定；
+  - 队友战绩（d1bfef6 起是独立页 web/mates.html，不走 Live 的工作线程）：主线程直接调 mates.Service，
+    再起一次 WebServer 用 http.client 调 /api/mates、/api/match（一次只发一个请求、读完回应再记，顺序固定）；
   - 时钟是假的（g_clock virtual）：time.time / monotonic / datetime.now 只在剧本里拨。
 除了 snapshot()，还记：叠加层位置 / 网页 /overlay 接口回的配置 / 叠加层状态文件（extras）、开头一次 live.heroes()、
 结尾冻结目录里的文件变动（g_files；config.toml、fixes.jsonl 贴全文）。认位置成功那条路用合成的 OCR 结果走一次。
@@ -16,21 +18,26 @@
 """
 from __future__ import annotations
 
+import ast
 import copy
 import hashlib
+import http.client
 import importlib
+import inspect
 import json
 import logging
 import queue
 import threading
+import textwrap
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-# 第 1 节列的网页动作（Live.action 的 type），回放里每个都要走到
+# Live.action 能处理的网页动作（type），回放里每个都要走到。PLAN 第 1 节列了 24 个；d1bfef6 把队友战绩挪到独立页
+# （webui 的 /api/mates、/api/match），去掉了 mate_query / mate_remove，剩 22 个。运行时还从 Live.action 源码里抽一遍对账
 WEB_ACTIONS = ("set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page "
                "buyback ult name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings "
-               "mate_query mate_remove open_logs").split()
+               "open_logs").split()
 
 # 叠加层相关的动作：做完以后不管变没变，都把叠加层位置 / 网页 /overlay 接口回的东西 / 状态文件记一次
 OVERLAY_ACTIONS = {"toggle_overlay", "toggle_lock", "close_overlay", "overlay_moved"}
@@ -40,6 +47,8 @@ ROLE_TEXT = {1: "优势路", 2: "中路", 3: "劣势路", 4: "辅助", 5: "纯�
 SYNTH_ROLES = [2, 3, 4, 1, 5]               # 夜魇 5 格各自排的位置（我在第 3 格 → 4 号位，和 config 的 1 号位不同）
 # 回放结束时列出冻结目录里的文件变动：文本附归一化后的全文（超过 64KB 只记 sha1），这两个不管多长都贴全文
 FULL_TEXT = ("config.toml", "data/fixes.jsonl")
+# 只记大小 + sha1、不贴全文的：队友战绩缓存的 OpenDota 英雄分位（原样转存 cassette 里的回应，一个英雄一个文件）
+NO_TEXT = ("data/benchmarks/",)
 
 MATCH = "9064593746"                         # 冻结目录里有这场的 11 次死亡推送（司夜刺客，夜魇第 3 格）
 SEL_FRAMES = ["20261023-013637", "20261023-013638", "20261023-013639", "20261023-014333", "20261023-014335",
@@ -81,7 +90,32 @@ def _modules() -> SimpleNamespace:
         buybackscan=_import("dota_assistant.vision.buybackscan", "dota_assistant.buybackscan"),
         llm=_import("dota_assistant.ai.llm", "dota_assistant.llm"),
         webui=_import("dota_assistant.app.webui", "dota_assistant.webui"),
+        mates=_import("dota_assistant.domain.mates", "dota_assistant.mates"),
     )
+
+
+def handled_actions(Live) -> set[str]:
+    """Live.action 的 if / elif 分发表里比过的动作名：t = a.get("type") / a["type"] 以后 t == "x"、t in ("x", "y")。
+    用 inspect.getsource 取源码（拆成 mixin 以后照样能取）"""
+    fn = ast.parse(textwrap.dedent(inspect.getsource(Live.action))).body[0]
+
+    def is_type(v) -> bool:
+        if isinstance(v, ast.Call) and isinstance(v.func, ast.Attribute) and v.func.attr == "get" and v.args:
+            return isinstance(v.args[0], ast.Constant) and v.args[0].value == "type"
+        return isinstance(v, ast.Subscript) and isinstance(v.slice, ast.Constant) and v.slice.value == "type"
+
+    names = {t.id for n in ast.walk(fn) if isinstance(n, ast.Assign) and is_type(n.value)
+             for t in n.targets if isinstance(t, ast.Name)}
+    out = set()
+    for n in ast.walk(fn):
+        if not (isinstance(n, ast.Compare) and isinstance(n.left, ast.Name) and n.left.id in names):
+            continue
+        for op, c in zip(n.ops, n.comparators):
+            if isinstance(op, ast.Eq) and isinstance(c, ast.Constant) and isinstance(c.value, str):
+                out.add(c.value)
+            elif isinstance(op, ast.In) and isinstance(c, (ast.Tuple, ast.List, ast.Set)):
+                out.update(e.value for e in c.elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+    return out
 
 
 def pretty(v, ind: int = 0) -> str:
@@ -268,11 +302,90 @@ class Replay:
     def tick(self, label: str) -> None:
         self.call(label, self.live.tick)
 
+    # ---------- 队友战绩（独立页，不走 Live.action）----------
+    def svc(self, label: str, fn, *args):
+        """直接调 mates.Service 的方法（主线程，阻塞到查完）；记返回值或异常"""
+        try:
+            res = fn(*args)
+        except Exception as e:                     # noqa: BLE001 —— 抛出来的也是行为（网页那边会变成 400 / 404）
+            self.record(label, f"出错 {type(e).__name__}: {e}")
+            return None
+        self.record(label, pretty(json.loads(json.dumps(res, ensure_ascii=False))))
+        return res
+
+    def http(self, port: int, method: str, path: str, body: dict | None = None):
+        """本地服务发一个请求，读完回应再记（服务端日志都在回应之前打完，顺序固定）；返回解析后的 JSON"""
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=300)
+        try:
+            data = None if body is None else json.dumps(body, ensure_ascii=False).encode("utf-8")
+            conn.request(method, path, body=data, headers={"Content-Type": "application/json"} if data else {})
+            r = conn.getresponse()
+            raw = r.read()
+            status, ctype = r.status, r.getheader("Content-Type")
+        finally:
+            conn.close()
+        try:
+            res = json.loads(raw.decode("utf-8"))
+            text = pretty(res)
+        except ValueError:
+            res, text = None, f"<不是 JSON> {raw[:200]!r}"
+        label = f"HTTP {method} {path}" + ("" if body is None else " " + json.dumps(body, ensure_ascii=False, sort_keys=True))
+        self.record(label, f"{status} {ctype}\n{text}")
+        return res
+
+    def mates_flow(self) -> None:
+        """队友战绩页的全部后端入口：查（第一次 / 20 分钟内不重查 / 刷新 / 查不到 / 乱填）、列表、点一局看整局（缓存、
+        STRATZ 评分）、从整局里点名字查别人（「和你一起」走 peers）、删人；再起一次 WebServer 走一遍 HTTP 层"""
+        m, cfg = self.m, self.cfg
+        code = str(cfg.account_id or 149388561)
+        svc = m.mates.Service(cfg, db=self.live.db)
+        self.svc("队友战绩 Service.list()（冻结目录里原有的）", svc.list)
+        self.svc(f"队友战绩 Service.query({code})", svc.query, code)
+        self.svc(f"队友战绩 Service.query({code})：20 分钟内查过，不重查", svc.query, code)
+        self.clock.advance(60)
+        self.svc(f"队友战绩 Service.query({code}, force=True)：刷新", svc.query, code, True)
+        self.svc("队友战绩 Service.query('1')：好友代码 1（OpenDota 上有资料）", svc.query, "1")
+        self.svc("队友战绩 Service.query('4294967294')：没这个号", svc.query, "4294967294")
+        self.svc("队友战绩 Service.query('不是数字')", svc.query, "不是数字")
+        views = self.svc("队友战绩 Service.list()", svc.list) or []
+        me = next((v for v in views if str(v.get("account_id")) == code), {})
+        mid = next((x["match_id"] for x in me.get("matches") or [] if x.get("match_id")), None)
+        other = None
+        if mid:
+            view = self.svc(f"队友战绩 Service.match(最近一局, focus={code})", svc.match, mid, int(code))
+            self.svc("队友战绩 Service.match(同一局, focus=None)：整局读缓存", svc.match, mid, None)
+            players = [p for t in ("radiant", "dire") for p in ((view or {}).get("teams") or {}).get(t) or []]
+            other = next((p["account_id"] for p in players if p.get("account_id") and str(p["account_id"]) != code), None)
+        else:
+            self.out.append("### 队友战绩：自己的最近比赛是空的，没走「看整局」")
+        self.svc("队友战绩 Service.match(99999999999)：没有这局", svc.match, 99999999999, None)
+        if other:
+            self.svc("队友战绩 Service.query(整局里另一个人)：点名字查", svc.query, str(other))
+        self.svc("队友战绩 Service.remove(1)", svc.remove, 1)
+        self.svc("队友战绩 Service.list()：删掉以后", svc.list)
+        # HTTP 层：WebServer 自己建一个 Service（读上面存下的 data/mates.json）
+        ws = m.webui.WebServer(self.live).start()
+        port = ws.server.server_address[1]
+        try:
+            self.http(port, "GET", "/api/mates")
+            self.http(port, "POST", "/api/mates", {"op": "query", "code": code})        # 刚查过：不重查
+            self.http(port, "POST", "/api/mates", {"op": "query", "code": "abc"})
+            self.http(port, "POST", "/api/mates", {"op": "nope"})
+            self.http(port, "POST", "/api/mates", {"op": "remove"})
+            if mid:
+                self.http(port, "GET", f"/api/match/{mid}?p={code}")
+            self.http(port, "GET", "/api/match/99999999999")
+            if other:
+                self.http(port, "POST", "/api/mates", {"op": "remove", "account_id": other})
+            self.http(port, "GET", "/api/mates")
+        finally:
+            ws.stop()
+
     def files_changed(self) -> str:
         """冻结目录里回放新增 / 改动 / 删除的文件（logs/ 不算）：路径 + 大小 + sha1；文本附归一化后的内容"""
         f = self.files
         lines = f.report(self.home, self.files_before, f.scan(self.home), self.norm, f.Scrubber(None),
-                         content=lambda rel: True, limit=lambda rel: 0 if rel in FULL_TEXT else 64_000)
+                         content=lambda rel: not rel.startswith(NO_TEXT), limit=lambda rel: 0 if rel in FULL_TEXT else 64_000)
         return "### 冻结目录里的文件变动（logs/ 不算）\n" + ("\n".join(lines) if lines else "（没有）")
 
     def synth_role_words(self, img, side: str, positions: list[int]) -> list:
@@ -539,20 +652,17 @@ class Replay:
         self.push(nxt)
         self.tick("下一局选人")
         self.act({"type": "explain_pick", "hero_id": first})
-        code = str(self.cfg.account_id or 149388561)
-        self.act({"type": "mate_query", "code": code})
-        self.act({"type": "mate_query", "code": code})                        # 20 分钟内查过：不重查
-        self.clock.advance(60)
-        self.act({"type": "mate_query", "code": code, "force": True})         # 刷新
-        self.act({"type": "mate_query", "code": "1"})                         # 没这个号
-        self.act({"type": "mate_query", "code": "不是数字"})
-        self.act({"type": "mate_remove", "account_id": 1})
+        self.mates_flow()
         self.act({"type": "open_logs"})
         self.act({"type": "bogus_action"})
 
         self.record("回放结束：叠加层状态（全量）", force=EXTRA_KEYS)
         self.out.append(self.files_changed())
 
+        handled = handled_actions(type(live))
+        if handled != set(WEB_ACTIONS):
+            raise AssertionError(f"Live.action 的分发表和 WEB_ACTIONS 对不上：多了 {sorted(handled - set(WEB_ACTIONS))}，"
+                                 f"少了 {sorted(set(WEB_ACTIONS) - handled)}")
         missing = [a for a in WEB_ACTIONS if a not in self.covered]
         self.out.append(f"### 网页动作覆盖：{len(WEB_ACTIONS) - len(missing)}/{len(WEB_ACTIONS)}"
                         + (f"，没走到：{missing}" if missing else "，全部走到"))

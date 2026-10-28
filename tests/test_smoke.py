@@ -10,8 +10,9 @@
    顺带跑几组 suggest，并用 tests/tools/sentinel.py 证明它不写运行目录；
 4. Live 的全部方法 / 属性（含私有方法）名字 + 签名和 tests/data/live_api.json 一字不差（P4 把 live.py 拆成 app/live/ 包以后也必须一样）；
    Live 各方法里用到的 self.xxx 都有着落（类上有，或者某个方法里赋过值）；模拟一次 mixin 拆分验证这些检查本身靠得住；
-5. 网页 / Electron 发给后端的动作名都在 Live.action 的分发表里；分发表本身也和 P0 时一致；
-   前端每一处 act / run / send 调用都必须被归类（字面量 / 登记过的动态调用 / 函数定义），漏抽的会报出来。
+5. 网页 / Electron 发给后端的动作名都在 Live.action 的分发表里；分发表本身也和基线（d1bfef6）一致；
+   前端每一处 act / run / send 调用都必须被归类（字面量 / 登记过的动态调用 / 函数定义），漏抽的会报出来；
+   前端请求的每个 /api/xxx 接口 webui 都有，队友战绩页（mates.js）发的 op webui 都认。
 
 更新 live_api.json（只在确实有意改了 Live 的接口时）：
     set UPDATE_LIVE_API=1 && python -m unittest tests.test_smoke
@@ -54,10 +55,11 @@ TIMEOUT = 120
 # 除了包本身，还要核对这些脚本里对 dota_assistant 的 import（打包入口不在单测里跑）
 EXTRA_SCRIPTS = ("packaging/*.py",)
 
-# P0 时 Live.action 的完整分发表（PLAN 第 1 节的清单；PLAN 写的是「23 个」，实际列了 24 个，和代码一致）
-ACTIONS_P0 = frozenset(
+# 基线 Live.action 的完整分发表。PLAN 第 1 节（b1113e8）列了 24 个；main 上 d1bfef6 把队友战绩改成独立页
+# （web/mates.html 直接请求 webui 的 /api/mates、/api/match，不走 Live），去掉了 mate_query / mate_remove，剩 22 个
+ACTIONS_BASE = frozenset(
     "set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page buyback ult "
-    "name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings mate_query mate_remove open_logs"
+    "name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings open_logs"
     .split())
 # 一定要有的子命令（列表本身是动态取的，这里只防「取到的是空的 / 取错了 parser」）
 KEY_COMMANDS = {"suggest", "kb", "run", "start", "update", "demo", "recognize", "logs"}
@@ -759,7 +761,7 @@ class WebActionTest(unittest.TestCase):
         self.acts, self.dyn, self.front_keys, self.unclassified, self.api_sites = front_actions()
 
     def test_action_table_unchanged(self):
-        self.assertEqual(self.handled, ACTIONS_P0, "Live.action 的分发表变了")
+        self.assertEqual(self.handled, ACTIONS_BASE, "Live.action 的分发表变了")
 
     def test_unknown_action_raises(self):
         """分发表以外的动作：抛 ValueError（webui 回 400 + 消息），不是悄悄忽略"""
@@ -788,8 +790,59 @@ class WebActionTest(unittest.TestCase):
 
     def test_plan_actions_reachable(self):
         """PLAN 第 1 节的每个动作都在 Live.action 里；前端不发的（只有热键 / 别处调用）单独列在这里，变了要更新"""
-        self.assertEqual(ACTIONS_P0 - self.handled, set())
-        self.assertEqual(ACTIONS_P0 - set(self.acts), {"toggle_lock"})   # F7 热键直接调 self.toggle_lock；叠加层锁按钮发 set overlay_locked
+        self.assertEqual(ACTIONS_BASE - self.handled, set())
+        self.assertEqual(ACTIONS_BASE - set(self.acts), {"toggle_lock"})   # F7 热键直接调 self.toggle_lock；叠加层锁按钮发 set overlay_locked
+
+
+# ---------- 6. 前端直接请求的 /api 接口（不经过 Live.action 的：队友战绩页等）----------
+
+FRONT_API = re.compile(r"/api/([a-z_]+)")                    # '/api/mates'、`/api/match/${mid}`、`${SERVER}/api/config`
+# webui 里认的接口：path == "/api/x"、re.fullmatch(r"/api/x/(\d+)", path)
+SERVED_API = re.compile(r"""['"]/api/([a-z_]+)(?=['"/])""")
+# 队友战绩页 op({ op: 'query', … }) → webui 的 _mates_op 里 body.get("op") == "query"
+MATES_OP = re.compile(r"(?<![\w.$])op\(\s*\{\s*op:\s*'(\w+)'")
+HANDLED_OP = re.compile(r"""body\.get\(\s*["']op["']\s*\)\s*==\s*["'](\w+)["']""")
+
+
+def load_webui_source() -> str:
+    """新路径优先（P4 后在 dota_assistant.app.webui），旧路径兜底（同 load_live）"""
+    for name in (f"{PKG}.app.webui", f"{PKG}.webui"):
+        try:
+            mod = importlib.import_module(name)
+        except ModuleNotFoundError as e:
+            if e.name and (name == e.name or name.startswith(e.name + ".")):
+                continue
+            raise
+        return inspect.getsource(mod)
+    raise ImportError("找不到 webui（dota_assistant.app.webui / dota_assistant.webui 都没有）")
+
+
+class FrontApiTest(unittest.TestCase):
+    def setUp(self):
+        self.src = load_webui_source()
+        self.front: dict[str, set[str]] = {}
+        self.ops: set[str] = set()
+        for p in front_files():
+            rel, text = p.relative_to(REPO).as_posix(), p.read_text(encoding="utf-8")
+            for m in FRONT_API.finditer(text):
+                self.front.setdefault(m.group(1), set()).add(rel)
+            if rel == "web/mates.js":
+                self.ops.update(MATES_OP.findall(text))
+
+    def test_front_api_paths_served(self):
+        """前端请求的每个 /api/xxx 在 webui 里都有分支（没有的会落到「没有这个接口」/ 静态文件 404）"""
+        self.assertGreaterEqual(set(self.front), {"action", "events", "heroes", "config", "mates", "match"},
+                                "正则没抽到前端的接口？")
+        served = set(SERVED_API.findall(self.src))
+        missing = {k: sorted(v) for k, v in self.front.items() if k not in served}
+        self.assertEqual(missing, {}, "前端请求了、webui 没有的接口")
+        # 变异自检：webui 里把 /api/mates 改个名，必须查得出来
+        self.assertNotIn("mates", set(SERVED_API.findall(self.src.replace('"/api/mates"', '"/api/mates_moved"'))))
+
+    def test_mates_ops_handled(self):
+        """队友战绩页 POST /api/mates 的 op（查 / 删）webui 都认（不认的回 400「不认识的操作」）"""
+        self.assertEqual(self.ops, {"query", "remove"}, "mates.js 发的 op 变了（新 op 要确认 webui 认，再改这里）")
+        self.assertEqual(self.ops - set(HANDLED_OP.findall(self.src)), set(), "mates.js 发了、webui 不认的 op")
 
 
 if __name__ == "__main__":

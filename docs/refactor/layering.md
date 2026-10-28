@@ -36,12 +36,13 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 - `sources.assets` / `stats` / `player` → `sources.http`：一律 `http._get(...)` / `http._stratz(...)` / `http._session` 形式（测试只 patch `http` 一处）。
 - `app.live.*` 的 mixin 之间互相调方法（都在 `self` 上，不需要 import 彼此）；`app.start` → `app.update`、`app.webui`；`app.demo` / `app.webui` → `app.live`。
 - `vision` 和 `game` 之间：现在没有互相引用。
+- **合并 main 的 d1bfef6（队友战绩改成独立页）带来的新依赖**，都是往下：`domain.mates` 多了 `sources.assets`（`Service._hero` 读英雄表 `assets.load_heroes()`、`_item_names` 读装备常量 `assets.items_const()`，原来是延迟 `from .coach import items_const`，`items_const` 已经在 `sources/assets`，改成直接 `assets.items_const()`）和 `kb`（`_item_names` 里延迟 `from .. import kb` 取装备中文名，照原样留在函数里）；`app.webui` 多了 `domain.mates`（`mates.Service` 给 `/api/mates`、`/api/match`）和 `sources.http`（`http.NETWORK_ERRORS`）。`app.live` 不再依赖 `domain.mates`。
 
 ## 搬家时要跟着改的 patch 目标（会在测试里体现）
 
 | 测试现在的写法 | 搬家后 | 前提（调用方怎么取名字） |
 |---|---|---|
-| `patch.object(data, "_get")`（test_mates） | `http._get` | `mates`、`sources/*` 用 `http._get(...)` |
+| `patch.object(data, "_get")`、`patch.object(data, "_stratz")`（test_mates） | `http._get`、`http._stratz` | `mates`、`sources/*` 用 `http._get(...)` |
 | `patch.object(data, "_stratz")`（test_nokey）、`patch.object(ls.data, "_stratz")`（test_lanestate） | `http._stratz` | `brief`、`coach`、`sources/player`、`research/lanestate` 用 `http._stratz(...)` |
 | `patch.object(data, "_player_matches_stratz")`（test_mates） | `player._player_matches_stratz` | `mates` 用 `player._player_matches_stratz(...)` |
 | `patch.object(data, "positions_source" / "load_positions")`（test_nokey） | `stats.xxx` | 调用方用 `stats.xxx(...)` |
@@ -61,7 +62,7 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 - `app/live/` 下除了 `consts.py`，任何文件绑定 `consts` 的名字（`from .consts import FIX_FILE`）或 `import *`。
 - `Live.方法名` 只认定义在 `Live` 或 `app/live/core.py` 里 `class Live(...)` 基类中的方法；同一个方法在两个 mixin 里各有一份也会报。
 - `imported` 只许 `data.DATA_DIR`、`webui.HTTPServer` 两条（基线白名单写死在测试里）。
-- `moves.json` 只追加不删：前 770 条的（旧模块, 名字）摘要固定。`--write-moves` 在现有表上合并：已有条目保留，新名字追加到末尾，没搬的名字跟着规则改去处。
+- `moves.json` 只追加不删：前 791 条的（旧模块, 名字）摘要固定（b1113e8 的 770 条，合并 d1bfef6 时删 2 条、加 23 条）。`--write-moves` 在现有表上合并：已有条目保留，新名字追加到末尾，没搬的名字跟着规则改去处。
 
 ## 各新模块的依赖（按当前代码）
 
@@ -71,16 +72,15 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 | `app.demo` | app | `app.live.core`、`app.webui`、`core.config` |
 | `app.live.cards` | app | `ai.llm`、`app.live.consts`、`app.live.core`、`app.live.draft`、`domain.brief`、`domain.engine` |
 | `app.live.consts` | app | `ai.llm`、`core.config`、`core.dota_install`、`domain.brief`、`game.hotkeys` |
-| `app.live.core` | app | `ai.gameplan`、`app.live.cards`、`app.live.consts`、`app.live.draft`、`app.live.ingame`、`app.live.mates`、`app.live.overlay`、`app.live.settings`、`app.live.timers`、`core.config`、`core.dota_install`、`core.heroes`、`core.log`、`domain.advisor`、`domain.brief`、`domain.buyback`、`domain.coach`、`domain.engine`、`domain.jungle`、`domain.mates`、`domain.ultcd`、`game.gsi`、`game.speech`、`vision.buybackscan`、`vision.capture`、`vision.grid`、`vision.recognize`、`vision.roles` |
+| `app.live.core` | app | `ai.gameplan`、`app.live.cards`、`app.live.consts`、`app.live.draft`、`app.live.ingame`、`app.live.overlay`、`app.live.settings`、`app.live.timers`、`core.config`、`core.dota_install`、`core.heroes`、`core.log`、`domain.advisor`、`domain.brief`、`domain.buyback`、`domain.coach`、`domain.engine`、`domain.jungle`、`domain.ultcd`、`game.gsi`、`game.speech`、`vision.buybackscan`、`vision.capture`、`vision.grid`、`vision.recognize`、`vision.roles` |
 | `app.live.draft` | app | `app.live.consts`、`app.live.core`、`app.live.ingame`、`app.live.timers`、`core.gsi_fields`、`core.heroes`、`domain.advisor`、`domain.engine`、`vision.grid`、`vision.recognize` |
 | `app.live.ingame` | app | `app.live.cards`、`app.live.consts`、`app.live.core`、`app.live.draft`、`app.live.timers`、`core.gsi_fields`、`domain.brief`、`domain.coach`、`domain.death`、`domain.itembuild`、`domain.jungle`、`domain.lanelog`、`kb`、`vision.recognize` |
-| `app.live.mates` | app | `app.live.core`、`domain.mates`、`sources.http` |
 | `app.live.overlay` | app | `app.live.cards`、`app.live.consts`、`app.live.draft`、`app.live.ingame`、`core.config` |
 | `app.live.settings` | app | `ai.llm`、`app.live.cards`、`app.live.consts`、`app.live.core`、`app.live.draft`、`app.live.overlay`、`core.config`、`core.dota_install`、`game.gsi`、`game.hotkeys` |
 | `app.live.timers` | app | `app.live.consts`、`app.live.core`、`app.live.draft`、`domain.buyback`、`domain.coach`、`domain.ultcd`、`kb`、`kb.cd_ops`、`sources.assets`、`vision.buybackscan` |
 | `app.start` | app | `ai.llm`、`app.update`、`app.webui`、`core.config`、`core.dota_install`、`game.gsi`、`sources.assets`、`sources.player`、`sources.stats`、`vision.gamefiles` |
 | `app.update` | app | `core.config`、`core.heroes`、`domain.engine`、`kb`、`kb.cd_ops`、`sources.assets`、`sources.http`、`sources.player`、`sources.stats` |
-| `app.webui` | app | `app.live.core`、`core.config`、`core.log`、`sources.assets` |
+| `app.webui` | app | `app.live.core`、`core.config`、`core.log`、`domain.mates`、`sources.assets`、`sources.http` |
 | `cli` | cli | `app.demo`、`app.start`、`app.update`、`app.webui`、`core.config`、`core.log`、`domain.advisor`、`domain.brief`、`domain.itembuild`、`domain.lanes`、`game.gsi`、`game.speech`、`kb`、`research.aibacktest`、`research.backtest`、`research.lanestate`、`sources.assets`、`sources.player`、`sources.stats`、`vision.calibrate`、`vision.recognize` |
 | `core.dota_install` | core | `core.config` |
 | `core.log` | core | `core.config` |
@@ -93,7 +93,7 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 | `domain.itembuild` | domain | `domain.coach`、`domain.death`、`kb`、`sources.assets`、`sources.stats` |
 | `domain.lanelog` | domain | `core.config` |
 | `domain.lanes` | domain | `domain.death`、`domain.engine`、`domain.explain`、`kb` |
-| `domain.mates` | domain | `core.config`、`sources.http`、`sources.player` |
+| `domain.mates` | domain | `core.config`、`kb`、`sources.assets`、`sources.http`、`sources.player` |
 | `domain.teamfight` | domain | `domain.death`、`domain.explain`、`domain.lanes`、`kb` |
 | `domain.ultcd` | domain | `kb`、`kb.cd_ops` |
 | `game.gsi` | game | `core.config`、`core.dota_install`、`core.gsi_fields`、`core.log` |
@@ -119,7 +119,7 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 
 ## live.py 方法分组
 
-`Live` 实际有 105 个方法（PLAN 第 1 节写的 127 个不准，以 ast 数的为准），模块级名字 31 个：`Live`、`log` 在 `core`，其余 29 个（常量 + `_side_cn` `_names` `_slot_text` `_check_hotkeys` `_check_dota_dir` `_colorful` `_view_text` `plan_error` `_next_stage` `_mask`）在 `consts`。
+`Live` 实际有 105 个方法（PLAN 第 1 节写的 127 个不准，以 ast 数的为准；合并 d1bfef6 后删了 `query_mate` / `_mate_ready`，剩 103 个，`mates` 这组和 `app/live/mates.py` 一起没了），模块级名字 31 个：`Live`、`log` 在 `core`，其余 29 个（常量 + `_side_cn` `_names` `_slot_text` `_check_hotkeys` `_check_dota_dir` `_colorful` `_view_text` `plan_error` `_next_stage` `_mask`）在 `consts`。
 
 和 PLAN P4 表不一样 / 表里没写的：
 
@@ -150,21 +150,20 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 | cards | 12 |
 | overlay | 12 |
 | settings | 4 |
-| mates | 2 |
 | consts（模块级常量 / 函数） | 29 |
 
 | 方法 | 放在 | 被谁调（组: 次数） | 调谁（组: 次数） | 备注 |
 |---|---|---|---|---|
 | `__init__` | core | - | settings:1、core:1、overlay:1 | 分发入口 |
 | `start` | core | - | draft:1、core:1 | 分发入口 |
-| `submit` | core | cards:4、draft:2、timers:2、settings:1、core:1、ingame:1、mates:1 | - |  |
+| `submit` | core | cards:4、draft:2、timers:2、settings:1、core:1、ingame:1 | - |  |
 | `_loop` | core | core:1 | draft:1、core:1 | 分发入口 |
 | `_run` | core | core:1 | core:1 |  |
 | `subscribe` | core | - | - |  |
 | `unsubscribe` | core | - | - |  |
 | `publish` | core | core:1 | core:1 | 分发入口 |
 | `current_snapshot` | core | - | - |  |
-| `action` | core | - | draft:7、overlay:7、timers:3、cards:3、core:2、ingame:1、mates:1、settings:1 | 分发入口 |
+| `action` | core | - | draft:7、overlay:7、timers:3、cards:3、core:2、ingame:1、settings:1 | 分发入口 |
 | `snapshot` | core | core:1 | overlay:3、core:2、settings:1、timers:1 | 分发入口 |
 | `status` | core | core:1 | - |  |
 | `close` | core | - | - |  |
@@ -258,8 +257,6 @@ PLAN 第 1 节列的其它往上 / 互相导入，按表放已经消掉，逐条
 | `_apply_dota_dir` | settings | settings:1 | - |  |
 | `settings_view` | settings | core:1 | - |  |
 | `_start_hotkeys` | settings | core:1、settings:1 | overlay:2、core:2、draft:1、cards:1 | 分发入口 |
-| `query_mate` | mates | core:1 | mates:1、core:1 |  |
-| `_mate_ready` | mates | mates:1 | - |  |
 
 ## 产品代码里看到、但没动的（只记录）
 

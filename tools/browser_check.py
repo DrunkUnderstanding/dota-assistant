@@ -1,4 +1,4 @@
-"""G6：起一个本机界面服务（同 run --browser 的 WebServer + Live），用无头 Edge / Chrome 打开控制面板、叠加层、顶栏，收控制台报错。
+"""G6：起一个本机界面服务（同 run --browser 的 WebServer + Live），用无头 Edge / Chrome 打开控制面板、叠加层、顶栏、队友战绩页，收控制台报错。
 
 和 run --browser 的区别（为了不碰玩家的东西）：
 - 运行目录是临时目录（DOTA_ASSISTANT_HOME），从本仓库只读复制 data/ knowledge/ web/ config.example.toml calibration.json，
@@ -29,7 +29,7 @@ BROWSERS = [
 ]
 # 页面 → 要不要有文字（顶栏不在比赛里本来就是空的）
 PAGES = {"panel.html": True, "overlay.html?preview=1": True, "topbar.html?preview=1": True, "overlay.html": True,
-         "topbar.html?scale=1": False}
+         "topbar.html?scale=1": False, "mates.html": True}
 # 不算报错的：浏览器自己要的 favicon；顶栏预览故意放了一个下不到的大招图标（测「图标下不到退回写字」）
 IGNORED = ["/favicon.ico", "/icons/abilities/no_such_ability.png"]
 # 设置从这里读（行为快照的冻结目录里那份已经去掉了 token；没有再用本仓库的）
@@ -47,7 +47,9 @@ def make_home() -> Path:
     home = Path(tempfile.mkdtemp(prefix="dota-browser-"))
     for name in ("data", "knowledge", "web"):                # web/ 也要：页面按 ROOT / "web" 找
         if (REPO / name).is_dir():
-            shutil.copytree(REPO / name, home / name)
+            # 查过的队友不带：mates.html 打开时会自动重查旧数据（联网），这里只看空列表的页面
+            skip = shutil.ignore_patterns("mates.json") if name == "data" else None
+            shutil.copytree(REPO / name, home / name, ignore=skip)
     for name in ("config.example.toml", "calibration.json"):
         if (REPO / name).is_file():
             shutil.copy2(REPO / name, home / name)

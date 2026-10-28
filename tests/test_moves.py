@@ -34,9 +34,10 @@ LIVE_DIR = "dota_assistant/app/live"
 LIVE_CONSTS = "dota_assistant.app.live.consts"
 ALL_MOVED = True            # P4 结束：旧模块全删了
 
-# 基线（b1113e8）生成的 770 条：只能在后面追加，不许删、不许挪顺序
-BASELINE_COUNT = 770
-BASELINE_DIGEST = "ce6fda8831ab8b7304b2d626173c56c9776c682e53acb71792218345e93302dc"
+# 基线：只能在后面追加，不许删、不许挪顺序。b1113e8 生成 770 条；合并 main 的 d1bfef6 时换成它的基线：
+# 删掉它去掉的 Live.query_mate / Live._mate_ready 两条，末尾追加 mates.py 新加的 23 个名字，共 791 条
+BASELINE_COUNT = 791
+BASELINE_DIGEST = "187585bd2c11ba27f9230f42c4f9d2f78f759ff02ec7c1a42313fc059bc2749b"
 # 旧模块里本来就是 import 进来、测试又 patch 的名字（基线白名单，写死，不跟着脚本走）
 IMPORTED_BASELINE = {("dota_assistant.data", "DATA_DIR"), ("dota_assistant.webui", "HTTPServer")}
 PATCHED_TAGS = {"test_patch", "test_assign"}
@@ -164,11 +165,11 @@ class MovesTableTest(unittest.TestCase):
         self.assertGreater(len(self.entries), 500)
 
     def test_baseline_entries_kept(self):
-        """表只追加不删：基线的 770 条一条不少、顺序不变（已经搬走的名字靠这些条目继续核对新模块里有它）"""
+        """表只追加不删：基线的 791 条一条不少、顺序不变（已经搬走的名字靠这些条目继续核对新模块里有它）"""
         self.assertGreaterEqual(len(self.entries), BASELINE_COUNT, "moves.json 条目比基线少：不许删条目")
         keys = "\n".join(f"{e['old']}:{e['name']}" for e in self.entries[:BASELINE_COUNT])
         self.assertEqual(hashlib.sha256(keys.encode("utf-8")).hexdigest(), BASELINE_DIGEST,
-                         "moves.json 前 770 条的（旧模块, 名字）变了：只能在末尾追加，不许删、不许挪顺序、不许改名"
+                         "moves.json 前 791 条的（旧模块, 名字）变了：只能在末尾追加，不许删、不许挪顺序、不许改名"
                          "（改去处只改 new / new_file）")
 
     def test_flags_whitelisted(self):

@@ -30,7 +30,7 @@ import numpy as np
 
 from ...ai import gameplan
 from ...domain import advisor as adv
-from ...domain import brief, buyback, coach, jungle, mates, ultcd
+from ...domain import brief, buyback, coach, jungle, ultcd
 from ...vision import buybackscan, grid, roles
 from ...core import log as logs
 from ...core.config import Config
@@ -46,20 +46,19 @@ from .timers import TimersMixin
 from .cards import CardsMixin
 from .overlay import OverlayMixin
 from .settings import SettingsMixin
-from .mates import MatesMixin
 from . import consts
 
 log = logging.getLogger(__name__)
 
 
-class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin, MatesMixin):
+class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin):
     def __init__(self, cfg: Config, screen_factory=None, use_gsi: bool = True, use_hotkeys: bool = True,
                  speaker: Speaker | None = None, advisor: adv.Advisor | None = None,
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
                  overlay_file: Path | None = None, coach_prepare: Callable | None = None,
                  brief_build: Callable | None = None, plan_build: Callable | None = None,
                  ban_watcher: grid.BanWatcher | None = None, read_roles: Callable | None = None,
-                 ocr: Callable | None = None, mate_fetch: Callable | None = None):
+                 ocr: Callable | None = None):
         """后面几个参数给测试换成假的；正常运行都不用传"""
         self.cfg = cfg
         self.config_file: Path | None = None    # 账号设置写到哪；None = 项目根目录的 config.toml，测试里换成临时文件
@@ -146,10 +145,6 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self.pick_brief: brief.Brief | None = None
         self.pick_page = "lane"
         self.pick_note = ""                      # 还没做好 / 出错时显示什么
-
-        # ---- 队友战绩：控制面板填好友代码查（mates.py）----
-        self.mates = mates.Mates()
-        self._mate_fetch = mate_fetch or mates.fetch
 
         self.last_view: DraftView | None = None
         self.pending_key = None
@@ -347,10 +342,6 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"))
         elif t == "save_settings":
             self.save_settings(a)
-        elif t == "mate_query":
-            self.query_mate(a.get("code"), bool(a.get("force")))
-        elif t == "mate_remove":
-            self.mates.remove(int(a["account_id"]))
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
@@ -421,7 +412,6 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             "slots": slots,
             "bans_text": self.bans_text,
             "buyback": self.buyback_view(),
-            "mates": self.mates.view(self.db),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

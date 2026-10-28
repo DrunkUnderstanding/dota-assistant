@@ -49,9 +49,9 @@
 | 对面大招冷却（`ultcd.py`，顶栏对面头像下面、买活小条再往下） | 🟡 代码完成 | 单元测试（挑哪个大招、按等级取冷却、减冷却算法、游戏文件写法解析、点 / 取消 / 右键菜单、换局清空）；真实知识库抽查末日 / 骷髅王；神杖写法从 GitHub 同步的游戏文件取到 13/13；无头浏览器看过小条和右键菜单；**没在 Electron / Dota 上方看过，`hero.level` 没在真实推送里见过，本机游戏资源包那条路没跑过**（第 32 节）；小条 2026-10-26 加大到 60×24、换成金币 / 技能图标（第 32.1 节） |
 | 对线优劣回测 + 实战记录（`lanestate.py`，`lane-test` / `lane-review`） | 🟡 回测完成，实战记录代码完成 | 1523 场样本外对局回测（第 28 节）；实战记录单元测试；**没接过真实游戏，GSI 的 kills / assists / level 字段没在真实推送里见过** |
 | 不填 key 也能用（没 STRATZ token / 调不了 AI，第 35 节） | ✅ 完成 | 单元测试（`tests/test_nokey.py`）；全新目录、没 token、AI 来源选 API Key 却没填，从零 `update` 再跑 `suggest` 和 `demo`（无头浏览器看叠加层）：推荐、分路、本局要点、局内提醒都出来，AI 打法那页写明用不了，日志没有警告；分位置数据改用 OpenDota 分路凑，1523 场回测见第 35 节 |
-| 队友战绩（`mates.py`，控制面板左下「队友战绩」，第 38 节） | 🟡 代码完成 | 单元测试（`tests/test_mates.py`：好友代码解析、假接口整理结果、记住查过的人、Live 里查 / 刷新 / 删 / 出错）；开发机真联网查自己 + 最常一起打的队友 + 一个不存在的代码，约 1.5 秒一个人；无头 Chrome 截过 1400 / 900 宽的真实控制面板；2026-10-28 Electron 控制面板里真鼠标点输入框 / 查询 / 刷新 / × 都生效（见第 38 节末） |
+| 队友战绩（`mates.py` + 独立页 `web/mates.html`，控制面板顶栏「队友战绩」按钮开，第 38 / 38.1 / 38.2 节） | 🟡 代码完成 | **2026-10-28 改成独立页 + 点一局看整局 + 每局 KDA / 表现分（第 38.1 节），加上可选的 STRATZ 评分（第 38.2 节）：单元测试 + 真联网 + 无头 Chrome 截过简况 / 整局；Electron 里真鼠标走通整条（第 38.2 节末）**；第一版：单元测试（`tests/test_mates.py`：好友代码解析、假接口整理结果、记住查过的人、Live 里查 / 刷新 / 删 / 出错）；开发机真联网查自己 + 最常一起打的队友 + 一个不存在的代码，约 1.5 秒一个人；无头 Chrome 截过 1400 / 900 宽的真实控制面板；2026-10-28 Electron 控制面板里真鼠标点输入框 / 查询 / 刷新 / × 都生效（见第 38 节末） |
 | 局内打法 | ❌ 未开始 | 本局要点 + 缺口提醒算是雏形；敌方装备识别、热键提问待做（第 15 节末尾） |
-| 工程化重构（2026-10-28，分支 `refactor/structure`，计划 [refactor/PLAN.md](refactor/PLAN.md)） | 🟡 代码完成，未合并 main | 平铺的 40 个模块按层分进 `core / sources / kb / ai / domain / vision / game / research / app / cli` 子包，`live.py` 用 mixin 拆成 `app/live/`（新路径见第 4 节）；加了 `pyproject.toml`、`requirements.lock`、ruff。只搬家不改行为：门禁全过（编译 + ruff、单测、行为快照逐字节一致、单测不碰真实目录、冒烟 + 搬家清单、慢快照、无头浏览器打开三个页面无控制台报错）；临时 venv 里 `pip install -e .` 后 `dota-assistant --help` 正常。**真鼠标验收、打包版、实战待验**（第 7 节） |
+| 工程化重构（2026-10-28，分支 `refactor/structure`，计划 [refactor/PLAN.md](refactor/PLAN.md)） | 🟡 代码完成，未合并 main | 平铺的 40 个模块按层分进 `core / sources / kb / ai / domain / vision / game / research / app / cli` 子包，`live.py` 用 mixin 拆成 `app/live/`（新路径见第 4 节）；加了 `pyproject.toml`、`requirements.lock`、ruff。只搬家不改行为：门禁全过（编译 + ruff、单测、行为快照逐字节一致、单测不碰真实目录、冒烟 + 搬家清单、慢快照、无头浏览器打开三个页面无控制台报错）；临时 venv 里 `pip install -e .` 后 `dota-assistant --help` 正常。重构期间 main 多出的 d1bfef6（队友战绩独立页）已合并进分支、按新结构移植（`domain/mates.py`、`app/webui.py`；`Live` 里的队友战绩方法删了，没有 `app/live/mates.py`），行为快照按 d1bfef6 重建后逐字节一致。**真鼠标验收、打包版、实战待验**（第 7 节） |
 
 **游戏电脑上第一件事就是把「未实测」的几项跑一遍**，见第 6 节。
 
@@ -159,7 +159,7 @@ run（实时）：
 | `capture.py` `grid.py` `roles.py` `buybackscan.py` `calibrate.py` | `vision/`（同名） |
 | `hotkeys.py` `speech.py` | `game/` |
 | `backtest.py` `aibacktest.py` | `research/` |
-| `live.py` | `app/live/`：类本体 `core.py`，模块级常量 / 小函数 `consts.py`，方法按功能分进 `draft` `ingame` `timers` `cards` `overlay` `settings` `mates` 七个 mixin |
+| `live.py` | `app/live/`：类本体 `core.py`，模块级常量 / 小函数 `consts.py`，方法按功能分进 `draft` `ingame` `timers` `cards` `overlay` `settings` 六个 mixin（原计划还有 `mates`，main 的 d1bfef6 把队友战绩改成独立页走 webui，`Live` 里那两个方法删了，这个 mixin 也就没了） |
 | `webui.py` `start.py` `demo.py` | `app/` |
 | `cli.py` | `cli/__init__.py`（`dota_assistant.cli.main` 路径不变） |
 
@@ -200,7 +200,7 @@ run（实时）：
 | `domain/buyback.py` | 买活计时：双方 10 人的买活冷却（自己按 GSI，别人截图自动记 / 玩家点），界面是 `web/topbar.html`（第 31 节） |
 | `domain/ultcd.py` | 对面大招冷却：每个对面英雄挑一个大招、按等级 + 勾的减冷却（天赋 / 神杖 / 魔晶 / 玲珑心）算冷却，玩家看到放了点一下计时（第 32 节）；挑大招 / 各级冷却在 `kb/cd_ops.py` |
 | `domain/lanelog.py` | 对线实战记录：`live` 在 3:00 / 6:00 / 10:00 把自己的 GSI 数据记进 `data/lane_log.jsonl`，赛后 `lane-review` 对照（原 `lanestate.py` 的一部分） |
-| `domain/mates.py` | 队友战绩：好友代码 → OpenDota 资料 / 最近 100 局 / 同队记录 + STRATZ 天梯位置；查过的人记在 `data/mates.json`（第 38 节） |
+| `domain/mates.py` | 队友战绩：好友代码 → OpenDota 资料 / 最近 100 局 / 同队记录 + STRATZ 天梯位置；每局表现分（同英雄分位）；整局详情；`Service` 给 webui 的 `/api/mates`、`/api/match` 用；查过的人记在 `data/mates.json`（第 38 / 38.1 节） |
 | **vision/** | 看屏幕（和 game 平级） |
 | `vision/capture.py` | 截屏：优先 PrintWindow 只截 Dota 窗口（叠加层、直播弹幕等盖在上面的窗口不会截进去），找不到窗口 / 全黑再退回 mss 整屏 |
 | `vision/recognize.py` | 校准数据 `Calibration`、模板库 `TemplateBank`、`recognize()`（原 `vision.py`） |
@@ -227,7 +227,6 @@ run（实时）：
 | `app/live/cards.py` | 本局要点 / 如果选它：做要点卡片（数据页 + AI 打法页）、翻页 |
 | `app/live/overlay.py` | 叠加层：显隐、固定 / 解锁、拖动后的位置、底色样式 |
 | `app/live/settings.py` | 设置：账号设置保存、Dota 目录、热键注册 |
-| `app/live/mates.py` | 队友战绩：控制面板填好友代码查 |
 | `app/webui.py` | 本机 HTTP 服务（静态页面、头像、SSE 推快照、POST 操作）+ 启动 Electron，Electron 的输出转进日志 |
 | `app/start.py` | 一键启动：双击「启动助手.bat」走这里，能自动做的准备工作都自动做，只在缺东西时问一句（第 13 节） |
 | `app/demo.py` | 演示：按真实对局逐个选人，再当「假 Dota」把录像按 GSI 格式推给本地端口 |
@@ -306,7 +305,7 @@ run（实时）：
 
 ## 7. 下一步（建议顺序）
 
--1. **工程化重构收尾**（第 2 节、[refactor/PLAN.md](refactor/PLAN.md) P6）：代码和门禁都完成了，还差 ① PLAN 第 5 节真鼠标清单（叠加层 / 顶栏 / 控制面板）在重构后的代码上点一遍；
+-1. **工程化重构收尾**（第 2 节、[refactor/PLAN.md](refactor/PLAN.md) P6）：代码和门禁都完成了，还差 ① PLAN 第 5 节真鼠标清单（叠加层 / 顶栏 / 控制面板）在重构后的代码上点一遍（「控制面板队友战绩」那项按 d1bfef6 改成独立页 `mates.html`：开窗口、查询、进整局、返回、点名字查人、删人、刷新，同第 38.2 节末）；
    ② `python packaging/build.py` 打包，拿 exe 跑 `suggest`、`kb hero 小黑`、`start`；③ `demo` 完整跑一遍；④ 玩家用重构后的版本打一局天梯（GSI、截图识别、买活自动记只能这样验）。都过了再合并 main、推送（要玩家点头）。
    **唯一可见差异：日志里模块名前缀变了**（例如 `live` → `app.live.draft`、`data` → `sources.http`），按模块名搜日志的习惯要跟着改。
    以后每次改完多跑三个门禁：`python tools/golden/run.py check`（行为快照；行为本来就该变时，先确认差异是该有的再 `update-snapshot`）、`python tools/check_isolation.py`、`ruff check dota_assistant tests tools packaging`。
@@ -316,7 +315,7 @@ run（实时）：
 
 0.3 **朋友电脑上验证 Dota 目录 / 阵营**（第 36 节）：新打包版发给朋友，看启动日志「Dota 目录：」是不是他真实的安装目录、有没有「跳过 …空壳」那行；进选人后状态栏变成「GSI 已连接 · 夜魇/天辉」、叠加层黄条消失。还连不上就让他发日志 + 启动选项截图。
 
-0.4 **队友战绩**（第 38 节）：~~Electron 里真鼠标点~~（2026-10-28 点过）；看一个没公开比赛数据的人显示成什么样。
+0.4 **队友战绩**（第 38 / 38.1 / 38.2 节）：~~独立页在 Electron 里真鼠标点~~（2026-10-28 点过）；还没看过：一个没公开比赛数据的人显示成什么样、表现分 / STRATZ 的悬停提示（原生 title，脚本测不到）。
    以后可以做：OCR 认出的队友名字对上 `data/mates.json` 或 OpenDota `peers`（一起打过的人）自动查；队友常玩英雄 / 位置喂给「剩余位置」猜队友位置、推荐时避开撞车。
 
 0.5 **不填 key**（第 35 节）：没 token 的人用打包版会一直用打包时带的 STRATZ 分位置数据（不更新）；要不要过一阵在打包时刷新一次、或改成「STRATZ 旧了超过 N 天就换 OpenDota 凑的」，等有人反馈推荐位置不准再定。
@@ -1843,11 +1842,61 @@ OpenDota `/search` 按名字搜一个常见名返回 50 个人，认不准路人
   有 STRATZ token 再用 `data._player_matches_stratz(cfg, id, 100)`（原来查自己的那个，加了 account_id / limit 参数）；STRATZ 出错只在位置那行写原因，其余照样显示。
 - **存**（`mates.Mates`）：最多记 8 个人，新查的排前；20 分钟内查过的再填不重查（点「刷新」才重查），存 `data/mates.json`（好友代码 + 上次查到的数据），
   下次开面板还在。打包时跳过这个文件（`DATA_SKIP`，里面有别人的好友代码和名字）。
-- **线程**：`Live.query_mate` 在后台线程联网，查完 `submit(_mate_ready)` 回工作线程写回；正在查的同一个人不重复开线程。断网 / 限速只记一行日志。
+- **线程**（第一版，38.1 已改成独立页走 `/api/mates`）：`Live.query_mate` 在后台线程联网，查完 `submit(_mate_ready)` 回工作线程写回；正在查的同一个人不重复开线程。断网 / 限速只记一行日志。
 - 只是展示，**还没接进推荐**（下一步 0.4）。
 - **Electron 真鼠标（2026-10-28 提交前，同第 37.2 节那次的临时服务，`mates.json` 写在临时目录）**：真点输入框、键盘输入代码、真点「查询」→ 约 5 秒出卡片（名字、段位、和你一起几局、最近 20 局、常玩、位置）；
   真点「刷新」→ 变「查询中…」→ 「刚刚查的」；真点「×」→ 回到「还没查过谁」。测试时用脚本强行把面板提到最前，有两次按下 / 抬起落在不同元素上没点着，
   是脚本强拉窗口时窗口位置跳了一下（按下那一刻的 clientY 偏了 26），窗口稳定时同一个 × 点一下就删了，判断不是页面的问题。
+
+### 38.1 改成独立页：点一局看整局，列表里有每局 KDA 和表现（2026-10-28）
+
+玩家（原话）：「这个内置的查队友战绩的功能应该是一个独立页，这个独立页填入好友码以后可以点击他的战绩进入他具体的那一局，看那一整局的战绩，
+然后在外面的简况页面里面应该可以看得到他的击杀、死亡、助攻还有这局的表现」。
+
+- **入口**：控制面板顶栏紧跟标题的「队友战绩」（金色描边 + 两个人的图标，2026-10-28 玩家要求放显眼处）→ `window.open('/mates.html', 'mates')`。Electron 里 `main.js` 的 `setWindowOpenHandler` 只放行本机服务的地址，
+  开成普通窗口（1240×860），`did-create-window` 接上日志；已经开着再点就 `focus()` 不开第二个。浏览器模式（`run --browser`）是新标签。控制面板里原来那张卡片去掉了。
+- **页面**（`web/mates.html` + `mates.js` + `mates.css`，按钮 / 卡片沿用 `panel.css`）：顶上输入框；左边「查过的人」（点了切换，悬停出 ×）；右边：
+  - **简况**（`#p=好友代码`）：名字、段位、和你一起几局、几分钟前查的、刷新；最近 20 局胜负 + 胜率、平均 KDA、平均表现；常玩前 6；位置；
+    下面**最近 20 局表格**：英雄、胜负（中途离开标出来）、**击杀 / 死亡 / 助攻**、**表现分**（数字 + 小条，悬停看每一项）、正 / 反补、经济 / 经验每分、英雄伤害、等级、时长、模式（组排几人）、几天前。点一行进整局。
+  - **整局**（`#p=…&m=比赛编号`）：比分、时长、模式、时间；天辉 / 夜魇两张表，每人：英雄 + 名字 + 段位、等级、K/D/A、表现分、正反补、GPM / XPM、英雄伤害、建筑伤害 / 治疗、净资产、
+    6 格装备 + 中立物品（图标，悬停中文名）+ 背包、神杖 / 魔晶；从谁点进来的标「他」，自己标「你」，同色小圆点 = 一起排的（`party_id` 相同且不止一人），没公开数据的显示「匿名玩家」。
+    点名字查那个人（加进左边）。看整局时左边收起，表格占满宽度；900 宽时表格在框里横向滚。
+  - 地址栏 hash 当路由，窗口后退能回简况；第一版存的数据（最近几局没有比赛编号，点不进去）`Service` 标 `stale`，页面打开那个人时自动重查一次。
+- **表现分**（`mates.score`）：这局的经济、经验、击杀 / 分、助攻 / 分、死亡 / 分（反过来，越少越好）、正补 / 分、英雄伤害 / 分、建筑伤害，各自放进 OpenDota `/benchmarks?hero_id=`
+  （这个英雄所有对局的 10%~99% 分位）里看排百分之几（`percentile`：分位之间按直线插，正好等于一串相同分位值时取中间，比 99% 还高算 100），取平均 × 100。
+  ≥65 绿、≤35 红。**和同英雄比**：辅助英雄经济低不吃亏；但一个英雄打不同位置（四号位小小 vs 中单小小）会被一起比，这点没处理。和 OpenDota 网页上每局的 benchmarks 同一个来源，只是自己算、各项等权平均。
+  分位曲线存 `data/benchmarks/<英雄 id>.json`，7 天重拉，拉不到用旧的；第一次查一个人要拉最近 20 局里的十几个英雄（4 个并排），约 4~5 秒，之后约 1.5~3 秒。
+- **整局数据**（`mates.fetch_match`）：OpenDota `/matches/{id}`，只存用得到的字段到 `data/matches/<编号>.json`（打完的比赛不会变，以后直接读），最多 200 局。
+  刚打完 OpenDota 还没有的回 404 →「刚打完的要等几分钟」。装备 id → key 用 OpenDota 装备常量，中文名用知识库（没有就英文名），图标走原来的 `/items/<key>.png`。
+- **服务**：不走 `Live` 的工作线程（联网好几秒、整局数据大，不该塞进每秒推给叠加层的快照）。`webui.WebServer` 带一个 `mates.Service`：
+  `GET /api/mates`、`POST /api/mates {op: query|remove}`（阻塞到查完，本地服务是多线程的）、`GET /api/match/<编号>?p=<好友代码>`。同一个人同时只查一次（每人一把锁，第二个请求等第一个查完直接用）。
+  `Live` 里第一版加的 `query_mate` / `mate_query` / 快照里的 `mates` 都删了。
+- **打包**：`data/matches/`、`data/benchmarks/` 和 `mates.json` 一样不打进去（`DATA_SKIP`）。
+- **验证**：`tests/test_mates.py` 10 → 19 个（分位插值、表现分、整局 / 分位缓存、Service 查 / 刷新 / 出错 / 同一人只查一次 / 整局视图（匿名、组排、你 / 他、装备、离开）、旧数据标 stale、`/api/mates` `/api/match` 接口）；
+  开发机真联网：查自己约 5 秒（第一次拉分位）、队友约 3.7 秒，最近 20 局表现分 25~88；点进一局 1.8 秒，10 人表现分 34~82，组排三对都标出来了；
+  无头 Chrome 截过简况（1240 宽）、整局（1240 / 900 宽）。**没在 Electron 里点过新页面**（下一步 0.4）。
+
+### 38.2 加上 STRATZ 评分（可选）（2026-10-28）
+
+问玩家「换成 STRATZ 的表现评分会有什么问题」时实测：玩家和最常一起打的队友，OpenDota 最近 20 局里 STRATZ 有评分的只有 10 / 11 局——
+**最新 5 局（14~17 小时前）STRATZ 还没收录**，再往前 4~5 局（40~110 小时前）收录了但没解析（`imp` 是 null）；整局查最新那局 10 个人全空。
+另外它要 token、接口只给一个总分。玩家定：「用上 stratz，但是这个是一个可选项，没有就算了，不强求」→ **表现分照旧，STRATZ 评分加在旁边**。
+
+- **取数**：`mates.stratz_ratings`（`player.matches(take: 30)` 每局的 `imp` / `award` / `position`，一次请求，跟着查人一起拉，结果放进最近每一局的 `stratz`）；
+  `mates.stratz_match`（`match(id).players`，按英雄 id 对上 10 个人）。`imp` null = 没解析，不显示。奖项 MVP / TOP_CORE / TOP_SUPPORT → MVP / 最佳核心 / 最佳辅助。
+- **可选**：没 token 不问 STRATZ、页面不出 STRATZ 这一列、不出任何说明；有 token 但最近 20 局都没评分也不出这一列；STRATZ 出错只记一行日志（查人）/ 整局页一行小字，表现分照常。
+- **整局缓存**：10 个人都有评分才存进 `data/matches/<编号>.json` 的 `stratz`（JSON 里键是字符串，读回来转 int）；没解析的局记在内存里 30 分钟内不再问（`STRATZ_RETRY`，来回翻页不用每次多等一两秒），出错的不算、下次照问。
+- **显示**：表现分右边一列「STRATZ」：`+29` / `-12`（≥10 绿、≤-10 红），有奖项加金色小标；整局页名字下面多一个 STRATZ 判的「N 号位」。悬停说明「0 = 平均，正数好于平均」。
+  加了这一列以后最近 20 局表格在 1240 宽放不下，「模式」改成短写（天梯全英雄选择只写「天梯」，悬停看全名，`mode_short`）。
+- **验证**：单元测试（解析、没解析 / 不认这个号、没 token 不问、出错不显示、整局齐了才存 / 读存下的、没解析 30 分钟内不再问）；真联网：队友最近 20 局 12 局有评分（−42 ~ +29，一个最佳核心），
+  STRATZ 解析过的那局 10 人 −31 ~ +18（MVP、最佳核心、最佳辅助都出来了），第二次打开直接读缓存 0.0 秒；最新那局显示「STRATZ 还没解析这局」那行字；无头 Chrome 截过三张。
+- **Electron 真鼠标（2026-10-28 提交前，开发机 1920×1080 缩放 1；临时服务真联网、`mates.json` / 整局 / 分位都写临时目录；调试端口只读页面状态，点击和打字全是 SendInput）**：
+  控制面板真点「队友战绩」→ 开出「Dota 选人助手 · 队友战绩」窗口；再点一次 → 还是一个窗口；真点输入框、键盘打代码、真点「查询」→ 简况 + 20 行、出了 STRATZ 列；
+  真点第 6 局 → 整局 10 人、「他」那行高亮、左边收起、73 个装备图标、10 个 STRATZ 分；真点「← 返回」→ 回简况；再进一局真点别人的名字 → 查了他、左边变 2 个且选中他；
+  真点左边第一个人切回来，真点另一人那行再点 × → 删掉；真点「刷新」→「查询中…」→「刚刚查的」。Electron 日志没有报错 / 警告。
+  测试脚本的坑（不是页面问题）：脚本强行把窗口提到最前以后马上点，Chromium 有一会儿把窗口位置算错 26 像素（`mousedown` 的 clientY 是 2、`click` 是 28），
+  点到标题栏上没点着；改成窗口已经在最前就不再拉、拉了等 1.2 秒再点就好了（第 37.2 节那次也碰到过）。另外 VS Code 扩展的环境里有 `ELECTRON_RUN_AS_NODE=1`，
+  手动起 Electron 要先去掉（`webui.serve` 已经去掉了），不然 `--remote-debugging-port` 报参数错退出（退出码 9）。
 
 ## 39. 选人顶栏去噪点：徽章 / 段位条 / 颜色条（2026-10-28，`vision.VIEWS` + `vision.confident`）
 

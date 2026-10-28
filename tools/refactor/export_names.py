@@ -16,7 +16,7 @@
   5. live.py 的 Live 每个方法，写成 "Live.方法名"
 
 --write-moves 的合并规则（重构中途也能安全地跑）：
-  - 已有条目一条不删、顺序不动（test_moves 核对基线 770 条的摘要）；名字已经搬走、旧模块里没了，条目照样留着，
+  - 已有条目一条不删、顺序不动（test_moves 核对基线 791 条的摘要）；名字已经搬走、旧模块里没了，条目照样留着，
     test_moves 才能一直核对新模块里有它。
   - 新出现的名字追加到末尾。
   - 规则（SPLIT / LIVE_GROUPS）改了某个还没搬的名字的去处：更新那一条的 new / new_file 并打印出来；
@@ -171,7 +171,7 @@ LIVE_GROUPS = {
         "overlay_style",
     ],
     "settings": ["save_settings", "_apply_dota_dir", "settings_view", "_start_hotkeys"],
-    "mates": ["query_mate", "_mate_ready"],
+    # 原来还有 "mates": query_mate / _mate_ready：main 的 d1bfef6 把队友战绩改成独立页走 webui /api/mates，这两个方法删了
 }
 LIVE_PKG = "app.live"
 # 分发入口：被它们调用不说明「属于哪组」（网页动作、热键、快照、每秒的 tick / coach_tick、叠加层视图拼装）
@@ -183,7 +183,7 @@ NOTES = {
             "tags 为什么进清单（public 公开名 / split 拆分模块的全部名字 / live_method / test_patch / test_assign / "
             "test_ref / cross_module）、imported=true 表示旧模块里这个名字是 import 进来的（测试 patch 它）、"
             "per_module=true 表示每个拆出来的新文件各自定义一份（logger），不查「旧文件不能再定义」。"
-            "由 tools/refactor/export_names.py --write-moves 生成。表只追加不删：已有条目不删、不挪顺序（test_moves 核对前 770 条的摘要），"
+            "由 tools/refactor/export_names.py --write-moves 生成。表只追加不删：已有条目不删、不挪顺序（test_moves 核对前 791 条的摘要），"
             "名字搬走以后条目照样留着；新名字追加到末尾。没搬的名字改放法：改脚本里的 SPLIT / LIVE_GROUPS 再跑 --write-moves"
             "（会更新那一条的 new / new_file），或手工改这一条，并在 notes 里写原因。imported 只许 data.DATA_DIR、webui.HTTPServer 两条。",
     "ultcd 调整": "MIN_CD、cooldowns、pick 从 PLAN 表的 domain/ultcd 改放到 kb/cd_ops：kb/cd_ops.update_ops 要用 pick "
@@ -208,6 +208,9 @@ NOTES = {
     "live 模块级": "PLAN P4：模块级常量和小函数一律 app/live/consts（包括 PLAN 表里写在 settings 的 _check_hotkeys / _check_dota_dir，"
                    "它们是模块级函数不是方法），各 mixin 用 consts.NAME 访问；class Live 和 log 在 core。",
     "kb 与 cli": "kb.py → kb/__init__.py、cli.py → cli/__init__.py：新旧模块名相同，靠 old_file / new_file 区分。",
+    "合并 d1bfef6": "重构期间 main 多了 d1bfef6（队友战绩改成独立页）：Live.query_mate / Live._mate_ready 删了（app/live/mates.py 和 MatesMixin 跟着删），"
+                   "这两条从表里去掉；mates.py 新加的名字（Service、表现分、整局、STRATZ 评分等 23 个）按 WHOLE 规则去 domain/mates，追加在末尾。"
+                   "test_moves 的基线跟着换成 d1bfef6：前 791 条。",
 }
 
 LOGGER_NAMES = ("log", "logger")
