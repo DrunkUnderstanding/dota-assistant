@@ -10,10 +10,10 @@ from unittest import mock
 
 import requests
 
-from dota_assistant import data, mates
+from dota_assistant import mates
 from dota_assistant.core.config import Config
 from dota_assistant.core.heroes import HeroDB
-from dota_assistant.sources import http
+from dota_assistant.sources import http, player
 from tests.test_engine import AXE, HEROES, PL
 from tests.test_webui import make_live
 
@@ -65,7 +65,7 @@ class FetchTest(unittest.TestCase):
                                   {"account_id": ME, "with_games": 10, "with_win": 7, "against_games": 40}])
         ranked = [(AXE.id, 3, True)] * 6 + [(PL.id, 1, False)] * 2 + [(AXE.id, 0, True)] * 2
         with mock.patch.object(http, "_get", get), \
-                mock.patch.object(data, "_player_matches_stratz", return_value=ranked) as st:
+                mock.patch.object(player, "_player_matches_stratz", return_value=ranked) as st:
             d = mates.fetch(Config(account_id=ME, stratz_token="t"), MATE)
         self.assertEqual(st.call_args.args[1:], (MATE, mates.SAMPLE))
         self.assertEqual(len(d["matches"]), mates.RECENT)
@@ -103,7 +103,7 @@ class FetchTest(unittest.TestCase):
 
     def test_stratz_down(self):
         with mock.patch.object(http, "_get", fake_get([m(AXE.id, True)])), \
-                mock.patch.object(data, "_player_matches_stratz", side_effect=http.APIError("NPGSQL TIMEOUT")):
+                mock.patch.object(player, "_player_matches_stratz", side_effect=http.APIError("NPGSQL TIMEOUT")):
             d = mates.fetch(Config(stratz_token="t"), MATE)
         self.assertIsNone(d["positions"])
         self.assertIn("NPGSQL TIMEOUT", d["positions_note"])

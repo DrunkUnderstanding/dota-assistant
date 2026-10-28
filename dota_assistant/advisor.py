@@ -3,11 +3,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 
-from . import data, explain, kb, lanes
+from . import explain, kb, lanes
 from .core.config import Config
 from .engine import POSITION_NAMES, Engine, Suggestion, pct
 from .core.heroes import Hero, HeroDB
-from .sources import assets
+from .sources import assets, player
 from .sources import stats as stats_mod
 
 TARGETED_TITLE = "针对这局"
@@ -67,12 +67,12 @@ class Advisor:
         self.cfg = cfg
         self.db: HeroDB = assets.load_heroes()
         self.engine = Engine(self.db, stats_mod.load_stats(cfg), stats_mod.load_positions(cfg))
-        self.me = data.load_player(cfg)
+        self.me = player.load_player(cfg)
         self.pool = self.db.find_many(cfg.pool)
         self.kb = kb.KnowledgeBase.load()      # 没有知识库也能推荐，只是没有机制说明
 
     def _suggest(self, draft: Draft, position: int) -> list[Suggestion]:
-        history, by_pos = (data.player_history(self.me, position, self.engine.positions)
+        history, by_pos = (player.player_history(self.me, position, self.engine.positions)
                            if self.me else ({}, False))
         return self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
                                    bans=draft.bans, pool=self.pool, only_pool=self.cfg.only_pool,

@@ -36,7 +36,7 @@ from pathlib import Path
 from . import data
 from .core import config
 from .core import log as logs
-from .sources import assets
+from .sources import assets, player
 from .sources import stats as stats_mod
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
@@ -64,9 +64,9 @@ def cmd_suggest(cfg: config.Config, args) -> int:
         print(e.args[0])
         return 1
     pos = args.pos or cfg.position
-    bracket = (f"{data.MEDALS[cfg.rank_min]}~{data.MEDALS[cfg.rank_max]}"
+    bracket = (f"{player.MEDALS[cfg.rank_min]}~{player.MEDALS[cfg.rank_max]}"
                if cfg.rank_min and cfg.rank_max else "全段位")
-    who = f" | {a.me['name']}（{data.rank_name(a.me['rank_tier'])}）" if a.me else ""
+    who = f" | {a.me['name']}（{player.rank_name(a.me['rank_tier'])}）" if a.me else ""
     print(f"数据：最近 {cfg.days} 天 {a.engine.matches} 局天梯（{bracket}）{who}")
     for kind, text in adv.render_lines(a.advise(adv.Draft(allies, enemies, bans, me), pos), args.side):
         if kind == "title":
@@ -290,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
                or (args.cmd == "kb" and args.action == "update"))
 
     if args.cmd == "update":
-        (data.update_player if args.player else data.update)(cfg)
+        (player.update_player if args.player else data.update)(cfg)
         return 0
     if args.cmd == "suggest":
         return cmd_suggest(cfg, args)

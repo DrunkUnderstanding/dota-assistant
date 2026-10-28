@@ -14,9 +14,8 @@ from pathlib import Path
 
 import requests
 
-from . import data
 from .core.config import DATA_DIR, Config
-from .sources import http
+from .sources import http, player
 
 MATES_FILE = DATA_DIR / "mates.json"
 KEEP = 8                         # 最多记几个人（新查的排最前，挤掉最久没查的）
@@ -78,7 +77,7 @@ def fetch(cfg: Config, account_id: int) -> dict:
         out["positions_note"] = "常打位置要填 STRATZ token"
         return out
     try:
-        ranked = data._player_matches_stratz(cfg, account_id, SAMPLE)
+        ranked = player._player_matches_stratz(cfg, account_id, SAMPLE)
     except http.NETWORK_ERRORS as e:                  # STRATZ 偶尔整体超时：别的照样显示
         out["positions_note"] = f"STRATZ 没查到位置（{e}）"
         return out
@@ -148,7 +147,7 @@ class Mates:
             v = {"account_id": e["account_id"], "busy": e["busy"], "error": e["error"], "loaded": bool(d),
                  "name": d.get("name") or "", "fetched_at": d.get("fetched_at")}
             if d:
-                rank = data.rank_name(d.get("rank_tier")) if d.get("rank_tier") else "没定段 / 不公开"
+                rank = player.rank_name(d.get("rank_tier")) if d.get("rank_tier") else "没定段 / 不公开"
                 if d.get("leaderboard_rank"):
                     rank += f" · 第 {d['leaderboard_rank']} 名"
                 name = lambda h: (x.name_cn if (x := db.by_id.get(h)) else f"英雄 {h}")

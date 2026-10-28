@@ -18,7 +18,7 @@ from pathlib import Path
 from . import data
 from .core import config
 from .core.config import DATA_DIR, ROOT
-from .sources import assets
+from .sources import assets, player
 from .sources import stats as stats_mod
 
 FULL_UPDATE_DAYS = 3
@@ -112,7 +112,7 @@ def ensure_data(cfg: config.Config) -> None:
             _say("更新数据（3 天一次，约 5 分钟）…")
             data.update(cfg)
         elif cfg.account_id and _age_hours(DATA_DIR / "player.json") > PLAYER_UPDATE_HOURS:
-            data.update_player(cfg)
+            player.update_player(cfg)
         if not assets.ITEM_ICON_DIR.exists():      # 装备图标是 2026-10-26 加的：老数据不用等全量更新
             assets.fetch_item_icons()
         if not assets.ICONS_DONE.exists():         # 顶栏图标 2026-10-27 起预下：老数据第一次启动补一遍
