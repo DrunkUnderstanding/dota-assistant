@@ -5508,9 +5508,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._coach_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5528,9 +5528,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._death_recap",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5618,9 +5618,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._jungle_tick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5658,9 +5658,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._lane_log",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5818,9 +5818,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._show_coach",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5848,9 +5848,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._stage_tick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5868,9 +5868,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._start_coach",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -5898,9 +5898,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._take_death_shots",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -6008,9 +6008,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.coach_tick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
@@ -6128,9 +6128,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.mute_cue",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.ingame",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/ingame.py",
    "tags": [
     "live_method"
    ]
