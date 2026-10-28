@@ -1,16 +1,21 @@
 # 真鼠标测试用的本地服务：选人阶段（叠加层「?」）→ 局内（顶栏「?」），帮认 / 队友战绩都写到这个临时目录
+# 用法：python serve.py <端口> <临时目录> [截图目录]
+#   代码和 config.toml 用这个脚本所在的仓库（docs/refactor/uitest 往上三层，worktree 里跑就是 worktree 的代码）；
+#   截图目录默认 <仓库>/shots，要用 20261023-014333.png / 014347.png 两张选人截图（worktree 里没有就传 D:/dota/shots，只读）
 import sys, time, threading, json
 from pathlib import Path
 from types import SimpleNamespace
-sys.path.insert(0, "D:/dota")
-from dota_assistant import live as live_mod
+REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO))
+from dota_assistant.app import live as live_mod
 from dota_assistant.domain import mates
 from dota_assistant.core.config import load
 from dota_assistant.game.gsi import GameState
-from dota_assistant.live import Live
+from dota_assistant.app.live import Live
 from dota_assistant.vision.recognize import recognize, read_image
-from dota_assistant.webui import WebServer
+from dota_assistant.app.webui import WebServer
 port, tmp = int(sys.argv[1]), Path(sys.argv[2])
+shots = Path(sys.argv[3]) if len(sys.argv) > 3 else REPO / "shots"
 cfg = load()
 cfg.ai_plan = False; cfg.buyback_auto = False; cfg.voice = False; cfg.jungle_cues = False
 live = Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, overlay_file=tmp / "overlay.json")
@@ -21,8 +26,8 @@ live.gsi = SimpleNamespace(state=GameState(), stop=lambda: None)
 st = live.gsi.state
 st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
            "player": {"team_name": "radiant", "team_slot": 0}})
-b = recognize(read_image(Path("D:/dota/shots/20261023-014333.png")), live.cal, live.bank, 0.7, keep_images=True)
-v = recognize(read_image(Path("D:/dota/shots/20261023-014347.png")), live.cal, live.bank, 0.7, keep_images=True)
+b = recognize(read_image(shots / "20261023-014333.png"), live.cal, live.bank, 0.7, keep_images=True)
+v = recognize(read_image(shots / "20261023-014347.png"), live.cal, live.bank, 0.7, keep_images=True)
 for side in ("radiant", "dire"):
     for i in range(5):
         live._crops["blank"][(side, i)] = getattr(b, side)[i].image
