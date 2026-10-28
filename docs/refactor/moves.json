@@ -5458,9 +5458,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._brief_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5468,9 +5468,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._brief_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5718,9 +5718,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._pick_plan_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5728,9 +5728,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._pick_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5748,9 +5748,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._plan_ready",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5828,9 +5828,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._showing_brief",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5858,9 +5858,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._start_brief",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -5888,9 +5888,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live._start_plan",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -6048,9 +6048,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.explain_pick",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -6198,9 +6198,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.pick_view",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -6288,9 +6288,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.set_brief_page",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]
@@ -6358,9 +6358,9 @@
   {
    "old": "dota_assistant.live",
    "name": "Live.show_brief",
-   "new": "dota_assistant.app.live.core",
+   "new": "dota_assistant.app.live.cards",
    "old_file": "dota_assistant/live.py",
-   "new_file": "dota_assistant/app/live/core.py",
+   "new_file": "dota_assistant/app/live/cards.py",
    "tags": [
     "live_method"
    ]

@@ -31,8 +31,6 @@ class SettingsMixin:
         self.hotkeys = Hotkeys({getattr(self.cfg, f): key(getattr(self.cfg, f), *actions[f])
                                 for f in consts.HOTKEY_ACTIONS}).start()
 
-    # ---------- 网页发来的操作 ----------
-
     def save_settings(self, a: dict) -> None:
         """控制面板「设置」：账号（好友代码、STRATZ token）和 AI 打法来源写进 config.toml。
         密钥字段没传 = 不改（面板不会把已存的密钥发回页面）；传空字符串 = 清掉。

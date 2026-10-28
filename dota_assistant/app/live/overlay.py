@@ -13,8 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class OverlayMixin:
-    # ---------- 网页发来的操作 ----------
-
     def set_overlay_style(self, key: str, value, save: bool = True) -> None:
         """叠加层底色 / 不透明度。面板上拖滑块时 save=False 只改内存（叠加层马上跟着变），松手再写进 config.toml"""
         if key == "overlay_opacity":
