@@ -66,7 +66,7 @@ def ensure_electron() -> bool:
 
 def ensure_gsi(cfg: config.Config) -> None:
     from .core.dota_install import find_dota
-    from .gsi import ensure_cfg
+    from .game.gsi import ensure_cfg
     dota = find_dota(cfg.dota_dir)
     if dota is None:
         _say("没找到 Dota 2 安装目录（要有 game\\dota\\pak01_dir.vpk），GSI 没法自动配：\n"

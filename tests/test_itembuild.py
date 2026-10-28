@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 from dota_assistant.domain import coach, itembuild
 from dota_assistant import kb
-from dota_assistant.gsi import GameState
+from dota_assistant.game.gsi import GameState
 from dota_assistant.sources import assets
 
 CONST = {

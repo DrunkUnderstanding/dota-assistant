@@ -314,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
         paths = [Path(x) for pat in args.images for x in (glob.glob(str(pat)) or [str(pat)])]
         return cmd_label(cfg, paths)
     if args.cmd == "gsi-install":
-        from .gsi import install_cfg
+        from .game.gsi import install_cfg
         path = install_cfg(args.dota_dir, cfg.gsi_port)
         config.save({"dota_dir": str(args.dota_dir)})   # 以后一键启动、导出网格图都用这个目录，不再自动找
         print(f"已写入 {path}（Dota 目录也记进了 config.toml）\n"
@@ -363,7 +363,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "kb":
         return cmd_kb(cfg, args)
     if args.cmd == "gsi-dump":
-        from .gsi import dump
+        from .game.gsi import dump
         dump(cfg.gsi_port, config.ROOT / "shots" / "gsi")
         return 0
     if args.cmd == "say":

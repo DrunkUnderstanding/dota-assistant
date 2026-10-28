@@ -47,7 +47,7 @@ from .core.dota_install import find_dota, is_dota_dir
 from .core.gsi_fields import SELECTION_STATE, STRATEGY_STATE
 from .core.heroes import Hero
 from .domain.engine import POSITION_NAMES
-from .gsi import GSIServer, ensure_cfg
+from .game.gsi import GSIServer, ensure_cfg
 from .hotkeys import Hotkeys, vk_code
 from .kb import cd_ops
 from .sources import assets, http

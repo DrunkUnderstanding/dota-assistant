@@ -2,7 +2,7 @@
 import unittest
 
 from dota_assistant.domain import death
-from dota_assistant.gsi import GameState
+from dota_assistant.game.gsi import GameState
 
 BKB = {"name": "item_black_king_bar", "cooldown": 0, "can_cast": True}
 NAMES = {"black_king_bar": "黑皇杖", "blink": "闪烁匕首", "magic_wand": "魔杖", "drow_ranger_glacier": "冰川"}

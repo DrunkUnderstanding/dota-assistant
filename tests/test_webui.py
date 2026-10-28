@@ -24,7 +24,7 @@ from dota_assistant import live as live_mod
 from dota_assistant.domain import mates as mates_mod
 from dota_assistant.core.config import Config
 from dota_assistant.domain.engine import Engine, Suggestion
-from dota_assistant.gsi import GameState
+from dota_assistant.game.gsi import GameState
 from pathlib import Path
 from dota_assistant.core.heroes import HeroDB
 from dota_assistant.live import Live

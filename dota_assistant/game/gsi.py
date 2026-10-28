@@ -16,8 +16,8 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 
-from .core import dota_install, gsi_fields
-from .core.log import HTTPServer
+from ..core import dota_install, gsi_fields
+from ..core.log import HTTPServer
 
 HISTORY_SECONDS = 60         # 对局中留最近多久的推送（死亡复盘往回看 20 秒，多留点余量）
 log = logging.getLogger(__name__)
@@ -101,7 +101,7 @@ class GameState:
         if text == self._last_logged:
             return
         self._last_logged = text
-        from .core.config import ROOT
+        from ..core.config import ROOT
         d = ROOT / "shots" / "gsi"
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{time.strftime('%Y%m%d-%H%M%S')}-{int(time.time() * 1000) % 1000:03d}.json").write_text(

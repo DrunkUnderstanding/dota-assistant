@@ -214,7 +214,7 @@ class TrackerTest(unittest.TestCase):
     def test_gsi_buyback_cooldown_is_end_game_time(self):
         """2026-10-26 实战推送：hero.buyback_cooldown 一直是 2817（买活时 game_time 2337 + 480），不是还剩几秒"""
         from dota_assistant.core.gsi_fields import buyback_left
-        from dota_assistant.gsi import GameState
+        from dota_assistant.game.gsi import GameState
         push = lambda cd, gt: {"map": {"clock_time": gt - 246, "game_time": gt}, "hero": {"buyback_cost": 1634, "buyback_cooldown": cd}}
         self.assertEqual(buyback_left(push(2817, 2753)), 64)
         self.assertEqual(buyback_left(push(2817, 2900)), 0)       # 冷却过了，字段还留着
