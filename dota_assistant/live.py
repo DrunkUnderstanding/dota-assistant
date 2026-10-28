@@ -41,6 +41,7 @@ from .core.heroes import Hero
 from .engine import POSITION_NAMES
 from .gsi import GSIServer, ensure_cfg
 from .hotkeys import Hotkeys, vk_code
+from .kb import cd_ops
 from .sources import assets, http
 from .speech import Speaker
 from .vision import EMPTY, Calibration, DraftView, TemplateBank, confident, feature, recognize, write_image
@@ -240,7 +241,7 @@ class Live:
         self._bb_orphans: dict[str, list[float]] = {}   # 消息栏「买活了」认出是这局某个英雄、但他没在确认的：英雄 key → 看到的几帧的游戏时钟
         self._hero_icons: dict[str, object] = {}  # 英雄小图标（key → 图，下不到是 None），和消息栏行首的小图比
         self._kb_base = None                      # 知识库（查对面大招冷却用，第一次用到才读；读不到是 False）
-        self._kb_ops: dict = {}                   # 大招神杖 / 魔晶冷却的写法（ultcd.load_ops）
+        self._kb_ops: dict = {}                   # 大招神杖 / 魔晶冷却的写法（cd_ops.load_ops）
 
         # ---- 选人时「如果选它」：点推荐英雄做的要点卡片 ----
         self.pick_key: tuple | None = None       # (英雄 id, 局面 key, 位置)；None = 没在看
@@ -1333,7 +1334,7 @@ class Live:
         if self._kb_base is None:
             from . import kb
             self._kb_base = kb.KnowledgeBase.load() or False
-            self._kb_ops = ultcd.load_ops(self._kb_base or None)
+            self._kb_ops = cd_ops.load_ops(self._kb_base or None)
         return self._kb_base or None
 
     def _ult_of(self, side: str, index: int):
@@ -1344,7 +1345,7 @@ class Live:
         h = self._hero(self.slots[side][index])
         base = self._knowledge() if h else None
         hk = base.heroes.get(h.id) if base else None
-        ab = ultcd.pick(hk) if hk else None
+        ab = cd_ops.pick(hk) if hk else None
         return (hk, ab, ultcd.mods(hk, ab, base, self._kb_ops)) if ab else None
 
     def _ult_cd(self, side: str, index: int, ab, mods) -> tuple[int, bool, list, float]:
@@ -1412,7 +1413,7 @@ class Live:
         hk, ab, mods = u
         lv, fixed, on, cd = self._ult_cd(side, index, ab, mods)
         return {"hero": hk.name, "name": ab.name, "key": ab.key, "end": self.ults.end(side, index, clock), "level": lv, "fixed": fixed,
-                "cd": cd, "cds": "/".join(f"{c:g}" for c in ultcd.cooldowns(ab)),
+                "cd": cd, "cds": "/".join(f"{c:g}" for c in cd_ops.cooldowns(ab)),
                 "mods": [{"key": m.key, "label": m.label, "on": m in on} for m in mods]}
 
     def mute_cue(self) -> None:

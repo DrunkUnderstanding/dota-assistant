@@ -177,10 +177,10 @@ def update(hero_ids: list[int], log=_say, force: bool = False) -> bool:
 
 
 def _update_cd_ops(log) -> None:
-    """大招神杖 / 魔晶减冷却的符号（datafeed 里没有，从游戏文件取，见 ultcd.py）；取不到不影响知识库"""
-    from .. import ultcd
+    """大招神杖 / 魔晶减冷却的符号（datafeed 里没有，从游戏文件取，见 cd_ops.py）；取不到不影响知识库"""
+    from . import cd_ops
     try:
-        ultcd.update_ops(log=log)
+        cd_ops.update_ops(log=log)
     except Exception as e:
         logger.warning("大招神杖 / 魔晶冷却没取到", exc_info=True)
         log(f"  大招神杖 / 魔晶冷却没取到（{e}），对面大招计时里不能勾神杖 / 魔晶")
@@ -272,7 +272,7 @@ class Entry:
     targets_enemy: bool = False                          # 官方字段：能指向敌方单位施放（behavior 带「单位目标」位、target_team 含敌方）
     # 冷却的加成（官方 special_values 里 AbilityCooldown 那一项）：天赋 [(天赋 key, 数值, operation)]，
     # operation 2 = 减几秒、4 = 减百分之几（对过天赋原文：末日「-10秒 末日冷却」是 2，撼地者「-50% 回音击冷却」是 4）；
-    # 神杖 / 魔晶只有数值、没有符号（绝冥再生的 10 是「-10」，激怒的 30/24/18 是「=30 =24 =18」，datafeed 分不出来），符号见 ultcd.py
+    # 神杖 / 魔晶只有数值、没有符号（绝冥再生的 10 是「-10」，激怒的 30/24/18 是「=30 =24 =18」，datafeed 分不出来），符号见 kb/cd_ops.py
     cd_talents: list[tuple[str, float, int]] = field(default_factory=list)
     cd_scepter: list[float] = field(default_factory=list)
     cd_shard: list[float] = field(default_factory=list)

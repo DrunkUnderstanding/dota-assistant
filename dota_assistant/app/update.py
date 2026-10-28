@@ -24,10 +24,11 @@ def fetch_icons(log=http._say) -> None:
     """顶栏 / 买活自动记要的图标一次下全，局内不用临时下：金币、每个英雄的小图标、每个对面会给小条的大招图标。
     已有的跳过；第一张就下不到（断网）就不试剩下的、不写标记，下次再补；个别 CDN 没有的照样写标记（运行时按需再试）"""
     from concurrent.futures import ThreadPoolExecutor
-    from .. import kb, ultcd
+    from .. import kb
+    from ..kb import cd_ops
     base = kb.KnowledgeBase.load()
     rels = ["icons/gold.png"] + [f"heroes/icons/{h.key}.png" for h in assets.load_heroes().by_id.values()]
-    rels += [f"abilities/{ab.key}.png" for h in (base.heroes.values() if base else ()) if (ab := ultcd.pick(h))]
+    rels += [f"abilities/{ab.key}.png" for h in (base.heroes.values() if base else ()) if (ab := cd_ops.pick(h))]
     todo = [r for r in rels if not (assets.ICON_DIR / r).is_file()]
     if todo and assets.fetch_icon(todo[0]) is None:
         log("  顶栏图标没下到（断网？），局内用到时再下")

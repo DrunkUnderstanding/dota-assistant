@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from dota_assistant import kb, ultcd
+from dota_assistant.kb import cd_ops
 from dota_assistant.ultcd import READY_SHOW, Tracker
 
 
@@ -17,11 +18,11 @@ def hero(*abilities):
 
 class PickTest(unittest.TestCase):
     def test_pick(self):
-        self.assertEqual(ultcd.pick(hero(ab("小技能", "13/10/7/4", ultimate=False), ab("末日", "140/130/120"))).name, "末日")
-        self.assertIsNone(ultcd.pick(hero(ab("肢解", "30/25/20"))))                 # 冷却太短不记
-        self.assertIsNone(ultcd.pick(hero(ab("射手天赋", ""))))                     # 被动大招没冷却
-        self.assertIsNone(ultcd.pick(hero(ab("神杖技能", "100", granted=True))))
-        self.assertEqual(ultcd.pick(hero(ab("短", "40/35/30"), ab("长", "100/90/80"))).name, "长")
+        self.assertEqual(cd_ops.pick(hero(ab("小技能", "13/10/7/4", ultimate=False), ab("末日", "140/130/120"))).name, "末日")
+        self.assertIsNone(cd_ops.pick(hero(ab("肢解", "30/25/20"))))                 # 冷却太短不记
+        self.assertIsNone(cd_ops.pick(hero(ab("射手天赋", ""))))                     # 被动大招没冷却
+        self.assertIsNone(cd_ops.pick(hero(ab("神杖技能", "100", granted=True))))
+        self.assertEqual(cd_ops.pick(hero(ab("短", "40/35/30"), ab("长", "100/90/80"))).name, "长")
 
     def test_level_and_cooldown(self):
         self.assertEqual([ultcd.guess_level(x) for x in (None, 3, 6, 11, 12, 17, 18, 30)], [1, 1, 1, 1, 2, 2, 3, 3])
@@ -63,9 +64,9 @@ class ModTest(unittest.TestCase):
         self.assertIsNone(ultcd.parse_op("=30 -5"))
 
     def test_kv(self):
-        self.assertEqual(ultcd.cd_ops(KV, "skeleton_king_reincarnation"), {"scepter": "-10"})
-        self.assertEqual(ultcd.cd_ops(KV, "ursa_enrage"), {"scepter": "=30 =24 =18"})
-        self.assertEqual(ultcd.cd_ops(KV, "nope"), {})
+        self.assertEqual(cd_ops.cd_ops(KV, "skeleton_king_reincarnation"), {"scepter": "-10"})
+        self.assertEqual(cd_ops.cd_ops(KV, "ursa_enrage"), {"scepter": "=30 =24 =18"})
+        self.assertEqual(cd_ops.cd_ops(KV, "nope"), {})
 
     def test_cooldown_with_mods(self):
         a = ab("末日", "140/130/120")
@@ -88,23 +89,23 @@ class ModTest(unittest.TestCase):
         base = kb.KnowledgeBase.load()
         if not base:
             self.skipTest("没有知识库")
-        old = ultcd.OPS_PATH
+        old = cd_ops.OPS_PATH
         with tempfile.TemporaryDirectory() as d:
-            ultcd.OPS_PATH = Path(d) / "cd_ops.json"
+            cd_ops.OPS_PATH = Path(d) / "cd_ops.json"
             try:
                 asked = []
 
                 def read(hero):
                     asked.append(hero)
                     return KV
-                ops = ultcd.update_ops(base, log=lambda m: None, reader=("测试", read))
+                ops = cd_ops.update_ops(base, log=lambda m: None, reader=("测试", read))
                 self.assertIn("skeleton_king", asked)
                 self.assertNotIn("doom_bringer", asked)                    # 神杖不改冷却的不去读
                 self.assertEqual(ops["skeleton_king_reincarnation"], {"scepter": "-10"})
-                self.assertEqual(ultcd.load_ops(base), ops)
-                self.assertEqual(ultcd.update_ops(base, log=lambda m: None, reader=("测试", None)), ops)   # 同版本不重取
+                self.assertEqual(cd_ops.load_ops(base), ops)
+                self.assertEqual(cd_ops.update_ops(base, log=lambda m: None, reader=("测试", None)), ops)   # 同版本不重取
             finally:
-                ultcd.OPS_PATH = old
+                cd_ops.OPS_PATH = old
 
 
 class TrackerTest(unittest.TestCase):
@@ -142,11 +143,11 @@ class RealKBTest(unittest.TestCase):
         return next(h for h in self.base.heroes.values() if h.key == key)
 
     def test_doom_and_wraith_king(self):
-        doom = ultcd.pick(self.by_key("doom_bringer"))
-        wk = ultcd.pick(self.by_key("skeleton_king"))
+        doom = cd_ops.pick(self.by_key("doom_bringer"))
+        wk = cd_ops.pick(self.by_key("skeleton_king"))
         self.assertEqual(doom.key, "doom_bringer_doom")
         self.assertEqual(wk.key, "skeleton_king_reincarnation")
-        self.assertEqual(len(ultcd.cooldowns(doom)), 3)
+        self.assertEqual(len(cd_ops.cooldowns(doom)), 3)
         doom_h = self.by_key("doom_bringer")
         labels = [m.label for m in ultcd.mods(doom_h, doom, self.base, {})]
         self.assertIn("20 级天赋：-10秒 末日冷却", labels)                     # 和天赋原文一致
