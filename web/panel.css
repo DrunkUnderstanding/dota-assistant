@@ -180,6 +180,8 @@ kbd {
 .btn-ghost { background: transparent; color: var(--text-dim); }
 .btn-ghost:hover { color: var(--bad); border-color: rgba(229, 103, 92, 0.5); background: rgba(229, 103, 92, 0.08); }
 .btn-small { height: 26px; padding: 0 10px; font-size: 12px; }
+/* 正在下载 / 检查时点不了的按钮：看得出点不了 */
+.btn:disabled, .btn:disabled:hover { opacity: 0.45; cursor: default; transform: none; filter: grayscale(0.4); }
 
 /* 叠加层预览：垫一块像游戏画面的底 */
 .preview { display: flex; flex-direction: column; }

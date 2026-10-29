@@ -444,7 +444,9 @@ function paintUpgrade(u) {
     git: '源码版：git pull 拉 GitHub 上的新提交，然后自动重启' }[u.mode] || '每次启动会在后台看一眼 GitHub 有没有新版本';
 
   $('#upgrade-ver').textContent = u.current ? `${u.current} → ${u.latest}${u.size_mb ? `（下载 ${u.size_mb} MB）` : ''}` : '';
-  $('#upgrade-notes').textContent = u.notes || '（这一版没写更新内容）';
+  // Release 说明是 Markdown：粗体 / 行内代码的记号去掉再显示（纯文本，不当 HTML）
+  const notes = (u.notes || '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/`([^`\n]+)`/g, '$1');
+  $('#upgrade-notes').textContent = notes || '（这一版没写更新内容）';
   const busy = ['downloading', 'installing', 'restarting'].includes(u.state);
   const bar = $('#upgrade-progress');
   bar.hidden = u.state !== 'downloading';
