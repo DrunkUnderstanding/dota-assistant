@@ -2016,4 +2016,4 @@ OpenDota `/search` 按名字搜一个常见名返回 50 个人，认不准路人
   旧版开着界面时起收尾进程、关面板：旧进程 0.3 秒内退出、换完、新版本自己起来（三个窗口、日志「代码版本」是新的）、`_update` 被删。
 - 面板在 GitHub 限流时：设置「版本」里红字「检查更新失败：GitHub 接口限流了…」，顶栏不出按钮（无头 Edge 截图看过）；`tools/browser_check.py` 6 个页面无报错。
 **没验证**：真实的「旧 Release 自动升到新 Release」（现在 GitHub 上的 Release 都没有这个功能）；没写权限的目录（Program Files）会在换文件时报错并挪回；行为快照这台机器没有 `D:\dota-golden`，没跑。
-**顺手看到（原来就有，没改）**：`calibration.json` 坏了（不是 JSON）时打包版双击启动直接停在「出错了…按回车」，日志里只有「启动助手…」，堆栈只打在控制台。
+**顺手修的**：`calibration.json` 坏了（不是 JSON / 结构不对）时打包版双击启动直接停在「出错了…按回车」，日志里只有「启动助手…」。现在 `Calibration.load` 读不了就记一条 WARN、当没校准（控制面板显示「未校准」），单测 `test_vision.CalibrationFileTest`。这个改动也拿来实测了一次真实的自动更新（见下）。

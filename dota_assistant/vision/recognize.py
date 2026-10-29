@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from collections import Counter
 from dataclasses import dataclass, field
@@ -19,6 +20,8 @@ import cv2
 import numpy as np
 
 from ..core.config import DATA_DIR, ROOT
+
+log = logging.getLogger(__name__)
 
 CALIBRATION_PATH = ROOT / "calibration.json"
 TEMPLATE_DIR = ROOT / "templates"
@@ -69,8 +72,12 @@ class Calibration:
     def load(cls, path: Path = CALIBRATION_PATH) -> Calibration | None:
         if not path.exists():
             return None
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return cls(**{k: [tuple(r) for r in v] if isinstance(v, list) else v for k, v in raw.items()})
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            return cls(**{k: [tuple(r) for r in v] if isinstance(v, list) else v for k, v in raw.items()})
+        except (ValueError, TypeError, AttributeError) as e:   # 文件坏了：当没校准，别让启动直接失败
+            log.warning("校准文件 %s 读不了（%s），当作没校准；重新 calibrate 一次", path, e)
+            return None
 
     @property
     def ready(self) -> bool:

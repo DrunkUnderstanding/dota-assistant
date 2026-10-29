@@ -106,6 +106,19 @@ class VisionTest(unittest.TestCase):
         self.assertIsNone(view.dire[4].hero_id)
 
 
+class CalibrationFileTest(unittest.TestCase):
+    def test_save_load_and_broken_file(self):
+        path = Path(tempfile.mkdtemp()) / "calibration.json"
+        cal = Calibration(interpolate((0.1, 0.0, 0.05, 0.03), (0.3, 0.0, 0.05, 0.03), 5),
+                          interpolate((0.6, 0.0, 0.05, 0.03), (0.8, 0.0, 0.05, 0.03), 5), note="1920x1080")
+        cal.save(path)
+        self.assertEqual(Calibration.load(path), cal)
+        for broken in ("", "{坏了", '{"radiant": [[1, 2, 3, 4]], "什么": 1}', "[1, 2]"):
+            path.write_text(broken, encoding="utf-8")
+            with self.assertLogs("dota_assistant.vision.recognize", "WARNING"):
+                self.assertIsNone(Calibration.load(path))           # 坏了当没校准，不让启动直接失败
+
+
 SHOTS = Path(__file__).resolve().parent.parent / "shots"
 REAL = {"20261023-014347": "加速选人第 26 秒：拉比克盖着徽章「5」，天辉第 1、2 格是队友预选的灰头像",
         "20261022-231827": "天梯选人：斯拉克上盖着「超凡入圣III」段位条，其余是空位（也盖着段位旗 + 段位条）",
