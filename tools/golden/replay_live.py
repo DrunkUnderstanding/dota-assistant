@@ -34,10 +34,11 @@ from pathlib import Path
 from types import SimpleNamespace
 
 # Live.action 能处理的网页动作（type），回放里每个都要走到。PLAN 第 1 节列了 24 个；d1bfef6 把队友战绩挪到独立页
-# （webui 的 /api/mates、/api/match），去掉了 mate_query / mate_remove，剩 22 个。运行时还从 Live.action 源码里抽一遍对账
+# （webui 的 /api/mates、/api/match），去掉了 mate_query / mate_remove，剩 22 个；2026-10-29 加了更新助手的
+# upgrade_check / upgrade_install，24 个。运行时还从 Live.action 源码里抽一遍对账
 WEB_ACTIONS = ("set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page "
                "buyback ult name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings "
-               "open_logs").split()
+               "open_logs upgrade_check upgrade_install").split()
 
 # 叠加层相关的动作：做完以后不管变没变，都把叠加层位置 / 网页 /overlay 接口回的东西 / 状态文件记一次
 OVERLAY_ACTIONS = {"toggle_overlay", "toggle_lock", "close_overlay", "overlay_moved"}
@@ -654,6 +655,9 @@ class Replay:
         self.act({"type": "explain_pick", "hero_id": first})
         self.mates_flow()
         self.act({"type": "open_logs"})
+        # 更新助手：冻结目录不是 git 克隆也不是打包版，检查不联网、直接说没法自动更新；没有能装的就报错
+        self.act({"type": "upgrade_check"})
+        self.act({"type": "upgrade_install"})
         self.act({"type": "bogus_action"})
 
         self.record("回放结束：叠加层状态（全量）", force=EXTRA_KEYS)

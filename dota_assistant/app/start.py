@@ -1,5 +1,6 @@
 """一键启动：双击「启动助手.bat」走这里。能自动做的准备工作都自动做，只在缺东西时问一句。
 
+  0. 上次更新助手留下的 _update/ 删掉（upgrade.py）
   1. 没有 config.toml → 从 config.example.toml 生成；好友代码、token、AI 来源在控制面板「设置」里填（第一次会自动弹出）
   2. 没装 Electron 界面 → 有 Node.js 就自动 npm install；没有就提示去装（打包版自带，不用装）
   3. 找到 Dota 安装目录 → 自动写 GSI 配置（第一次会提醒加启动项 -gamestateintegration）
@@ -15,7 +16,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from . import update
+from . import update, upgrade
 from ..core import config
 from ..core.config import DATA_DIR, ROOT
 from ..sources import assets, player
@@ -145,6 +146,7 @@ def no_key_note(cfg: config.Config) -> str:
 
 
 def main() -> int:
+    upgrade.cleanup()                            # 上次更新留下的下载 / 旧文件
     cfg = ensure_config()
     if not ensure_electron():
         return 1

@@ -13,7 +13,7 @@ DRAFT_SHOTS = [
 
 SUBCOMMANDS = ["update", "suggest", "start", "run", "demo", "calibrate", "recognize", "label", "gsi-install",
                "backtest", "lanes-test", "lane-test", "lane-review", "backtest-ai", "coach-sim", "death-sim",
-               "brief-sim", "kb", "gsi-dump", "say", "logs"]
+               "brief-sim", "kb", "gsi-dump", "say", "logs", "upgrade"]
 
 SUGGEST = [
     ["--enemy", "PA,莱恩,风行者", "--ally", "敌法师,冰女", "--pos", "3"],

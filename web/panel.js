@@ -415,6 +415,67 @@ function paintOverlayStyle(style) {
   $('.swatch-custom').classList.toggle('on', !OV_COLORS.some(([c]) => c === style.color));
 }
 
+// ---------- 更新助手（检查 / 下载在 Python 后台跑，这里只画状态；app/upgrade.py） ----------
+
+const upDlg = $('#upgrade');
+const UP_BUSY = { checking: '正在检查…', downloading: '正在下载', installing: '正在安装…', restarting: '马上重启…' };
+let closing = false;
+
+function upgradeLine(u) {
+  if (!u || u.state === 'idle') return '还没检查过';
+  const ver = u.current ? `当前 ${u.current}${u.latest ? `，GitHub 上最新 ${u.latest}` : ''}` : '';
+  const what = u.state === 'error' ? u.error
+    : UP_BUSY[u.state] ? UP_BUSY[u.state] + (u.state === 'downloading' ? ` ${Math.round(u.progress * 100)}%` : '')
+    : u.available ? '有新版本，点顶栏「有新版本」看更新内容' : u.reason;
+  return [ver, what].filter(Boolean).join('\n');
+}
+
+function paintUpgrade(u) {
+  u = u || { state: 'idle' };
+  const btn = $('#btn-upgrade');
+  btn.hidden = !(u.available || u.state === 'restarting');
+  $('#btn-upgrade-text').textContent = u.state === 'downloading' ? `下载中 ${Math.round(u.progress * 100)}%`
+    : u.state === 'installing' ? '安装中…' : u.state === 'restarting' ? '正在重启…' : '有新版本';
+  const line = $('#version-line');
+  line.textContent = upgradeLine(u);
+  line.classList.toggle('is-error', u.state === 'error');
+  $('#btn-upgrade-check').disabled = ['checking', 'downloading', 'installing', 'restarting'].includes(u.state);
+  $('#version-sub').textContent = { package: '免安装版：从 GitHub Release 下载新版本，替换后自动重启',
+    git: '源码版：git pull 拉 GitHub 上的新提交，然后自动重启' }[u.mode] || '每次启动会在后台看一眼 GitHub 有没有新版本';
+
+  $('#upgrade-ver').textContent = u.current ? `${u.current} → ${u.latest}${u.size_mb ? `（下载 ${u.size_mb} MB）` : ''}` : '';
+  $('#upgrade-notes').textContent = u.notes || '（这一版没写更新内容）';
+  const busy = ['downloading', 'installing', 'restarting'].includes(u.state);
+  const bar = $('#upgrade-progress');
+  bar.hidden = u.state !== 'downloading';
+  $('i', bar).style.width = `${Math.round((u.progress || 0) * 100)}%`;
+  const status = $('#upgrade-status');
+  status.textContent = u.state === 'error' ? `${u.error}${u.mode === 'package' ? `。下载太慢可以到 ${u.page} 手动下载 zip，解压覆盖` : ''}`
+    : busy ? upgradeLine(u).split('\n').pop() : '';
+  status.classList.toggle('is-error', u.state === 'error');
+  $('#upgrade-go').disabled = busy || !u.available;
+  $('#upgrade-go').textContent = u.state === 'error' ? '再试一次' : '更新并重启';
+  $('#upgrade-later').disabled = u.state === 'restarting';
+  // 新版本准备好了：关掉控制面板，Electron 退出、助手退出，收尾窗口接手（Python 那边几秒后也会强制关）
+  if (u.state === 'restarting' && !closing) {
+    closing = true;
+    setTimeout(() => window.close(), 1500);
+  }
+}
+
+$('#btn-upgrade').addEventListener('click', () => { if (!upDlg.open) upDlg.showModal(); });
+$('#upgrade-later').addEventListener('click', () => upDlg.close());
+$('#upgrade-go').addEventListener('click', async () => {
+  $('#upgrade-go').disabled = true;
+  const res = await act('upgrade_install');
+  if (!res.ok) showMessage(res.message, true);
+});
+$('#btn-upgrade-check').addEventListener('click', async () => {
+  $('#btn-upgrade-check').disabled = true;
+  const res = await act('upgrade_check');
+  if (!res.ok) showMessage(res.message, true);
+});
+
 // ---------- 启动 ----------
 
 getJSON('/api/heroes').then((h) => { heroes = h; });
@@ -428,6 +489,7 @@ connect((s) => {
   renderOverlay($('#preview'), s.overlay.view);
   $('#preview').classList.toggle('is-hidden', !s.overlay.visible);
   paintOverlayStyle(s.overlay.style);
+  paintUpgrade(s.upgrade);
 }, (ok) => {
   if (!ok) showMessage('和助手断开了（python 那边退出了？），正在重连…', true);
   else if ($('#footer').classList.contains('is-error')) showMessage('已重新连上助手');

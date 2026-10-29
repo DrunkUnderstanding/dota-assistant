@@ -47,6 +47,7 @@ from .cards import CardsMixin
 from .overlay import OverlayMixin
 from .settings import SettingsMixin
 from . import consts
+from .. import upgrade
 
 log = logging.getLogger(__name__)
 
@@ -99,6 +100,8 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self.overlay_pos: dict | None = None     # 拖过的位置（占屏幕宽 / 高的比例）和拉过的宽度，没拖过就用 config 里的
         self._load_overlay_state()
         self.message = ""                        # 状态栏最后一条操作提示
+        self.updater = upgrade.Updater()         # 助手自己的更新（检查 / 下载在它自己的后台线程里）
+        self.quit_requested = threading.Event()  # 更新准备好了：webui 看到就关界面、退出，交给收尾进程
         self.notice: dict | None = None          # 演示用：临时盖住选人推荐的内容
 
         # ---- 局内缺口提醒 ----
@@ -342,6 +345,13 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             self.overlay_moved(float(a["x"]), float(a["y"]), a.get("width"), a.get("height"), a.get("screen"))
         elif t == "save_settings":
             self.save_settings(a)
+        elif t == "upgrade_check":
+            if not self.updater.check_async():
+                raise ValueError("正在检查 / 下载，等一下")
+        elif t == "upgrade_install":
+            if not self.updater.install_async(self.quit_requested.set):
+                raise ValueError("现在没有能装的新版本（或者正在下载）")
+            self.message = "开始更新，好了以后助手会自己重启"
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
@@ -416,6 +426,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},
             "status": self.status(),
+            "upgrade": self.updater.view(),
         }
 
     def heroes(self) -> list[dict]:

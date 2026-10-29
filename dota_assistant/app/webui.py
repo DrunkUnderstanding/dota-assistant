@@ -229,7 +229,7 @@ def serve(live, browser: bool = False) -> int:
             log.info("浏览器模式：%s", srv.url)
             print(f"界面：{srv.url}/panel.html（叠加层预览：{srv.url}/overlay.html?preview=1，"
                   f"买活计时条预览：{srv.url}/topbar.html?preview=1），Ctrl+C 退出")
-            threading.Event().wait()
+            getattr(live, "quit_requested", threading.Event()).wait()
             return 0
         exe = find_electron()
         if exe is None:
@@ -242,9 +242,14 @@ def serve(live, browser: bool = False) -> int:
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         log.info("界面服务 %s，已启动 Electron（pid %d）", srv.url, proc.pid)
         threading.Thread(target=_pipe_electron, args=(proc.stdout,), daemon=True, name="electron-log").start()
+        quit_evt = getattr(live, "quit_requested", None)
+        if quit_evt is not None:
+            threading.Thread(target=_quit_when, args=(quit_evt, proc), daemon=True, name="quit").start()
         try:
             code = proc.wait()
             log.info("Electron 退出，返回 %s", code)
+            if quit_evt is not None and quit_evt.is_set():
+                return 0                                    # 更新要重启：正常退出，别让启动窗口停住等回车
             return code
         except KeyboardInterrupt:
             proc.terminate()
@@ -255,6 +260,16 @@ def serve(live, browser: bool = False) -> int:
         log.info("助手退出")
         live.close()
         srv.stop()
+
+
+def _quit_when(evt: threading.Event, proc: subprocess.Popen) -> None:
+    """更新准备好了（Live.quit_requested）：控制面板自己会关窗口让 Electron 退出，几秒还没退就直接结束它"""
+    evt.wait()
+    try:
+        proc.wait(timeout=8)
+    except subprocess.TimeoutExpired:
+        log.info("更新要重启：Electron 没自己退出，结束它")
+        proc.terminate()
 
 
 def _pipe_electron(stream) -> None:
@@ -274,4 +289,6 @@ def _pipe_electron(stream) -> None:
 
 def run(cfg: Config, browser: bool = False) -> int:
     from .live import Live
-    return serve(Live(cfg), browser)
+    live = Live(cfg)
+    live.updater.check_async(delay=5)                       # 启动后在后台看一眼 GitHub 有没有新版本
+    return serve(live, browser)

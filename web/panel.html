@@ -19,6 +19,11 @@
     </svg>队友战绩
   </button>
   <div class="status" id="status"></div>
+  <button class="btn btn-upgrade" id="btn-upgrade" hidden title="GitHub 上有新版本，点开看更新内容">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/>
+    </svg><span id="btn-upgrade-text">有新版本</span>
+  </button>
   <button class="btn btn-icon" id="btn-settings" title="设置：好友代码、STRATZ token、AI 打法用哪家" aria-label="设置">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="3"/>
@@ -153,6 +158,14 @@
         <p class="row-hint">Steam 里右键 Dota 2 → 管理 → 浏览本地文件，把打开的文件夹地址（以 dota 2 beta 结尾）粘过来。自动找对了就留空。</p>
       </section>
 
+      <section class="dlg-sec" id="version-head">
+        <div class="sec-head">
+          <div><h3>版本</h3><p class="dlg-sub" id="version-sub">每次启动会在后台看一眼 GitHub 有没有新版本</p></div>
+          <button type="button" class="btn btn-small" id="btn-upgrade-check">检查更新</button>
+        </div>
+        <p class="row-hint version-line" id="version-line"></p>
+      </section>
+
       <section class="dlg-sec" id="hotkeys-head">
         <div class="sec-head">
           <div><h3>热键</h3><p class="dlg-sub">游戏里随时按；保存后马上生效</p></div>
@@ -165,6 +178,30 @@
     <footer class="dlg-actions">
       <button type="button" class="btn btn-ghost" value="cancel" id="settings-cancel">取消</button>
       <button type="submit" class="btn btn-primary" value="save">保存</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dlg dlg-upgrade" id="upgrade">
+  <form method="dialog" id="upgrade-form">
+    <header class="dlg-head">
+      <h2>更新助手</h2>
+      <p class="dlg-note" id="upgrade-ver"></p>
+    </header>
+    <div class="dlg-body">
+      <section class="dlg-sec">
+        <h3>更新内容</h3>
+        <pre class="upgrade-notes" id="upgrade-notes"></pre>
+      </section>
+      <section class="dlg-sec">
+        <p class="dlg-sub">更新要重启助手（准备好以后再等半分钟左右），打着比赛别点。config.toml 里的设置、个人数据、校准、日志和截图都会保留。</p>
+        <div class="upgrade-progress" id="upgrade-progress" hidden><i></i></div>
+        <p class="upgrade-status" id="upgrade-status"></p>
+      </section>
+    </div>
+    <footer class="dlg-actions">
+      <button type="button" class="btn btn-ghost" id="upgrade-later">以后再说</button>
+      <button type="button" class="btn btn-primary" id="upgrade-go">更新并重启</button>
     </footer>
   </form>
 </dialog>

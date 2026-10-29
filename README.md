@@ -24,6 +24,11 @@ AI 打法（选完人后写这局怎么打）有三种来源，在「设置」�
 STRATZ token 和 AI 的 Key 都不填也能用：选人推荐、对面分路、机制提醒、针对装、各种计时照常；
 少的是对线胜负、起手装、强势期、同分段出装节奏（要 STRATZ）和 AI 打法（打法页会写明缺什么）。
 
+**更新**：每次启动会在后台看一眼 GitHub 有没有新版本，有的话控制面板顶上出一个绿色的「有新版本」，点开看更新内容，
+「更新并重启」会自己下载、替换、重开（`config.toml`、个人数据、校准、日志、截图都保留）。也可以在「设置」→「版本」里手动「检查更新」，
+或者命令行 `Dota选人助手.exe upgrade`。GitHub 下载慢的话，到 [Releases](https://github.com/DrunkUnderstanding/dota-assistant/releases/latest)
+手动下 zip，再 `Dota选人助手.exe upgrade --zip 下好的.zip`。
+
 自己打包：`pip install pyinstaller anthropic`，`electron/` 下 `npm install` 过一次，然后 `python packaging/build.py`，
 产物在 `build/`。打包不会带上本机的 `config.toml`（脚本最后会扫一遍确认密钥没混进去）。
 
@@ -45,6 +50,10 @@ Dota 设置里显示模式改「无边框窗口」，社交里打开「公开比
 
 控制面板状态栏显示「GSI 未连接 · 没找到 Dota 目录」时，点它到「设置」填 Dota 安装目录（Steam 里右键 Dota 2 → 管理 → 浏览本地文件，以 `dota 2 beta` 结尾）。
 GSI 没连上时助手不知道你在哪边，会先当你在天辉（叠加层上有黄条提示）；在夜魇就在控制面板「阵营」手动选。
+
+**更新**：用 `git clone` 下来的，控制面板顶上出「有新版本」时点「更新并重启」就会 `git pull`（依赖变了顺手 `pip install`）再重开；
+命令行是 `python -m dota_assistant upgrade`。本地有没推送的提交 / 和 GitHub 分叉时不自动拉，自己 `git pull`。
+下载源码 zip 解压的没法自动更新，换成 `git clone` 或者用免安装版。
 
 选人阶段的 GSI 推送会自动存到 `shots/gsi/`，用来确认 GSI 能不能直接给出双方阵容。
 

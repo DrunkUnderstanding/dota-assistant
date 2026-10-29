@@ -60,6 +60,7 @@ EXTRA_SCRIPTS = ("packaging/*.py",)
 ACTIONS_BASE = frozenset(
     "set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page buyback ult "
     "name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings open_logs"
+    " upgrade_check upgrade_install"           # 2026-10-29 更新助手（app/upgrade.py）
     .split())
 # 一定要有的子命令（列表本身是动态取的，这里只防「取到的是空的 / 取错了 parser」）
 KEY_COMMANDS = {"suggest", "kb", "run", "start", "update", "demo", "recognize", "logs"}

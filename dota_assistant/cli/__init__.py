@@ -24,12 +24,15 @@
   kb mistake [--wrong 错误说法 --right 正确说法 --hero X --item Y --who 开发助手 --evidence 原文 --has-tag 标签]
                                列出 / 记录 AI 常见误判（knowledge/mistakes.toml）
   logs [-n 行数] [--open]       看最新一份日志的末尾（--open 打开日志文件夹）
+  upgrade [--check] [--yes] [--zip 压缩包]
+                               更新助手本身：打包版下 GitHub Release、源码版 git pull（--zip 用手动下好的打包版压缩包）
 
 运行类命令（start / run / demo / update …）每次在 logs/ 下写一个日志文件，见 log.py。
 """
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -41,7 +44,7 @@ from ..sources import stats as stats_mod
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
-                     "coach-sim", "brief-sim", "lanes-test", "lane-test"}
+                     "coach-sim", "brief-sim", "lanes-test", "lane-test", "upgrade"}
 
 
 def _split(s: str | None) -> list[str]:
@@ -215,6 +218,46 @@ def cmd_logs(args) -> int:
     return 0
 
 
+def cmd_upgrade(args) -> int:
+    from ..app import upgrade
+    if args.finish:                       # 更新的收尾（app/upgrade.py 起的，新旧版本之间的约定）
+        return upgrade.finish(Path(args.target), args.pid, Path(args.src) if args.src else None,
+                              restart=not args.no_restart)
+    if args.zip:
+        if upgrade.detect() != "package":
+            print("--zip 只给打包版用；源码版直接 upgrade（git pull）")
+            return 1
+        cmd = upgrade.finish_command(config.ROOT, os.getpid(), upgrade.extract(args.zip, config.ROOT), restart=False)
+        upgrade.spawn(cmd, config.ROOT)
+        print("解压好了，新开的窗口里会等这里退出再替换文件")
+        return 0
+    try:
+        c = upgrade.check()
+    except Exception as e:
+        print(f"检查更新失败：{e}")
+        return 1
+    print(upgrade.describe(c))
+    if args.check or not c.available:
+        return 0
+    if not args.yes and input("\n现在更新？[y/N] ").strip().lower() not in ("y", "yes", "是"):
+        return 0
+    try:
+        cmd = upgrade.prepare(c, config.ROOT, progress=_progress, restart=False)
+    except Exception as e:
+        print(f"\n更新失败：{e}")
+        return 1
+    if c.mode == "git":
+        print("更新好了，下次启动就是新版本")
+        return 0
+    upgrade.spawn(cmd, config.ROOT)
+    print("\n下载好了，新开的窗口里会等这里退出再替换文件")
+    return 0
+
+
+def _progress(f: float) -> None:
+    print(f"\r  下载 {f:6.1%}", end="", flush=True)
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):                 # 被重定向到管道 / 文件时默认是 GBK
         if hasattr(stream, "reconfigure"):
@@ -284,6 +327,16 @@ def main(argv: list[str] | None = None) -> int:
     op = sub.add_parser("logs", help="看最新的日志")
     op.add_argument("-n", type=int, default=60, help="显示最后多少行")
     op.add_argument("--open", action="store_true", help="打开日志文件夹")
+    gp = sub.add_parser("upgrade", help="更新助手本身（打包版下 GitHub Release，源码版 git pull）")
+    gp.add_argument("--check", action="store_true", help="只看有没有新版本")
+    gp.add_argument("--yes", action="store_true", help="不问，直接更新")
+    gp.add_argument("--zip", type=Path, help="打包版：用手动下载好的压缩包更新（GitHub 下载慢时用）")
+    # 下面几个是更新的收尾进程用的（app/upgrade.py 起的），新旧版本之间的约定，别改
+    gp.add_argument("--finish", action="store_true", help=argparse.SUPPRESS)
+    gp.add_argument("--pid", type=int, default=0, help=argparse.SUPPRESS)
+    gp.add_argument("--target", help=argparse.SUPPRESS)
+    gp.add_argument("--src", help=argparse.SUPPRESS)
+    gp.add_argument("--no-restart", action="store_true", help=argparse.SUPPRESS)
     args = ap.parse_args(argv)
     cfg = config.load()
     logs.setup(cfg, args.cmd, to_file=args.cmd in FILE_LOG_COMMANDS
@@ -376,4 +429,6 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.cmd == "logs":
         return cmd_logs(args)
+    if args.cmd == "upgrade":
+        return cmd_upgrade(args)
     return 1
