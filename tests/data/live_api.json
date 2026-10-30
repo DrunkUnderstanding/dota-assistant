@@ -347,6 +347,10 @@
   "kind": "method",
   "signature": "(self, key: 'str', value, save: 'bool' = True) -> 'None'"
  },
+ "set_timer": {
+  "kind": "method",
+  "signature": "(self, key: 'str', on: 'bool') -> 'None'"
+ },
  "set_ult": {
   "kind": "method",
   "signature": "(self, side: 'str', index: 'int', level=None, mod=None, on=None) -> 'None'"

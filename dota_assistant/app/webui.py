@@ -57,7 +57,7 @@ def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
     拉过高度才有 height（没有 = 到屏幕底），拖到过别的屏才有 screen（那块屏左上角，没有 = monitor 那块）"""
     pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
     out = {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
-           "opacity": cfg.overlay_opacity, "buyback_timer": cfg.buyback_timer, "ult_timer": cfg.ult_timer}
+           "opacity": cfg.overlay_opacity}
     out.update({k: pos[k] for k in ("height", "screen") if k in pos})
     return out
 

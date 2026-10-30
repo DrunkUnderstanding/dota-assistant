@@ -83,6 +83,8 @@ bindSeg('seg-side', 'side_mode');
 bindSeg('seg-mode', 'mode');
 $('#opt-voice').addEventListener('change', (e) => run('set', { key: 'voice', value: e.target.checked }));
 $('#opt-scan').addEventListener('change', (e) => run('set', { key: 'scan_without_gsi', value: e.target.checked }));
+const TIMERS = ['buyback_timer', 'ult_timer'];   // 叠加层卡片「顶栏计时」：买活 / 对面大招小条
+for (const k of TIMERS) $(`#opt-${k}`).addEventListener('change', (e) => run('set', { key: k, value: e.target.checked }));
 
 function paintSettings(st) {
   const mark = (id, v) => $$(`#${id} button`).forEach((b) => b.classList.toggle('on', b.dataset.v === String(v)));
@@ -91,6 +93,7 @@ function paintSettings(st) {
   mark('seg-mode', st.mode);
   $('#opt-voice').checked = st.voice;
   $('#opt-scan').checked = st.scan_without_gsi;
+  for (const k of TIMERS) $(`#opt-${k}`).checked = st[k];
 }
 
 // ---------- 设置窗口（账号、AI 来源、热键） ----------

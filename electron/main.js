@@ -335,7 +335,7 @@ app.whenReady().then(async () => {
   const cfg = await loadConfig();
   gameDisplay = pickDisplay(cfg.monitor);
   createOverlay(cfg);
-  if (cfg.buyback_timer !== false || cfg.ult_timer !== false) createTopbar();
+  createTopbar();   // 买活 / 大招都关着也开：控制面板能随时打开，关着时页面什么都不画、整条点穿
   createPanel();
 });
 

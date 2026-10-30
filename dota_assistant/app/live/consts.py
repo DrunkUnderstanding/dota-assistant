@@ -103,6 +103,8 @@ def plan_error(err: Exception) -> str:
 
 
 SECRET_FIELDS = {"stratz_token": "STRATZ token", "ai_api_key": "API Key"}   # 不发给页面、不进日志
+# 控制面板「顶栏计时」开关：config 字段 → 名字（app/live/timers.set_timer）
+TIMER_SWITCHES = {"buyback_timer": "买活计时", "ult_timer": "对面大招计时"}
 # 热键：config 字段 → (完整说明, 面板窗口窄时的短说明)；按哪个键在「设置」里改
 HOTKEY_ACTIONS = {
     "hotkey_toggle": ("显隐 / 关提醒", "显隐"),

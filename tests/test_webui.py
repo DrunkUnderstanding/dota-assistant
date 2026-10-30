@@ -883,6 +883,46 @@ class CoachLiveTest(unittest.TestCase):
         self.assertTrue(all(x["end"] is None for side in bb["slots"].values() for x in side))
         self.assertFalse(go(0, state="DOTA_GAMERULES_STATE_POST_GAME")["show"])  # 比赛结束收起
 
+    def test_timer_switches(self):
+        """控制面板「顶栏计时」：买活 / 对面大招开关马上生效、写进 config.toml；关着点小条不记，再打开接着显示原来的倒计时；两个都关顶栏整条收起"""
+        from dota_assistant import kb
+        axe = self.live.db.find("斧王")
+        cull = kb.Entry(name="淘汰之刃", key="axe_culling_blade", text="", cooldown="80/75/70", ultimate=True)
+        self.live._kb_base = SimpleNamespace(heroes={axe.id: kb.HeroKB(axe.id, "斧王", "axe", "近战", 150, [cull], [], [], {})}, items={})
+        self.live._kb_ops = {}
+        self.live.config_file.write_text('buyback_timer = true  # 买活计时\nult_timer = true\n', encoding="utf-8")
+        self.live.gsi.state.update({"map": {"matchid": "123", "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", "clock_time": 900},
+                                    "player": {"team_name": "radiant", "team_slot": 1},
+                                    "hero": {"name": "npc_dota_hero_phantom_lancer", "alive": True, "level": 8}})
+        wait(self.live.submit(self.live.coach_tick))
+        act = lambda **kw: wait(self.live.submit(self.live.action, kw))
+        set_ = lambda key, on: act(type="set", key=key, value=on)
+        bb = lambda: json.loads(self.live.current_snapshot)["buyback"]
+        act(type="buyback", side="dire", index=0)
+        act(type="ult", side="dire", index=0)
+        self.assertEqual((bb()["buyback_on"], bb()["slots"]["dire"][0]["ult"]["name"]), (True, "淘汰之刃"))
+
+        self.assertEqual(set_("buyback_timer", False), "买活计时已关闭")
+        self.assertFalse(bb()["buyback_on"])
+        self.assertIsNotNone(bb()["slots"]["dire"][0]["ult"])                      # 大招小条还在
+        self.assertIn("买活计时关着", act(type="buyback", side="dire", index=1))
+        self.assertIsNone(bb()["slots"]["dire"][1]["end"])
+        self.assertFalse(json.loads(self.live.current_snapshot)["settings"]["buyback_timer"])
+        saved = config.load(self.live.config_file)
+        self.assertEqual((saved.buyback_timer, saved.ult_timer), (False, True))
+        self.assertIn("# 买活计时", self.live.config_file.read_text(encoding="utf-8"))
+
+        self.assertEqual(set_("ult_timer", False), "对面大招计时已关闭")
+        self.assertFalse(bb()["show"])                                             # 两个都关：整条收起
+        self.assertFalse(config.load(self.live.config_file).ult_timer)
+
+        set_("buyback_timer", True)
+        set_("ult_timer", True)
+        slot = bb()["slots"]["dire"][0]
+        self.assertAlmostEqual(slot["end"], 900 + 480, delta=2)                    # 关之前记的接着显示
+        self.assertAlmostEqual(slot["ult"]["end"], 900 + 80, delta=2)
+        self.assertTrue(json.loads(self.live.current_snapshot)["settings"]["ult_timer"])
+
     def test_buyback_auto_from_screenshot(self):
         """顶栏头像变灰 → 后台认倒计时 → 变回彩色后看消息栏：「买活了」+ 行首小图是他，两帧都对上才自动计时、存样本；
         消息栏没有买活（倒计时说早复活了也一样）不记"""

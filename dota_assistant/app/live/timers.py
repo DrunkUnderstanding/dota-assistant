@@ -5,6 +5,7 @@ import logging
 import threading
 import time
 
+from ...core import config
 from ...domain import buyback, coach, ultcd
 from ...vision import buybackscan
 from ...kb import cd_ops
@@ -29,9 +30,9 @@ class TimersMixin:
             self._bb_scan_err = False
         m = st.raw.get("map") or {}
         clock = m.get("clock_time")
-        # 进游戏（号角前出门）就显示，玩家 2026-10-26 要的「开局就可以显示」；号角前时钟是负数，倒计时照样算
-        self._bb_show = bool((self.cfg.buyback_timer or self.cfg.ult_timer) and st.in_match
-                             and isinstance(clock, (int, float)))
+        # 进游戏（号角前出门）就显示，玩家 2026-10-26 要的「开局就可以显示」；号角前时钟是负数，倒计时照样算。
+        # 这里只管在不在局里，买活 / 大招开没开用的时候现看 cfg（控制面板能随时开关，buyback_view）
+        self._bb_show = bool(st.in_match and isinstance(clock, (int, float)))
         if self._bb_show and self.cfg.ult_timer:
             self._knowledge()                    # 第一次读知识库要一会儿，放在这里读，别拖慢推快照
         if not isinstance(clock, (int, float)):
@@ -205,7 +206,10 @@ class TimersMixin:
         if side not in consts.SIDES or not 0 <= index < 5:
             raise ValueError("格子不存在")
         clock = self._game_clock()
-        if not (self._bb_show and self.cfg.buyback_timer) or clock is None:
+        if not self.cfg.buyback_timer:
+            self.message = "买活计时关着，控制面板「顶栏计时」里打开"
+            return
+        if not self._bb_show or clock is None:
             self.message = "进游戏后才能记买活"
             return
         if (side, index) in self.buyback.auto:
@@ -218,10 +222,19 @@ class TimersMixin:
             self.message = f"已取消{name}的买活计时"
         log.info("买活计时 %s（游戏时间 %s）", self.message, coach._mmss(clock / 60))
 
+    def set_timer(self, key: str, on: bool) -> None:
+        """控制面板「顶栏计时」开关：买活 / 对面大招小条马上出 / 收，写进 config.toml。
+        关掉时这局已经在走的倒计时不清，再打开接着显示"""
+        setattr(self.cfg, key, on)
+        path = config.save({key: on}, self.config_file)
+        log.info("顶栏计时已保存到 %s：%s = %s", path, key, on)
+        self.message = f"{consts.TIMER_SWITCHES[key]}已{'打开' if on else '关闭'}"
+
     def buyback_view(self) -> dict:
         """给 topbar.html：冷却结束的游戏时钟 + 时钟锚点，页面自己每秒算剩多少（快照不用每秒变）"""
         clock = self._game_clock()
-        if not self._bb_show or clock is None or self._bb_anchor is None:
+        if (not self._bb_show or not (self.cfg.buyback_timer or self.cfg.ult_timer)
+                or clock is None or self._bb_anchor is None):
             return {"show": False}
         st = self.gsi.state
         me = self._my_slot(st)

@@ -300,6 +300,8 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
                 self.scan_without_gsi = bool(value)
             elif key == "overlay_locked":
                 self.set_locked(bool(value))
+            elif key in consts.TIMER_SWITCHES:
+                self.set_timer(key, bool(value))
             elif key in ("overlay_opacity", "overlay_color"):
                 self.set_overlay_style(key, value, save=bool(a.get("save", True)))
             else:
@@ -417,7 +419,8 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
                                     "valid": not text or h is not None, **hint})
         return {
             "settings": {"position": self.position, "position_auto": self.position_auto, "side_mode": self.side_mode, "mode": self.mode,
-                         "voice": self.voice, "scan_without_gsi": self.scan_without_gsi},
+                         "voice": self.voice, "scan_without_gsi": self.scan_without_gsi,
+                         **{k: getattr(self.cfg, k) for k in consts.TIMER_SWITCHES}},
             "config": self.settings_view(),
             "slots": slots,
             "bans_text": self.bans_text,
