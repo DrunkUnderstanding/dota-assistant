@@ -10,8 +10,8 @@
 克制优势 = 实际对位胜率 与「按双方自身强度推算的期望胜率」之差。
 样本少的对位用贝叶斯收缩拉回期望值，避免 30 局 70% 胜率这种噪声霸榜。
 
-卡片上的胜率只算候选英雄自己（其余 9 人当平均水平）；「全队」再加上已选队友、已选敌人和阵营（Suggestion.team_breakdown），
-和回测里预测整局胜负的是同一个式子（backtest.predict_drafts）。
+卡片上的胜率只算候选英雄自己（其余 9 人当平均水平）；叠加层顶上的「阵容」胜率是已选的整个阵容（Engine.draft_rest + 阵营，
+advisor.draft_rate），和回测里预测整局胜负的是同一个式子（backtest.predict_drafts）。
 """
 from __future__ import annotations
 
@@ -57,7 +57,7 @@ RISK_TOP = 3            # 取最克我的前几个还没被选的英雄
 RISK_HINT = 4.0         # 对面还剩 ≥3 手、且有英雄克我 ≥ 4 个百分点时，在理由里提示
 # 我的位置 → 和我对线的敌方位置（优势路 1+5 对劣势路 3+4，中路对中路）
 LANE_OPPONENTS = {1: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5), 5: (3, 4)}
-# 天辉自带的优势（logit），只进「全队」胜率，不影响排名（同一手的候选都在同一边）。
+# 天辉自带的优势（logit），只进叠加层顶上的「阵容」胜率，不影响排名（同一手的候选都在同一边）。
 # 回测（backtest 第五节）里拟合的截距：2026-10-30 5950 场样本外 +0.133 ±0.052（≈ +3.3 个百分点），见 HANDOFF 第 44 节
 RADIANT_EDGE = 0.13
 SIDE_NAMES = {"radiant": "天辉", "dire": "夜魇"}
@@ -98,42 +98,10 @@ class Suggestion:
     at_pos: float | None = None        # 加上这个位置相对整体的胜率差（还没按局数收缩）
     counter: float = 0.0
     synergy: float = 0.0
-    # 选它之后全队胜率的另外两块（logit，Engine.draft_rest）：(队友, 对面)；还没人选时 None（全队 = 这手，不显示）
-    team: tuple[float, float] | None = None
 
     @property
     def winrate(self) -> float:
         return sigmoid(self.score) * 100
-
-    def team_breakdown(self, side: str | None = None) -> list[tuple[str, str, float]] | None:
-        """选它之后全队胜率怎么来的：[(种类, 名称, 数值)]，从这张卡片的胜率（start 这手，%）起，依次加
-        ally 队友（已选队友自身强度 + 他们对已选敌人的克制 + 他们之间的配合）/ enemy 对面（已选敌人自身强度 + 他们之间的配合，取负）/
-        side 阵营（天辉 +RADIANT_EDGE、夜魇 −，不知道阵营 0），每步换回胜率算差，加起来正好等于全队胜率。没选的人当平均水平"""
-        if self.team is None:
-            return None
-        ally, enemy = self.team
-        edge = {"radiant": RADIANT_EDGE, "dire": -RADIANT_EDGE}.get(side or "", 0.0)
-        out, prev = [("start", "这手", self.winrate)], self.score
-        for kind, name, cum in (("ally", "队友", self.score + ally), ("enemy", "对面", self.score + ally + enemy),
-                                ("side", SIDE_NAMES.get(side or "", "阵营"), self.score + ally + enemy + edge)):
-            out.append((kind, name, (sigmoid(cum) - sigmoid(prev)) * 100))
-            prev = cum
-        return out
-
-    def team_winrate(self, side: str | None = None) -> float | None:
-        b = self.team_breakdown(side)
-        return None if b is None else sum(v for _, _, v in b)
-
-    def team_text(self, side: str | None = None) -> str | None:
-        """一行字：「全队 54.3%＝这手 61.7 －队友 3.1 －对面 5.0 ＋天辉 1.2」，小于 0.05 的项不写"""
-        b = self.team_breakdown(side)
-        if b is None:
-            return None
-        text = f"全队 {self.team_winrate(side):.1f}%＝这手 {b[0][2]:.1f}"
-        for _, name, v in b[1:]:
-            if abs(v) >= 0.05:
-                text += f" {'＋' if v >= 0 else '－'}{name} {abs(v):.1f}"
-        return text
 
     @property
     def situational(self) -> float:
@@ -369,8 +337,9 @@ class Engine:
 
     def draft_rest(self, allies: list[tuple[int, int | None]],
                    enemies: list[tuple[int, int | None]]) -> tuple[float, float]:
-        """候选英雄之外、已选阵容对全队胜率的贡献（logit）：(队友, 对面)，见 Suggestion.team_breakdown。
-        allies / enemies = [(英雄 id, 猜的位置)]，位置 None 时用整体强度。候选自己那块（自身 + 克制 + 配合）就是它的综合分"""
+        """已选阵容的胜率（logit）：(我方, 对面)，没选的人当平均水平，见 advisor.draft_rate。
+        allies / enemies = [(英雄 id, 位置)]，位置 None 时用整体强度。
+        我方 = 各人自身强度 + 每人对每个敌人的克制 + 两两配合；对面 = −（各人自身强度 + 两两配合）"""
         own = lambda h, p: self.base_at(h, p) if p else self.base.get(h, 0)
         ally = (sum(own(h, p) for h, p in allies)
                 + sum(self.advantage(a, e) for a, _ in allies for e, _ in enemies)

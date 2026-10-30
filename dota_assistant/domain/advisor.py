@@ -6,7 +6,7 @@ from dataclasses import dataclass, field, replace
 from .. import kb
 from . import explain, lanes
 from ..core.config import Config
-from .engine import POSITION_NAMES, Engine, Suggestion, pct
+from .engine import POSITION_NAMES, RADIANT_EDGE, SIDE_NAMES, Engine, Suggestion, pct, sigmoid
 from ..core.heroes import Hero, HeroDB
 from ..sources import assets, player
 from ..sources import stats as stats_mod
@@ -62,6 +62,7 @@ class Advice:
     team: list[TeamSlot] = field(default_factory=list)   # 我方五个位置：谁占了哪几个、剩下的每个位置推荐谁（有队友选了 / 我选好了才有）
     familiar_min: int = 0                 # 「推荐」只放我生涯打过这么多局的英雄；0 = 没按熟练度分（没生涯数据 / 门槛关了）
     duo: str | None = None                # 空位置（给队友的）是按这位双排队友会玩的英雄分的（他的名字）
+    rest: tuple[float, float] | None = None   # 已选阵容（含选好的我）的 (我方, 对面) logit，Engine.draft_rest；还没人选时 None
 
 
 class Advisor:
@@ -144,28 +145,26 @@ class Advisor:
         lane = lanes.assign([e.id for e in draft.enemies], [a.id for a in draft.allies], position, None,
                             self.engine.positions, draft.ally_pos) if draft.enemies and self.engine.positions else None
         duo = (self.duo["name"] or "双排队友") if self.duo and self.familiar(self.duo["career"]) is not None else None
+        rest = self.draft_rest(draft, position) if draft.allies or draft.enemies or draft.my_hero else None
         if draft.my_hero:
             return Advice(position, draft, [], [], threat, lanes=lane, lane_tips=self.lane_tips(draft.my_hero, lane),
-                          team=self.team_slots(draft, position), duo=duo)
+                          team=self.team_slots(draft, position), duo=duo, rest=rest)
         res = self._suggest(draft, position)
-        if draft.allies or draft.enemies:
-            rest = self.draft_rest(draft, position)
-            for s in res:
-                s.team = rest
         picks, targeted = self._split(res, self.cfg.top, self.cfg.top_other, bool(draft.enemies or draft.allies),
                                       self.career, self.pool)
         slots = self.team_slots(draft, position, picks + targeted) if draft.allies else []
         gated = self.cfg.familiar_games if self.familiar(self.career, self.pool) is not None else 0
         return Advice(position, draft, picks, targeted, threat, self.explain(picks + targeted, draft.enemies), lane,
-                      team=slots, familiar_min=gated, duo=duo)
+                      team=slots, familiar_min=gated, duo=duo, rest=rest)
 
     def draft_rest(self, draft: Draft, position: int) -> tuple[float, float]:
-        """已选队友 / 敌人对「全队」胜率的贡献（Engine.draft_rest）：位置用选人界面认出的，其余按常打位置猜（和分路同一个猜法）"""
+        """已选阵容的 (我方, 对面) logit（Engine.draft_rest）：选好的我按当前位置，队友用选人界面认出的位置，
+        其余按常打位置猜（和分路同一个猜法）"""
         pos = self.engine.positions
         mine = {g.hero: g.pos for g in lanes.guess([a.id for a in draft.allies], pos, taken={position}, fixed=draft.ally_pos)}
         theirs = {g.hero: g.pos for g in lanes.guess([e.id for e in draft.enemies], pos)}
-        return self.engine.draft_rest([(a.id, mine.get(a.id)) for a in draft.allies],
-                                      [(e.id, theirs.get(e.id)) for e in draft.enemies])
+        allies = [(a.id, mine.get(a.id)) for a in draft.allies] + ([(draft.my_hero.id, position)] if draft.my_hero else [])
+        return self.engine.draft_rest(allies, [(e.id, theirs.get(e.id)) for e in draft.enemies])
 
     def lane_tips(self, me: Hero, lane: lanes.Lanes | None) -> list[explain.Why]:
         if not (self.kb and lane and me.id in self.kb.heroes):
@@ -236,6 +235,9 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
     d = advice.draft
     side_cn = {"radiant": "天辉", "dire": "夜魇"}.get(side or "", "阵营未知")
     out = [("title", f"选人助手 · {POSITION_NAMES[advice.position]} · {side_cn}")]
+    rate = draft_rate(advice, side)
+    if rate:
+        out.append(("dim", f"阵容胜率 {rate['winrate']:.1f}%（{rate['note']}）"))
     if d.enemies:
         out.append(("dim", "敌：" + " ".join(h.name_cn for h in d.enemies)))
     if d.allies:
@@ -256,8 +258,6 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
                 situ = f"（克制 {b['counter']:+.1f} 配合 {b['syn']:+.1f}）" if title == TARGETED_TITLE else ""
                 out.append(("row", f"{s.hero.name_cn}  {s.winrate:.1f}%{situ}　{s.reason()}"))
                 out.append(("dim", "　算法 " + s.calc_text(POSITION_NAMES[advice.position])))
-                if s.team is not None:     # 选它之后全队的胜率（加上已选队友、已选敌人、阵营）
-                    out.append(("dim", "　" + s.team_text(side)))
                 if s.vs:
                     out.append(("dim", "　对位 " + "  ".join(f"{e.name_cn} {pct(v):+.1f}" for e, v in s.vs)))
                 if s.syn:          # 和每个已选队友的配合，负的也列出来（相互拖累，例如抢同一个位置）
@@ -323,8 +323,6 @@ def render_view(advice: Advice, side: str | None) -> dict:
                  "syn": [{**hero_ref(a), "delta": round(pct(v), 1)} for a, v in s.syn],
                  # 胜率怎么来的：整体 → 位置 → 冷门打折 → 自身（小计）→ 克制 → 配合 → 其他，依次加起来 = winrate
                  "calc": calc_view(s, advice.position),
-                 # 选它之后全队胜率：这手 → 队友 → 对面 → 阵营，依次加起来 = team_winrate；还没人选时 None
-                 "team": team_rate_view(s, side),
                  "why": [w.__dict__ for w in advice.why.get(s.hero.id, [])]} for s in group]})
     threat = None
     if advice.threat:
@@ -336,6 +334,7 @@ def render_view(advice: Advice, side: str | None) -> dict:
         "position_name": POSITION_NAMES[advice.position],
         "side": side,
         "side_name": {"radiant": "天辉", "dire": "夜魇"}.get(side or "", "阵营未知"),
+        "draft_rate": draft_rate(advice, side),   # 叠加层标题栏的「阵容 xx%」；还没人选时 None
         "enemies": [hero_ref(h) for h in d.enemies],
         "allies": [hero_ref(h) for h in d.allies],
         "bans": [hero_ref(h) for h in d.bans],
@@ -376,12 +375,15 @@ def team_pick(s: Suggestion, position: int) -> dict:
             **({"unfamiliar": list(s.unfamiliar)} if s.unfamiliar is not None else {})}
 
 
-def team_rate_view(s: Suggestion, side: str | None) -> dict | None:
-    b = s.team_breakdown(side)
-    if b is None:
+def draft_rate(advice: Advice, side: str | None) -> dict | None:
+    """已选阵容的胜率：{winrate（%）, note（说明一句）}。我方已选（含选好的我）+ 对面已选 + 阵营（天辉 +RADIANT_EDGE / 夜魇 −），
+    没选的人当平均水平；对所有候选都一样，所以只在顶上放一次（玩家 2026-10-30：每张卡片一行「全队」太挤）。还没人选时 None"""
+    if advice.rest is None:
         return None
-    return {"winrate": round(s.team_winrate(side), 1),
-            "calc": [{"kind": k, "name": n, "value": round(v, 1)} for k, n, v in b]}
+    edge = {"radiant": RADIANT_EDGE, "dire": -RADIANT_EDGE}.get(side or "", 0.0)
+    me = "含你" if advice.draft.my_hero else "你这手按平均算"
+    return {"winrate": round(sigmoid(sum(advice.rest) + edge) * 100, 1),
+            "note": f"已选的英雄 + {SIDE_NAMES.get(side or '', '阵营未知')}，{me}"}
 
 
 def calc_view(s: Suggestion, position: int) -> list[dict]:

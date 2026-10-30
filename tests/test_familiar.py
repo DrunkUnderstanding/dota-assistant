@@ -157,8 +157,8 @@ class BreakdownTest(unittest.TestCase):
         self.assertIn(("dim", "　算法 " + s.calc_text("三号位")), adv.render_lines(advice, None))
 
 
-class TeamRateTest(unittest.TestCase):
-    """选它之后全队的胜率：卡片胜率（这手）+ 已选队友 + 已选敌人 + 阵营，和回测预测整局胜负的式子一致"""
+class DraftRateTest(unittest.TestCase):
+    """叠加层顶上的「阵容」胜率：已选的我方（含选好的我）+ 已选对面 + 阵营，和回测预测整局胜负的式子一致"""
 
     def engine(self):
         stats = make_stats({(TIDE.id, PL.id): (20000, 0.56), (CM.id, PL.id): (20000, 0.45), (AXE.id, WK.id): (20000, 0.53)})
@@ -166,48 +166,45 @@ class TeamRateTest(unittest.TestCase):
                         [min(PL.id, WK.id), max(PL.id, WK.id), 20000, 10600]]
         return Engine(HeroDB(HEROES), stats)
 
-    def test_same_formula_as_whole_draft(self):
-        # 全队 logit = 我方各人自身强度之和 − 对面之和 + 我方每人对对面每人的克制 + 我方两两配合 − 对面两两配合（backtest.predict_drafts）
-        eng = self.engine()
-        allies, enemies = [CM], [PL, WK]
-        s = next(x for x in eng.suggest(position=3, allies=allies, enemies=enemies, position_filter=False, top=None)
-                 if x.hero == TIDE)
-        s.team = eng.draft_rest([(a.id, None) for a in allies], [(e.id, None) for e in enemies])
-        ours, theirs = [TIDE.id, CM.id], [PL.id, WK.id]
-        whole = (sum(eng.base[h] for h in ours) - sum(eng.base[h] for h in theirs)
-                 + sum(eng.advantage(a, e) for a in ours for e in theirs)
-                 + eng.synergy(TIDE.id, CM.id) - eng.synergy(PL.id, WK.id))
-        self.assertAlmostEqual(s.team_winrate(None), sigmoid(whole) * 100, places=9)
-        self.assertAlmostEqual(s.team_winrate("radiant"), sigmoid(whole + E.RADIANT_EDGE) * 100, places=9)
-        self.assertAlmostEqual(s.team_winrate("dire"), sigmoid(whole - E.RADIANT_EDGE) * 100, places=9)
-        # 各步加起来正好等于全队胜率，第一步就是卡片上的胜率
-        steps = s.team_breakdown("radiant")
-        self.assertEqual([(k, n) for k, n, _ in steps], [("start", "这手"), ("ally", "队友"), ("enemy", "对面"), ("side", "天辉")])
-        self.assertAlmostEqual(steps[0][2], s.winrate, places=9)
-        self.assertAlmostEqual(sum(v for _, _, v in steps), s.team_winrate("radiant"), places=9)
-        self.assertLess(steps[1][2], 0)           # 水晶室女被幻影长矛手克
-        self.assertLess(steps[2][2], 0)           # 对面幻影长矛手 + 冥魂大帝配合好
-        self.assertEqual(s.team_breakdown(None)[3], ("side", "阵营", 0.0))
-        text = s.team_text("dire")
-        self.assertTrue(text.startswith(f"全队 {s.team_winrate('dire'):.1f}%＝这手 {s.winrate:.1f} －队友 "))
-        self.assertIn("－夜魇", text)
+    @staticmethod
+    def whole(eng, ours, theirs):
+        """整局 logit = 我方各人自身强度之和 − 对面之和 + 我方每人对对面每人的克制 + 我方两两配合 − 对面两两配合（backtest.predict_drafts）"""
+        pairs = lambda hs: [(a, b) for i, a in enumerate(hs) for b in hs[i + 1:]]
+        return (sum(eng.base[h] for h in ours) - sum(eng.base[h] for h in theirs)
+                + sum(eng.advantage(a, e) for a in ours for e in theirs)
+                + sum(eng.synergy(a, b) for a, b in pairs(ours)) - sum(eng.synergy(a, b) for a, b in pairs(theirs)))
 
-    def test_advise_shows_team_only_with_draft(self):
+    def test_same_formula_as_whole_draft(self):
+        eng = self.engine()
+        ally, enemy = eng.draft_rest([(TIDE.id, None), (CM.id, None)], [(PL.id, None), (WK.id, None)])
+        self.assertAlmostEqual(ally + enemy, self.whole(eng, [TIDE.id, CM.id], [PL.id, WK.id]), places=12)
+        self.assertLess(enemy, 0)                 # 对面幻影长矛手 + 冥魂大帝配合好
+
+    def test_advise_rate_on_top_only(self):
         a = advisor()
         a.engine = self.engine()
-        empty = a.advise(adv.Draft(), 3)
-        self.assertTrue(all(s.team is None for s in empty.picks))
-        self.assertIsNone(adv.render_view(empty, "radiant")["groups"][0]["items"][0]["team"])
-        self.assertFalse(any(t.startswith("　全队") for _, t in adv.render_lines(empty, "radiant")))
+        empty = a.advise(adv.Draft(), 3)          # 还没人选：不显示
+        self.assertIsNone(adv.render_view(empty, "radiant")["draft_rate"])
+        self.assertFalse(any(t.startswith("阵容胜率") for _, t in adv.render_lines(empty, "radiant")))
+        # 我还没选：只算已选的（我这手按平均）；天辉 +RADIANT_EDGE、夜魇 −、不知道阵营 0
         advice = a.advise(adv.Draft(allies=[CM], enemies=[PL, WK]), 3)
-        first = advice.picks[0]
-        self.assertEqual(first.hero, TIDE)                         # 排名没变：全队那几项对每个候选都一样
-        self.assertEqual(len({s.team for s in advice.picks + advice.targeted}), 1)
-        self.assertIn(("dim", "　" + first.team_text("radiant")), adv.render_lines(advice, "radiant"))
-        team = adv.render_view(advice, "radiant")["groups"][0]["items"][0]["team"]
-        self.assertEqual(team["winrate"], round(first.team_winrate("radiant"), 1))
-        self.assertEqual([c["kind"] for c in team["calc"]], ["start", "ally", "enemy", "side"])
-        json.dumps(team, ensure_ascii=False)
+        whole = self.whole(a.engine, [CM.id], [PL.id, WK.id])
+        for side, edge in (("radiant", E.RADIANT_EDGE), ("dire", -E.RADIANT_EDGE), (None, 0.0)):
+            self.assertEqual(adv.render_view(advice, side)["draft_rate"]["winrate"], round(sigmoid(whole + edge) * 100, 1))
+        rate = adv.render_view(advice, "radiant")["draft_rate"]
+        self.assertEqual(rate["note"], "已选的英雄 + 天辉，你这手按平均算")
+        lines = adv.render_lines(advice, "radiant")
+        self.assertEqual(lines[1], ("dim", f"阵容胜率 {rate['winrate']:.1f}%（{rate['note']}）"))
+        self.assertFalse(any(t.startswith("　全队") for _, t in lines))           # 卡片上不再每张一行
+        self.assertNotIn("team", adv.render_view(advice, "radiant")["groups"][0]["items"][0])
+        self.assertEqual(advice.picks[0].hero, TIDE)                             # 排名不受影响
+        # 我选好了：算上我
+        picked = a.advise(adv.Draft(allies=[CM], enemies=[PL, WK], my_hero=TIDE), 3)
+        rate = adv.render_view(picked, "dire")["draft_rate"]
+        self.assertEqual(rate["winrate"], round(sigmoid(self.whole(a.engine, [CM.id, TIDE.id], [PL.id, WK.id])
+                                                        - E.RADIANT_EDGE) * 100, 1))
+        self.assertEqual(rate["note"], "已选的英雄 + 夜魇，含你")
+        json.dumps(rate, ensure_ascii=False)
 
 
 class CareerDataTest(unittest.TestCase):

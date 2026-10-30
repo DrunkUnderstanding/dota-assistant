@@ -233,17 +233,6 @@ function calcRow(item, compact = false) {
   return `<span class="pick-calc ${compact ? 'is-compact' : ''}">${base}${terms}${eq}</span>`;
 }
 
-// 选它之后全队的胜率（advisor.team_rate_view）：从这张卡片的胜率起，加上已选队友、已选敌人、阵营，没选的人当平均水平；
-// 卡片右上角的胜率只算这个英雄自己，排名按它排（其余几项对每个候选都一样）
-function teamRow(item) {
-  if (!item.team) return '';
-  const [start, ...rest] = item.team.calc;
-  const terms = rest.filter((x) => Math.abs(x.value) >= 0.05)
-    .map((x) => `<span class="${x.value < 0 ? 'is-neg' : ''}">${CALC_SIGN(x.value)}${esc(x.name)} <b>${Math.abs(x.value).toFixed(1)}</b></span>`).join('');
-  return `<span class="pick-calc calc-team" title="选它之后我方整个阵容的胜率：这手（卡片上的胜率）加上已选队友、已选敌人和阵营，还没选的人按平均水平算">`
-    + `<span class="calc-eq">全队 <b>${item.team.winrate.toFixed(1)}</b></span><span>＝这手 <b>${start.value.toFixed(1)}</b></span>${terms}</span>`;
-}
-
 // targeted =「针对这局」：右上角胜率前面醒目地写这一手的克制、配合（这组就是按它俩挑的，玩家 2026-10-30 要一眼看到，
 // 而且要分开、不同颜色：克制绿、配合蓝，和理由标签「克 / 配」同色）。数值取 calc 里的克制 / 配合两步（百分点）
 const situBadge = (c, kind, label) => {
@@ -269,7 +258,6 @@ function card(item, rank, targeted = false) {
         <div class="pick-bar"><i style="width:${barPct(item.winrate)}%"></i></div>
         <div class="pick-tags">${tags}</div>
         ${calcRow(item)}
-        ${teamRow(item)}
         ${vsRow(item)}
         ${vsRow(item, true)}
         ${why ? `<div class="pick-why">${why}</div>` : ''}
@@ -285,6 +273,7 @@ function draftHTML(v) {
     <header class="ov-head">
       <span class="ov-pos">${esc(v.position_name)}</span>${v.position_auto ? '<span class="ov-auto" title="从选人界面名字下面的位置自动认出来的">自动</span>' : ''}
       <span class="ov-side ${sideCls}">${esc(v.side_name)}</span>
+      ${v.draft_rate ? `<span class="ov-rate" title="${esc(`阵容胜率：${v.draft_rate.note}`)}">阵容 <b>${v.draft_rate.winrate.toFixed(1)}</b>%</span>` : ''}
       <span class="ov-brand">选人助手</span>
     </header>`;
   let a = '';
