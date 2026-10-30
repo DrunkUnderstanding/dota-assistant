@@ -30,7 +30,8 @@ let userHeight = null;   // 拉过的高度；null = 没拉过，窗口到屏幕
 let locked = true;       // 固定：只有锁和 × 接鼠标；解锁：整张卡片都接（好拖动）
 let drag = null;         // 拖动中：{ dx, dy, timer }
 let resize = null;       // 改大小中：{ mode: 'w' 宽 | 'h' 高 | 'wh' 都改, dx, dy, timer }
-const MIN_WIDTH = 300;   // 再窄推荐卡片就挤不下了（Python 那边 consts.OVERLAY_WIDTH 同一个下限）
+const MIN_WIDTH = 400;   // 选人推荐不缩小（放不下上下滚），再窄卡片就挤出界、「针对这局」的四字名被截断（无头浏览器量的：380 不出界、400 名字完整）；
+                         // Python 那边 consts.OVERLAY_WIDTH 同一个下限
 const MIN_HEIGHT = 160;  // 再矮卡片缩到最小也放不下几行
 let hitRects = [];       // 页面报来的可点区域（窗口内 CSS 像素 = 逻辑像素）：固定时是锁和 ×，解锁时是整个窗口
 let grabbing = false;    // 窗口现在是否接鼠标

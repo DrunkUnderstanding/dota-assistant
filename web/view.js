@@ -265,6 +265,21 @@ function card(item, rank, targeted = false) {
     </div>`;
 }
 
+// 「推荐」「针对这局」等推荐组可以收起（玩家 2026-10-30 要的）：收起后一个英雄一个小头像 + 胜率，点了照样看「选它怎么打」。
+// 收起了哪几组按组名记在浏览器本地存储里，换局 / 重开助手都保持（存不了就只在这次开着时记）
+const FOLD_KEY = 'ov-folded-groups';
+const groupFolded = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); }
+})();
+function toggleGroup(title) {
+  if (!groupFolded.delete(title)) groupFolded.add(title);
+  try { localStorage.setItem(FOLD_KEY, JSON.stringify([...groupFolded])); } catch { /* 存不了就算了 */ }
+}
+function mini(item, rank) {
+  return `<span class="pick-mini ${rank === 0 ? 'is-top' : ''}" data-id="${item.id}" title="${esc(`${item.name} ${item.winrate.toFixed(1)}%\n点一下：看选${item.name}怎么打这套阵容`)}">`
+    + `${face(item)}<b>${item.winrate.toFixed(1)}</b></span>`;
+}
+
 // 内容分两栏：A = 阵容 + 分路，B = 我这路怎么打 / 推荐 / 威胁。窄的时候上下接着排（顺序不变），
 // 叠加层拉宽到 640px 以上左右并排（base.css 的容器查询），整张卡片矮一半，不容易超出屏幕
 function draftHTML(v) {
@@ -299,7 +314,12 @@ function draftHTML(v) {
   let rank = 0;
   for (const g of v.groups) {
     const note = g.note ? `<small>${esc(g.note)}</small>` : '';
-    html += `<section class="ov-group"><h3>${esc(g.title)}${note}</h3>${g.items.map((it) => card(it, rank++, g.targeted)).join('')}</section>`;
+    const folded = groupFolded.has(g.title);
+    const fold = `<button class="group-fold" type="button" data-group-fold="${esc(g.title)}" title="${folded ? '展开：看每个推荐的理由' : '收起：只留头像和胜率'}">`
+      + `${folded ? `▾ 展开 ${g.items.length}` : '▴ 收起'}</button>`;
+    const items = folded ? `<div class="pick-minis">${g.items.map((it) => mini(it, rank++)).join('')}</div>`
+      : g.items.map((it) => card(it, rank++, g.targeted)).join('');
+    html += `<section class="ov-group ${folded ? 'is-folded' : ''}"><h3><span>${esc(g.title)}${note}</span>${fold}</h3>${items}</section>`;
   }
   if (v.skipped?.length) {                           // 这局点 × 去掉的：点名字恢复，新一局自动清空
     html += `<div class="ov-skipped"><span>这局不想玩</span>${v.skipped.map((h) => `<button type="button" data-unskip="${h.id}" title="恢复推荐${esc(h.name)}">${esc(h.name)} ↺</button>`).join('')}</div>`;
@@ -311,8 +331,9 @@ function draftHTML(v) {
   if (v.threat) {
     html += `<div class="ov-threat">${face(v.threat, 'face-sm')}<span>注意 <b>${esc(v.threat.name)}</b> 对我方威胁最大</span><em>${v.threat.delta > 0 ? '+' : ''}${v.threat.delta.toFixed(1)}%</em></div>`;
   }
-  if (!a || !html) return head + a + html;           // 只有一栏的内容，不用分
-  return `${head}<div class="ov-cols"><div class="ov-col">${a}</div><div class="ov-col">${html}</div></div>`;
+  // 标题栏下面的都放进 .ov-body：叠加层窗口放不下时只有这一块上下滚（overlay.html），标题栏和右上角按钮不动
+  if (!a || !html) return `${head}<div class="ov-body">${a}${html}</div>`;   // 只有一栏的内容，不用分
+  return `${head}<div class="ov-body"><div class="ov-cols"><div class="ov-col">${a}</div><div class="ov-col">${html}</div></div></div>`;
 }
 
 // closable：局内提醒，带关闭按钮（点它或按显隐热键关掉）
@@ -366,13 +387,16 @@ export function renderOverlay(root, view) {
   root._view = view;                                  // 点「展开 / 收起」时按这份重画
   if (root._html === html) return false;
   root._html = html;
+  const top = root.querySelector('.ov-body')?.scrollTop || 0;   // 重画（每次局面变了）不把滚到的位置弹回顶上
   root.innerHTML = html;
+  const body = root.querySelector('.ov-body');
+  if (body && top) body.scrollTop = top;
   return true;
 }
 
 // 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，推荐英雄的 × → 这局不想玩，「这局不想玩」里的名字 → 恢复，
 // 剩余位置 → 切位置，要点卡片的标签 → 翻页，
-// 要点小节 / 剩余位置的「展开 / 收起」→ 只在本地重画，× → 关卡片
+// 要点小节 / 剩余位置 / 推荐组的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
     const slot = e.target.closest('.slot[data-slot]');
@@ -412,6 +436,11 @@ export function bindOverlayClicks(root, act) {
       if (!teamUnfolded.delete(p)) teamUnfolded.add(p);
       return renderOverlay(root, root._view);
     }
+    const groupFold = e.target.closest('.group-fold[data-group-fold]');
+    if (groupFold) {
+      toggleGroup(groupFold.dataset.groupFold);
+      return renderOverlay(root, root._view);
+    }
     const tab = e.target.closest('.brief-tab[data-page]');
     const pos = e.target.closest('.team-row[data-pos]');
     if (pos) return act('set', { key: 'position', value: Number(pos.dataset.pos) });
@@ -420,7 +449,7 @@ export function bindOverlayClicks(root, act) {
     if (skip) return act('skip_hero', { hero_id: Number(skip.dataset.skip) });
     const unskip = e.target.closest('[data-unskip]');
     if (unskip) return act('unskip_hero', { hero_id: Number(unskip.dataset.unskip) });
-    const pick = e.target.closest('.pick[data-id]');
+    const pick = e.target.closest('.pick[data-id], .pick-mini[data-id]');
     if (pick) return act('explain_pick', { hero_id: Number(pick.dataset.id) });
     if (e.target.closest('.ov-close')) act('dismiss_coach');
   });

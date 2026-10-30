@@ -20,6 +20,19 @@
   html:has(body.preview) { height: auto; overflow: auto; background: #0d110c; }
   body.preview { overflow: visible; }
 
+  /* 选人推荐（标题栏下面是 .ov-body）：窗口放不下时不缩小字、也不因此变成左右两栏（玩家 2026-10-30 要的），
+     卡片最高到窗口底，标题栏不动、下面这块上下滚。滚动条放在卡片右边的留白里，有没有滚动条排版都一样宽 */
+  body:not(.preview) .ov:has(> .ov-body) { display: flex; flex-direction: column; max-height: calc(100vh - 4px); }   /* 4 = body 上下 padding */
+  .ov:has(> .ov-body) > * { flex: none; }
+  body:not(.preview) .ov > .ov-body {
+    flex: 0 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+    margin-right: -10px; padding-right: 4px; scrollbar-gutter: stable;
+  }
+  .ov-body::-webkit-scrollbar { width: 6px; }
+  .ov-body::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 3px; }
+  .ov-body::-webkit-scrollbar-thumb { background: rgba(216, 167, 78, 0.55); border-radius: 3px; }
+  .ov-body::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
   /* 右上角两个按钮：锁（关着 = 位置固定、鼠标穿透；打开 = 按住卡片任意处拖动）、×（关闭叠加层） */
   .ov-wrap { position: relative; }
   .ov-head { padding-right: 60px; }               /* 给右上角按钮让出位置 */
@@ -41,7 +54,7 @@
   .ov.is-hidden ~ .ov-tools { display: none; }
   body.unlocked { cursor: grab; user-select: none; }
   body.unlocked.dragging { cursor: grabbing; }
-  /* 解锁时整个窗口画成金色虚线框：框就是叠加层占的地方，卡片放不下会在框里整体缩小。框里任意处按住都能拖 */
+  /* 解锁时整个窗口画成金色虚线框：框就是叠加层占的地方，选人推荐放不下在框里上下滚，局内卡片放不下整体缩小。框里任意处按住都能拖 */
   .ov-frame {
     display: none; position: fixed; inset: 0; pointer-events: none;
     border: 2px dashed var(--gold); border-radius: 8px; background: rgba(236, 192, 106, 0.06);
@@ -83,7 +96,7 @@
 </div>
 <div class="ov-frame"></div>
 <div class="ov-resize ov-resize-w" data-mode="w" title="按住左右拖：改叠加层宽度"></div>
-<div class="ov-resize ov-resize-h" data-mode="h" title="按住上下拖：改叠加层高度（卡片放不下会整体缩小）"></div>
+<div class="ov-resize ov-resize-h" data-mode="h" title="按住上下拖：改叠加层高度（选人推荐放不下就上下滚，局内卡片放不下会整体缩小）"></div>
 <div class="ov-resize ov-resize-wh" data-mode="wh" title="按住拖：宽度和高度一起改"></div>
 <script type="module">
 import { act, connect } from './api.js';
@@ -120,12 +133,24 @@ let lastRects = '';
 function reportHitRects() {
   // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」，卡片上的 × 去掉）+「这局不想玩」的恢复按钮 + 要点卡片的翻页标签 / 展开收起
   // + 剩余位置的空位置（点了切位置）/ 展开收起 + 顶栏对照的格子（点了帮认）和打开的「这格是谁」；其余地方照样点穿
-  const hits = ['.pick[data-id]', '.ov-skipped button', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold',
-    '.slot[data-slot]', '.slot-picker'];
+  // + 推荐组的展开收起 / 收起后的小头像
+  const hits = ['.pick[data-id]', '.pick-mini[data-id]', '.group-fold', '.ov-skipped button', '.brief-tab[data-page]', '.brief-fold',
+    '.team-row[data-pos]', '.team-fold', '.slot[data-slot]', '.slot-picker'];
   const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [];
+  // 选人推荐能上下滚：滚出去的部分不算（裁到滚动区里），滚动条那一条也接鼠标（拖它滚；滚轮在上面这些可点的地方也能滚）
+  const scroller = root.querySelector(':scope > .ov-body');
+  const clip = scroller?.getBoundingClientRect();
+  const boxes = els.map((el) => {
+    const r = el.getBoundingClientRect();
+    if (!clip || !scroller.contains(el)) return { x: r.left, y: r.top, r: r.right, b: r.bottom };
+    return { x: Math.max(r.left, clip.left), y: Math.max(r.top, clip.top), r: Math.min(r.right, clip.right), b: Math.min(r.bottom, clip.bottom) };
+  });
+  if (locked && scroller && !root.classList.contains('is-hidden') && scroller.scrollHeight > scroller.clientHeight + 1) {
+    boxes.push({ x: clip.right - 10, y: clip.top, r: clip.right, b: clip.bottom });
+  }
   const rects = locked
-    ? els.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height)
-      .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.width), h: Math.ceil(r.height) }))
+    ? boxes.filter((r) => r.r > r.x && r.b > r.y)
+      .map((r) => ({ x: Math.floor(r.x), y: Math.floor(r.y), w: Math.ceil(r.r - r.x), h: Math.ceil(r.b - r.y) }))
     : [{ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight }];
   const key = JSON.stringify(rects);
   if (key === lastRects) return;
@@ -133,8 +158,9 @@ function reportHitRects() {
   shell?.setHitRects(rects);
 }
 new ResizeObserver(() => { fitHeight(); reportHitRects(); }).observe(wrap);
+root.addEventListener('scroll', reportHitRects, true);   // 滚动区滚了，里面的卡片位置跟着变（scroll 不冒泡，在捕获阶段收）
 
-// ---------- 放不下就缩小：卡片比窗口（到屏幕底）高时整体等比缩小，最小 55% ----------
+// ---------- 放不下就缩小（局内卡片）：卡片比窗口（到屏幕底）高时整体等比缩小，最小 55%；选人推荐不缩，上下滚 ----------
 // zoom 缩的是字和间距；宽度按缩放换算，卡片仍然正好占满窗口宽度（缩小后一行能放更多，宽到 640 还会分两栏）
 const MIN_ZOOM = 0.55;
 let zoom = 1;
@@ -146,6 +172,8 @@ function setZoom(z) {
 function fitHeight() {
   // 浏览器里 ?preview=1 预览：页面本来就能往下滚，不缩放（缩放会把宽度改成整个浏览器窗口宽，卡片被撑满屏、右边出界）
   if (document.body.classList.contains('preview')) { setZoom(1); return; }
+  // 选人推荐（有 .ov-body）：字不缩、不因为缩小变两栏，卡片最高到窗口底，放不下的在 .ov-body 里上下滚（样式在上面）
+  if (root.querySelector(':scope > .ov-body')) { setZoom(1); return; }
   // 从 100% 往下一档一档试，取第一个放得下的。不按比例直接算：缩小会换排版（换行、宽了分两栏），高度不跟缩放成比例
   const avail = window.innerHeight - 6;
   for (let z = 1; ; z = Math.round((z - 0.05) * 100) / 100) {

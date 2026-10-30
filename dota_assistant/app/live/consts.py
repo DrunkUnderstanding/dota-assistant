@@ -15,7 +15,8 @@ SHOTS_DIR = ROOT / "shots"
 OVERLAY_FILE = DATA_DIR / "overlay.json"       # 叠加层拖动后的位置 + 是否固定（Electron 那边拖完报过来）
 FIX_FILE = DATA_DIR / "fixes.jsonl"            # 玩家帮认 / 改过的格子（一行一次），回头看学到的模板管不管用、哪次填错了
 OPACITY_MIN = 0.3                              # 叠加层底色再透就看不清字了
-OVERLAY_WIDTH = (300, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内
+OVERLAY_WIDTH = (400, 4000)                    # 拉宽叠加层时能存的宽度（逻辑像素），Electron 那边还会收到屏幕以内；
+                                               # 下限同 main.js 的 MIN_WIDTH（选人推荐不缩小、放不下上下滚，再窄卡片就挤出界）
 OVERLAY_HEIGHT = (120, 4000)                   # 拉过的高度，同上；没拉过 = 到屏幕底
 SIDES = ("radiant", "dire")
 DEATH_MIN_SHOW = 3                             # 死亡卡片至少显示几秒（复活很快 / 演示加速时也看得到）
