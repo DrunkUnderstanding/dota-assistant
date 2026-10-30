@@ -32,15 +32,16 @@ class SettingsMixin:
                                 for f in consts.HOTKEY_ACTIONS}).start()
 
     def save_settings(self, a: dict) -> None:
-        """控制面板「设置」：账号（好友代码、STRATZ token）和 AI 打法来源写进 config.toml。
+        """控制面板「设置」：账号（好友代码、双排队友好友代码、STRATZ token）和 AI 打法来源写进 config.toml。
         密钥字段没传 = 不改（面板不会把已存的密钥发回页面）；传空字符串 = 清掉。
         AI 设置下一局就生效；账号要重启助手才会重新拉个人数据和分位置数据。"""
         updates = {}
-        if "account_id" in a:
-            acc = str(a["account_id"] or "0").strip()
-            if not acc.isdigit():
-                raise ValueError("好友代码应该是一串数字")
-            updates["account_id"] = int(acc)
+        for key in ("account_id", "duo_account_id"):
+            if key in a:
+                acc = str(a[key] or "0").strip()
+                if not acc.isdigit():
+                    raise ValueError("好友代码应该是一串数字")
+                updates[key] = int(acc)
         for key, name in consts.SECRET_FIELDS.items():
             if key in a:
                 val = str(a[key] or "").strip()
@@ -71,7 +72,7 @@ class SettingsMixin:
             return
         hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in consts.HOTKEY_ACTIONS)
         account_changed = any(updates.get(k, getattr(self.cfg, k)) != getattr(self.cfg, k)
-                              for k in ("account_id", "stratz_token"))
+                              for k in ("account_id", "duo_account_id", "stratz_token"))
         dota_changed = updates.get("dota_dir", self.cfg.dota_dir) != self.cfg.dota_dir
         path = config.save(updates, self.config_file)
         for k, v in updates.items():
@@ -102,7 +103,7 @@ class SettingsMixin:
     def settings_view(self) -> dict:
         """给面板「设置」窗口看的；密钥本身不发给页面，只给末 4 位让玩家认得出是哪个"""
         c = self.cfg
-        return {"account_id": c.account_id, "stratz_token": consts._mask(c.stratz_token), "ai_plan": c.ai_plan,
+        return {"account_id": c.account_id, "duo_account_id": c.duo_account_id, "stratz_token": consts._mask(c.stratz_token), "ai_plan": c.ai_plan,
                 "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": consts._mask(c.ai_api_key),
                 "ai_base_url": c.ai_base_url, "providers": llm.PROVIDERS,
                 "dota_dir": c.dota_dir, "dota_found": str(self.dota_dir or ""),

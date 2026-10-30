@@ -38,7 +38,9 @@ class DraftMixin:
         # 队友排的位置（OCR）：格子顺序和 team_roles 一一对应
         ally_pos = {h.id: r for t, r in zip(self.slots[side], self.team_roles)
                     if r and (h := self._hero(t)) and h in allies}
-        return adv.Draft(allies, team[other], bans, my, ally_pos)
+        taken = {h.id for h in (*team["radiant"], *team["dire"], *bans)}
+        skip = [self.db.by_id[i] for i in self.skipped if i in self.db.by_id and i not in taken]
+        return adv.Draft(allies, team[other], bans, my, ally_pos, skip)
 
     def refresh(self, force_speech: bool = False) -> None:
         draft = self.current_draft()
@@ -114,11 +116,29 @@ class DraftMixin:
                                     and consts._colorful(cur) >= consts._colorful(blank) + consts.PICKED_COLOR_GAIN)
         return cache[(side, index)]
 
+    def skip_hero(self, hero_id: int) -> None:
+        """推荐卡片上点 ×：这局不想玩它，从给我的推荐里去掉、后面的顺位补上来（玩家朋友 2026-10-30 提的）"""
+        h = self.db.by_id.get(hero_id)
+        if h is None:
+            raise ValueError("没有这个英雄")
+        if hero_id not in self.skipped:
+            self.skipped.append(hero_id)
+        log.info("这局不想玩 %s（已去掉 %d 个）", h.name_cn, len(self.skipped))
+        self.message = f"这局不推荐{h.name_cn}了；点推荐下面「这局不想玩」里的名字能恢复"
+        self.refresh()
+
+    def unskip_hero(self, hero_id: int) -> None:
+        if hero_id in self.skipped:
+            self.skipped.remove(hero_id)
+            log.info("恢复推荐 %s", self.db.by_id[hero_id].name_cn)
+        self.refresh()
+
     def clear(self) -> None:
         self.slots = {s: [""] * 5 for s in consts.SIDES}
         self._named.clear()
         self.hints = {s: [{} for _ in range(5)] for s in consts.SIDES}
         self.bans_text = ""
+        self.skipped.clear()
         self.grid.reset()
         self.prev_draft = None
         self.refresh()

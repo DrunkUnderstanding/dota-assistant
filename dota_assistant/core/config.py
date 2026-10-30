@@ -34,6 +34,8 @@ class Config:
     position_filter: bool = True      # True=按位置粗筛候选
     top: int = 3                      # 「推荐」几个：按综合胜率排
     top_other: int = 3                # 「针对这局」几个：综合前 top 个之外按克制 + 配合挑（advisor.split_targeted）
+    familiar_games: int = 20          # 「推荐」只放生涯打过这么多局的英雄（OpenDota），不熟的只进「针对这局」并标出来；0 = 不分（advisor.split_targeted）
+    duo_account_id: int = 0           # 双排队友的好友代码：我选好以后「剩余位置」给队友的推荐按他会玩的分；0 = 不填
 
     # ---- 实时助手（python -m dota_assistant run）----
     monitor: int = 1                  # 截哪块屏幕（mss 编号，1=主屏）

@@ -195,7 +195,6 @@ img { display: block; }
 .team-row.is-taken.is-cur { opacity: 1; }
 .team-row.is-me .team-label, .team-row.is-me em { color: var(--gold); font-weight: 700; }
 .team-row.is-me .lane-hero .face-sm { box-shadow: inset 0 -2px 0 var(--gold); }
-.team-row.is-best { border-color: rgba(216, 167, 78, 0.45); background: var(--gold-soft); }
 .team-label { width: 40px; flex: none; font-size: 11px; color: var(--text-dim); }
 .team-row.is-cur .team-label { color: var(--gold); font-weight: 700; }
 .team-picks { display: flex; align-items: center; gap: 6px; }
@@ -211,13 +210,21 @@ img { display: block; }
 .team-row em ~ .team-fold { margin-left: 4px; }
 .team-pick { display: flex; align-items: center; gap: 3px; }
 .team-pick b { font: 600 11px/1 var(--num); color: var(--text-dim); }
+.team-pick.is-unfamiliar .face-sm { opacity: 0.55; }
+.team-pick i { font-style: normal; font-size: 10px; color: var(--bad); white-space: nowrap; }
+.team-picks { min-width: 0; flex-wrap: wrap; }
+/* 展开后一个英雄一行：头像 名字 胜率 不熟 算法（算法太长就折到下一行） */
+.team-picks.is-list { flex-direction: column; align-items: stretch; gap: 2px; }
+.team-picks.is-list .team-grp { width: auto; }
+.team-pick.is-line { flex-wrap: wrap; gap: 2px 6px; }
+.team-pick-name { font-size: 11px; color: var(--text); white-space: nowrap; }
+.team-pick .pick-calc { font-size: 10.5px; }
 .team-none { font-size: 11px; color: var(--text-faint); }
 .team-warn { font-size: 11px; color: var(--bad); }
 .ov-team .lane-hero .face-sm { box-shadow: inset 0 -2px 0 var(--radiant); }
 .team-row em { margin-left: auto; font-style: normal; font-size: 11px; white-space: nowrap; }
 .team-row em + em { margin-left: 4px; }
 .team-cur { color: var(--text-dim); }
-.team-best { color: var(--gold); }
 
 /* 推荐 */
 .ov-group h3 {
@@ -225,6 +232,7 @@ img { display: block; }
   color: var(--text-dim);
 }
 .ov-group + .ov-group h3 { margin-top: 10px; }
+.ov-group h3 small { margin-left: 6px; font-weight: 400; letter-spacing: 0; color: var(--text-faint); }
 .pick {
   display: flex; gap: 10px; align-items: stretch;
   padding: 7px; margin-bottom: 6px; border-radius: var(--radius);
@@ -253,6 +261,30 @@ img { display: block; }
 }
 .pick-wr small { font-size: 11px; color: var(--text-dim); margin-left: 1px; }
 .pick-top .pick-wr { color: var(--gold); }
+/* 推荐头像右上角的 ×：这局不想玩。压在头像上，不占名字那一行的宽度（「针对这局」那行本来就挤）。
+   20px：叠加层放不下会整体缩小（Electron 实测缩到 0.6 左右），16px 时只剩 10px 不好点 */
+.pick .pick-art { position: relative; }
+.pick-skip {
+  position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 4px; background: rgba(10, 14, 20, 0.72);
+  color: var(--text-dim); font: 15px/1 var(--font); cursor: pointer;
+}
+.pick-skip:hover { color: #fff; border-color: var(--bad); background: rgba(229, 103, 92, 0.85); }
+.ov-skipped { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--text-faint); }
+.ov-skipped span { margin-right: 2px; }
+.ov-skipped button {
+  padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim); font: 11px/1.5 var(--font); cursor: pointer;
+}
+.ov-skipped button:hover { color: var(--text); border-color: var(--gold); }
+/* 「针对这局」卡片：胜率前面分开写克制（绿）、配合（蓝），负数红 */
+.pick-situs { margin-left: auto; display: flex; gap: 4px; }
+.pick-situs + .pick-wr { margin-left: 0; }
+.pick-situ { padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-size: 11px; }
+.pick-situ b { font: 700 14px/1 var(--num); font-variant-numeric: tabular-nums; }
+.situ-counter { color: var(--good); background: rgba(92, 199, 127, 0.14); }
+.situ-syn { color: var(--syn); background: rgba(94, 174, 234, 0.14); }
+.pick-situ.is-neg { color: var(--bad); background: rgba(229, 103, 92, 0.14); }
 .pick-bar { height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
 .pick-bar i { display: block; height: 100%; border-radius: 2px; background: linear-gradient(90deg, #8a6a2c, var(--gold)); }
 .pick-tags { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -272,7 +304,20 @@ img { display: block; }
 .vs-good b { color: var(--good); }
 .vs-bad b { color: var(--bad); }
 .vs-bad .face-xs { opacity: 0.85; }
+.vs-syn b { color: var(--syn); }
+.face-xs.face-ally { box-shadow: inset 0 -2px 0 var(--radiant); }   /* 配合那行是队友：底边用我方颜色 */
 .pick-why { display: flex; flex-direction: column; gap: 1px; }
+/* 胜率怎么来的：自身（整体 · 位置 · 局数少）＋克制＋配合＝最终 */
+.pick-calc.is-compact { display: inline-flex; flex-wrap: nowrap; white-space: nowrap; }
+.pick-calc { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; font-size: 11px; line-height: 1.35; color: var(--text-faint); }
+.pick-calc b { font-family: var(--num); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text-dim); }
+.pick-calc small { font-size: 10px; }
+.calc-counter b { color: var(--good); }
+.calc-syn b { color: var(--syn); }
+.calc-eq b { color: var(--text); }
+.pick-calc .is-neg b { color: var(--bad); }
+/* 选它之后全队的胜率：全队 54.3 ＝这手 61.7 －队友 3.1 －对面 5.0 ＋天辉 1.2 */
+.calc-team .calc-eq { color: var(--text-dim); }
 .why { margin: 0; font-size: 11.5px; line-height: 1.35; color: var(--text-dim); }
 .why-good { color: color-mix(in srgb, var(--good) 75%, var(--text-dim)); }
 .why-bad { color: color-mix(in srgb, var(--bad) 75%, var(--text-dim)); }
@@ -288,6 +333,8 @@ img { display: block; }
 .tag-risk { color: var(--risk); background: rgba(235, 157, 76, 0.13); }
 .tag-meta { color: var(--meta); background: var(--gold-soft); }
 .tag-me, .tag-pool { color: var(--me); background: rgba(173, 159, 240, 0.12); }
+/* 不熟：放在理由最前面，要比别的标签显眼 */
+.tag-unfamiliar { color: #ffd2cc; background: rgba(229, 103, 92, 0.32); font-weight: 600; }
 
 /* 已选 / 威胁 / 提醒 */
 .ov-picked {

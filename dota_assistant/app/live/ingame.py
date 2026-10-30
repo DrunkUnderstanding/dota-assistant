@@ -26,6 +26,7 @@ class InGameMixin:
             self.grid.reset()                    # 新一局：上一局的禁用不算
             self._crops = {"blank": {}, "sel": {}, "strat": {}, "game": {}}
             self._named.clear()
+            self.skipped.clear()                 # 上一局「不想玩」的不带到这一局
             # 上一局点 × 收起的叠加层、点开的「如果选它」卡片，新一局选人时自动恢复，不用再按热键
             self.user_hidden = False
             self.pick_key = None

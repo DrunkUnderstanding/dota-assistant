@@ -13,9 +13,12 @@
   /* ?preview=1：在浏览器里预览时垫一张像游戏画面的背景，方便看透明效果 */
   body.preview {
     height: auto; min-height: 100vh; padding: 40px;
-    background: radial-gradient(circle at 30% 20%, #3b4a3a, #1b2418 45%, #0d110c);
+    background: radial-gradient(circle at 30% 20%, #3b4a3a, #1b2418 45%, #0d110c) no-repeat, #0d110c;   /* 卡片比窗口高时下面接着暗色，不重复渐变 */
   }
   body.preview .ov-wrap { width: 420px; }
+  /* 预览时页面要能上下滚（叠加层窗口本身不滚，所以上面 html / body 都是 overflow: hidden） */
+  html:has(body.preview) { height: auto; overflow: auto; background: #0d110c; }
+  body.preview { overflow: visible; }
 
   /* 右上角两个按钮：锁（关着 = 位置固定、鼠标穿透；打开 = 按住卡片任意处拖动）、×（关闭叠加层） */
   .ov-wrap { position: relative; }
@@ -115,9 +118,9 @@ connect((s) => {
 // ---------- 可点区域：固定时只有右上角的锁和 × 等，解锁时整个窗口（虚线框）；Electron 据此切换鼠标穿透 ----------
 let lastRects = '';
 function reportHitRects() {
-  // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」）+ 要点卡片的翻页标签 / 展开收起
+  // 固定时：右上角按钮 + 推荐英雄卡片（点了看「选它怎么打」，卡片上的 × 去掉）+「这局不想玩」的恢复按钮 + 要点卡片的翻页标签 / 展开收起
   // + 剩余位置的空位置（点了切位置）/ 展开收起 + 顶栏对照的格子（点了帮认）和打开的「这格是谁」；其余地方照样点穿
-  const hits = ['.pick[data-id]', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold',
+  const hits = ['.pick[data-id]', '.ov-skipped button', '.brief-tab[data-page]', '.brief-fold', '.team-row[data-pos]', '.team-fold',
     '.slot[data-slot]', '.slot-picker'];
   const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [];
   const rects = locked
@@ -141,6 +144,8 @@ function setZoom(z) {
   wrap.style.width = z === 1 ? '' : `${(window.innerWidth - 4) / z}px`;   // 4 = body 左右 padding
 }
 function fitHeight() {
+  // 浏览器里 ?preview=1 预览：页面本来就能往下滚，不缩放（缩放会把宽度改成整个浏览器窗口宽，卡片被撑满屏、右边出界）
+  if (document.body.classList.contains('preview')) { setZoom(1); return; }
   // 从 100% 往下一档一档试，取第一个放得下的。不按比例直接算：缩小会换排版（换行、宽了分两栏），高度不跟缩放成比例
   const avail = window.innerHeight - 6;
   for (let z = 1; ; z = Math.round((z - 0.05) * 100) / 100) {

@@ -61,14 +61,16 @@ ACTIONS_BASE = frozenset(
     "set_slot set_bans set refresh clear rescan learn shot dismiss_coach show_brief explain_pick brief_page buyback ult "
     "name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings open_logs"
     " upgrade_check upgrade_install"           # 2026-10-29 更新助手（app/upgrade.py）
+    " skip_hero unskip_hero"                   # 2026-10-30 推荐卡片上点 × 这局不想玩 / 点名字恢复
     .split())
 # 一定要有的子命令（列表本身是动态取的，这里只防「取到的是空的 / 取错了 parser」）
 KEY_COMMANDS = {"suggest", "kb", "run", "start", "update", "demo", "recognize", "logs"}
 SUGGEST_CASES = (    # (参数, 输出里必须有的片段)
-    (["--enemy", "PA,莱恩,风行者", "--ally", "敌法师,冰女", "--pos", "3"], ["【推荐】", "【针对这局"]),
+    # 填了好友代码、有生涯数据时标题是「【推荐（你打过 N 局以上的）】」，没有时是「【推荐】」，所以只认前缀
+    (["--enemy", "PA,莱恩,风行者", "--ally", "敌法师,冰女", "--pos", "3"], ["【推荐", "【针对这局", "算法 自身", "＋克制"]),
     (["--enemy", "末日,沉默", "--pos", "1", "--me", "卓尔", "--side", "radiant"], ["【你已选：卓尔游侠】"]),
-    (["--pos", "1"], ["【推荐】"]),
-    (["--pos", "5", "--ban", "小小,斧王"], ["【推荐】"]),
+    (["--pos", "1"], ["【推荐", "算法 自身"]),
+    (["--pos", "5", "--ban", "小小,斧王"], ["【推荐"]),
 )
 # logs.setup 之后控制台 handler 是 brief 格式：崩溃时 stderr 只有这一句、没有 Traceback（见 log.py 的 excepthook）
 CRASH_MARKS = ("Traceback", "程序出错退出")

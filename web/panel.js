@@ -130,6 +130,7 @@ function openSettings() {
   const c = state?.config;
   if (!c) return;
   form.account_id.value = c.account_id || '';
+  form.duo_account_id.value = c.duo_account_id || '';
   form.stratz_token.value = '';
   form.stratz_token.placeholder = secretPlaceholder(c.stratz_token, '没有可以不填');
   form.ai_plan.checked = c.ai_plan;
@@ -184,6 +185,7 @@ form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const payload = {
     account_id: form.account_id.value.trim(),
+    duo_account_id: form.duo_account_id.value.trim(),
     ai_plan: form.ai_plan.checked,
     ai_provider: form.ai_provider.value,
     ai_model: form.ai_model.value.trim(),

@@ -1,6 +1,7 @@
 """打分引擎回归：用人造数据，不联网。python -m unittest"""
 import unittest
 
+from dota_assistant.domain import engine as E
 from dota_assistant.domain.engine import Engine, pct  # noqa: F401  原有问题：pct 一直没用到；重构只搬家，不删
 from dota_assistant.core.heroes import Hero, HeroDB
 
@@ -65,14 +66,21 @@ class EngineTest(unittest.TestCase):
         self.assertFalse(next(s for s in res if s.hero == CM).in_pool)  # 1 局不算你的英雄
 
     def test_rare_hero_strength_is_shrunk(self):
-        # 斧王：场次很少、胜率 60%（绝活玩家）；潮汐：场次多、胜率 53%
+        # 斧王：场次很少、胜率 60%；潮汐：场次多、胜率 53%；冥魂大帝：场次少、胜率 40%（弱）
         over = {(AXE.id, h.id): (500, 0.6) for h in HEROES if h != AXE}
         over.update({(TIDE.id, h.id): (20000, 0.53) for h in (PL, CM, WK)})
+        over.update({(WK.id, h.id): (500, 0.4) for h in (PL, CM)})
         eng = Engine(HeroDB(HEROES), make_stats(over))
-        self.assertGreater(eng.base[AXE.id], eng.base[TIDE.id])                # 原始胜率斧王高
-        self.assertLess(eng.base_at(AXE.id, 3), eng.base_at(TIDE.id, 3))       # 按场次收缩后潮汐强
-        res = eng.suggest(position=3, position_filter=False)
-        self.assertEqual(res[0].hero, TIDE)
+        self.assertEqual(eng.cold_rate, 0.0)                                  # 英雄不够 COLD_RANK 个：不打折
+        self.assertEqual(eng.base_at(AXE.id, 3), eng.base[AXE.id])
+        eng.total, eng.cold_rate = 100_000, 0.04   # 当作还有很多别的英雄：斧王选取率 0.4%，潮汐 13%，门槛 4%
+        k = eng.games[AXE.id] / 100_000 / 0.04
+        self.assertAlmostEqual(eng.base_at(AXE.id, 3), eng.base[AXE.id] - E.COLD_MAX * (1 - k))   # 冷门：最多扣 2 点
+        self.assertGreater(eng.base_at(AXE.id, 3), eng.base_at(TIDE.id, 3))    # 只扣两点，真强的冷门英雄还是强
+        self.assertEqual(eng.base_at(TIDE.id, 3), eng.base[TIDE.id])          # 选取率 ≥ 门槛：不打折
+        self.assertEqual(eng.base_at(WK.id, 3), eng.base[WK.id])              # 低于 50% 的不动
+        eng.base[AXE.id] = 0.01                                               # 冷门、50.25%：扣完不会掉到 50% 以下
+        self.assertEqual(eng.base_at(AXE.id, 3), 0.0)
 
     def test_position_data_overrides_roles(self):
         # 冥魂大帝在数据里主要打三号位，标签却是 Carry 打头

@@ -112,7 +112,8 @@ def ensure_data(cfg: config.Config) -> None:
         if _age_hours(stats) > FULL_UPDATE_DAYS * 24 or not (DATA_DIR / "heroes.json").exists():
             _say("更新数据（3 天一次，约 5 分钟）…")
             update.update(cfg)
-        elif cfg.account_id and _age_hours(DATA_DIR / "player.json") > PLAYER_UPDATE_HOURS:
+        elif ((cfg.account_id and _age_hours(player.PLAYER_FILE) > PLAYER_UPDATE_HOURS)
+              or player.needs_update(cfg)):
             player.update_player(cfg)
         if not assets.ITEM_ICON_DIR.exists():      # 装备图标是 2026-10-26 加的：老数据不用等全量更新
             assets.fetch_item_icons()

@@ -379,6 +379,10 @@
   "kind": "method",
   "signature": "(self) -> 'str | None'"
  },
+ "skip_hero": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int') -> 'None'"
+ },
  "slots_view": {
   "kind": "method",
   "signature": "(self) -> 'dict'"
@@ -414,6 +418,10 @@
  "toggle_overlay": {
   "kind": "method",
   "signature": "(self) -> 'None'"
+ },
+ "unskip_hero": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int') -> 'None'"
  },
  "unsubscribe": {
   "kind": "method",

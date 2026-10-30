@@ -57,6 +57,7 @@ class FakeBank:
 def fake_advisor(cfg: Config) -> adv.Advisor:
     a = adv.Advisor.__new__(adv.Advisor)
     a.cfg, a.db, a.me, a.pool, a.kb = cfg, HeroDB(HEROES), None, [], None
+    a.career, a.duo = None, None             # 没生涯数据：推荐不按熟练度分（FamiliarTest 里再填）
     a.engine = Engine(a.db, make_stats({(TIDE.id, PL.id): (20000, 0.56)}))
     return a
 
@@ -144,37 +145,38 @@ class TeamSlotsTest(unittest.TestCase):
         a.engine.positions = positions
         return a
 
-    def test_open_positions_and_best(self):
-        # 潮汐猎人克幻影长矛手；队友水晶室女猜五号位 → 剩 1~4 号位，每个位置给前两个推荐
-        a = self.advisor({CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}})
+    def test_open_positions_for_teammates(self):
+        # 我打一号位还没选；队友水晶室女猜五号位 → 我的一号位不列英雄（看大卡片），二~四号位是给队友的推荐；
+        # 大卡片里已经给我的潮汐猎人不再列，同一个英雄只在一个空位置出现（2026-10-30 玩家要求）
+        a = fake_advisor(Config(position_filter=False, top=1, top_other=0))
+        a.engine.positions = {CM.id: {5: (900, 0)}, PL.id: {1: (900, 0)}}
         advice = a.advise(adv.Draft(allies=[CM], enemies=[PL]), 1)
-        self.assertEqual([t.position for t in advice.team if t.open], [1, 2, 3, 4])
+        self.assertEqual([s.hero for s in advice.picks], [TIDE])
+        self.assertTrue(advice.team[0].mine and not advice.team[0].picks)
+        self.assertEqual([t.position for t in advice.team if t.open], [2, 3, 4])
         taken = advice.team[4]
         self.assertEqual((taken.ally.hero, taken.ally.pos), (CM.id, 5))
-        # 每个空位置固定「推荐 3 + 针对这局 3」（不跟 config 的 top=2 / top_other=2），两组不重复；
-        # 只剩 3 个候选（5 个英雄去掉已选的 2 个）→ 全进推荐，针对这局为空
-        self.assertTrue(all(len(t.picks) == 3 and not t.targeted for t in advice.team if t.open))
-        self.assertEqual(len(advice.picks), 2)
-        self.assertEqual(advice.team[0].picks[0].hero, TIDE)
+        listed = [s.hero for t in advice.team for s in t.picks + t.targeted]
+        self.assertEqual(sorted(h.id for h in listed), sorted([AXE.id, WK.id]))     # 只剩斧王、冥魂大帝，各出现一次
         v = adv.render_view(advice, "radiant")["team"]
         self.assertEqual([r["current"] for r in v], [True, False, False, False, False])
-        self.assertEqual(sum(r["best"] for r in v), 1)
+        self.assertEqual([r["mine"] for r in v], [True, False, False, False, False])
         self.assertEqual(v[4]["ally"]["name"], "水晶室女")
-        self.assertEqual(v[0]["picks"][0]["id"], TIDE.id)
-        self.assertEqual(v[0]["targeted"], [])
         json.dumps(v, ensure_ascii=False)
-        self.assertTrue(any(t.startswith("剩余位置：一号位（当前） 潮汐猎人") for _, t in adv.render_lines(advice, None)))
+        line = next(t for _, t in adv.render_lines(advice, None) if t.startswith("剩余位置"))
+        self.assertTrue(line.startswith("剩余位置：（给队友）"))
+        self.assertNotIn("潮汐猎人", line)
+        self.assertTrue(line.endswith("你：一号位"))
 
     def test_ally_takes_my_position(self):
-        # 选人界面认出水晶室女打一号位（优先于按比例猜）：我当前的一号位被占，推荐改打别的
+        # 选人界面认出水晶室女打一号位（优先于按比例猜）：我当前的一号位被占，标出来；不再「推荐打 X 号位」
         a = self.advisor({CM.id: {5: (900, 0)}})
         advice = a.advise(adv.Draft(allies=[CM], enemies=[PL], ally_pos={CM.id: 1}), 1)
         self.assertFalse(advice.team[0].open)
-        self.assertIsNotNone(advice.best_open())
-        self.assertNotEqual(advice.best_open().position, 1)
+        self.assertFalse(any(t.mine for t in advice.team))
         line = next(t for _, t in adv.render_lines(advice, None) if t.startswith("剩余位置"))
         self.assertIn("队友占了：一号位（当前） 水晶室女", line)
-        self.assertIn("→ 推荐打", line)
+        self.assertNotIn("推荐打", line)
 
     def test_no_allies(self):
         a = self.advisor()
@@ -192,10 +194,11 @@ class TeamSlotsTest(unittest.TestCase):
         self.assertEqual([t.position for t in advice.team if t.open], [1, 2, 4])
         picked = {s.hero for t in advice.team for s in t.picks}
         self.assertTrue(picked and not picked & {TIDE, CM, PL})
-        self.assertIsNone(advice.best_open())
+        listed = [s.hero.id for t in advice.team for s in t.picks + t.targeted]
+        self.assertEqual(len(listed), len(set(listed)))                     # 同一个英雄只在一个空位置出现
         v = adv.render_view(advice, None)["team"]
         self.assertEqual([r["me"] for r in v], [False, False, True, False, False])
-        self.assertFalse(any(r["best"] for r in v))
+        self.assertFalse(any(r["mine"] for r in v))
         line = next(t for _, t in adv.render_lines(advice, None) if t.startswith("剩余位置"))
         self.assertTrue(line.startswith("剩余位置：（给队友）"))
         self.assertIn("三号位 你 潮汐猎人", line)

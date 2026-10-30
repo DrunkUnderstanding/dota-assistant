@@ -9,9 +9,13 @@
 
 克制优势 = 实际对位胜率 与「按双方自身强度推算的期望胜率」之差。
 样本少的对位用贝叶斯收缩拉回期望值，避免 30 局 70% 胜率这种噪声霸榜。
+
+卡片上的胜率只算候选英雄自己（其余 9 人当平均水平）；「全队」再加上已选队友、已选敌人和阵营（Suggestion.team_breakdown），
+和回测里预测整局胜负的是同一个式子（backtest.predict_drafts）。
 """
 from __future__ import annotations
 
+import itertools
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -23,7 +27,9 @@ from ..core.heroes import Hero, HeroDB
 # 样本 ≈ K 局时实际与期望各占一半。
 K_VS = 400
 K_SYN = 1100
-W_SYN = 0.7
+# 配合和克制算法一样（实际 − 应有，再按样本收缩），收缩已经按配合样本少、效应小处理过，不再额外打折：
+# 玩家 2026-10-30 要「克制 2.1 和配合 2.1 等价」。回测（1738 场样本外）0.7 → 1.0：区分度 +0.0012（95% 区间 −0.0007 ~ +0.0032），没有可测的差别。
+W_SYN = 1.0
 # 2026-10-25 玩家要求只按英雄本身（强度、克制、配合）排，不看自己打了几局：下面两项加分关掉（原 0.04 / 0.08）
 POOL_BONUS = 0.0        # 手写英雄池里的英雄加分（0.04 ≈ 1 个百分点）
 FAMILIAR_BONUS = 0.0    # 近期天梯打满 FAMILIAR_FULL 局的英雄加分（0.08 ≈ 2 个百分点），按局数线性
@@ -34,12 +40,15 @@ W_ME = 0.0              # 2026-10-24 玩家要求不看个人胜率（原 0.5）
 MIN_GAMES = 300         # 统计期内总场次低于此的英雄（刚出的新英雄等）不推荐
 POS_SHARE_MIN = 0.10    # 有分位置数据时：英雄至少 10% 的局打这个位置才推荐
 K_POS = 300             # 分位置胜率的收缩强度
-# 英雄打某位置的强度按「这个英雄打这个位置的局数」向 50% 收缩（2026-10-25 玩家要求）：冷门英雄 / 冷门位置
-# （米波中单、维萨吉、一号位拉席克）场次少、多是绝活玩家在打，胜率虚高，换个人不一定赢。局数 ≈ K_PICKS 时只算一半。
-# 回测（3001 场样本外）：区分度 0.0554 → 0.0501（2000 / 5000 / 20000 分别 0.0535 / 0.0516 / 0.0486），在噪声内略降；
-# 回测样本里选米波的多半就是米波玩家，本来就偏向绝活英雄，所以这点下降是预期的代价。
+# 冷门打折（2026-10-25 玩家要求，10-30 按玩家局数数据改成最多扣 2 点）：冷门英雄 / 冷门位置（米波、维萨吉）原来假设是绝活玩家抬高的。
+# 查了 7000 局米波 / 维萨吉玩家打这个英雄的生涯局数（HANDOFF 43.2）：比主流多赢的 4~7 点里绝活只占 0.5~0.9 点（95% 区间上限 1.4~2.5），
+# 其余是英雄本身强，所以原来按比例砍高出 50% 的部分（米波中单 −4.5、维萨吉中单 −6.2）砍多了。
+# 保留一点（玩家：会玩的人多半是看阵容才选它，胜率里掺着「挑了好阵容」，盲选不一定有；先定 1 点，玩家嫌米波 / 维萨吉出现得多，改 2 点）：
+# 门槛 = 倒数第 COLD_RANK 个英雄的总选取率（每次更新数据跟着变；玩家要倒数 40 个，去掉还剩 80 多个），这个位置的选取率 / 门槛 = k，
+# 扣 COLD_MAX ×（1 − k），最多扣到 50%；低于 50% 的不动（弱就是弱）。主流英雄（选取率 ≥ 门槛）不扣。
 # 只影响「自身强度」这一项，克制 / 配合的期望值仍用原始胜率（否则冷门英雄对谁都会显得「克」）。
-K_PICKS = 10000
+COLD_RANK = 40
+COLD_MAX = 0.08         # logit，≈ 2 个百分点
 # 下面两项 2026-10-21 回测调参：0.5 / 1.0 的对线加权、0.03~0.3 的反制扣分都没有带来可测的提升
 # （区分度变化 ±0.003，噪声约 ±0.01），所以默认关闭，只保留「易被反制」的文字提示。
 W_LANE = 0.0            # 对线对手的额外克制权重
@@ -48,8 +57,13 @@ RISK_TOP = 3            # 取最克我的前几个还没被选的英雄
 RISK_HINT = 4.0         # 对面还剩 ≥3 手、且有英雄克我 ≥ 4 个百分点时，在理由里提示
 # 我的位置 → 和我对线的敌方位置（优势路 1+5 对劣势路 3+4，中路对中路）
 LANE_OPPONENTS = {1: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5), 5: (3, 4)}
+# 天辉自带的优势（logit），只进「全队」胜率，不影响排名（同一手的候选都在同一边）。
+# 回测（backtest 第五节）里拟合的截距：2026-10-30 5950 场样本外 +0.133 ±0.052（≈ +3.3 个百分点），见 HANDOFF 第 44 节
+RADIANT_EDGE = 0.13
+SIDE_NAMES = {"radiant": "天辉", "dire": "夜魇"}
 
 POSITION_NAMES = {1: "一号位", 2: "中单", 3: "三号位", 4: "四号位", 5: "五号位"}
+POSITION_STEP = "位置"   # breakdown 里「打这个位置」那一步的名称（calc_text 换成具体位置名）
 
 
 def logit(p: float) -> float:
@@ -78,39 +92,122 @@ class Suggestion:
     enemies_left: int = 5
     my_games: int = 0                  # 我近期天梯用这个英雄的局数 / 胜场
     my_wins: int = 0
+    unfamiliar: tuple[int, int] | None = None   # 不熟：选它的人生涯这个英雄 (局数, 胜场) 不到 cfg.familiar_games（advisor 填，只提示）
+    # 综合分的组成（logit，给玩家看「胜率怎么来的」，见 breakdown）：自身强度 base 之前的两步、克制合计、配合合计（已乘 W_SYN）
+    overall: float | None = None       # 英雄整体强度（不分位置）
+    at_pos: float | None = None        # 加上这个位置相对整体的胜率差（还没按局数收缩）
+    counter: float = 0.0
+    synergy: float = 0.0
+    # 选它之后全队胜率的另外两块（logit，Engine.draft_rest）：(队友, 对面)；还没人选时 None（全队 = 这手，不显示）
+    team: tuple[float, float] | None = None
 
     @property
     def winrate(self) -> float:
         return sigmoid(self.score) * 100
+
+    def team_breakdown(self, side: str | None = None) -> list[tuple[str, str, float]] | None:
+        """选它之后全队胜率怎么来的：[(种类, 名称, 数值)]，从这张卡片的胜率（start 这手，%）起，依次加
+        ally 队友（已选队友自身强度 + 他们对已选敌人的克制 + 他们之间的配合）/ enemy 对面（已选敌人自身强度 + 他们之间的配合，取负）/
+        side 阵营（天辉 +RADIANT_EDGE、夜魇 −，不知道阵营 0），每步换回胜率算差，加起来正好等于全队胜率。没选的人当平均水平"""
+        if self.team is None:
+            return None
+        ally, enemy = self.team
+        edge = {"radiant": RADIANT_EDGE, "dire": -RADIANT_EDGE}.get(side or "", 0.0)
+        out, prev = [("start", "这手", self.winrate)], self.score
+        for kind, name, cum in (("ally", "队友", self.score + ally), ("enemy", "对面", self.score + ally + enemy),
+                                ("side", SIDE_NAMES.get(side or "", "阵营"), self.score + ally + enemy + edge)):
+            out.append((kind, name, (sigmoid(cum) - sigmoid(prev)) * 100))
+            prev = cum
+        return out
+
+    def team_winrate(self, side: str | None = None) -> float | None:
+        b = self.team_breakdown(side)
+        return None if b is None else sum(v for _, _, v in b)
+
+    def team_text(self, side: str | None = None) -> str | None:
+        """一行字：「全队 54.3%＝这手 61.7 －队友 3.1 －对面 5.0 ＋天辉 1.2」，小于 0.05 的项不写"""
+        b = self.team_breakdown(side)
+        if b is None:
+            return None
+        text = f"全队 {self.team_winrate(side):.1f}%＝这手 {b[0][2]:.1f}"
+        for _, name, v in b[1:]:
+            if abs(v) >= 0.05:
+                text += f" {'＋' if v >= 0 else '－'}{name} {abs(v):.1f}"
+        return text
 
     @property
     def situational(self) -> float:
         """这局阵容带来的加减（克制 + 配合 − 反制风险，logit）：综合分去掉英雄自身强度"""
         return self.score - self.base
 
+    def breakdown(self) -> list[tuple[str, str, float]]:
+        """最终胜率怎么来的：[(种类, 名称, 数值)]，第一项是起点「整体」胜率（%），后面每项是依次加上去的变化（百分点），
+        加起来正好等于 winrate。种类 = start 整体 / pos 打这个位置 / shrink 冷门打折 / base 自身强度（小计，不参与相加）/
+        counter 克制 / syn 配合 / other 其他（反制扣分、英雄池加分，现在都关着）。
+        打分是在 logit 里依次相加的，这里每加一项就换回胜率算差，所以胜率越高、同样的克制换来的百分点越少，
+        各项加起来不会有误差；但和「对位」里单个敌人的百分点（按 50% 附近换算）直接相加会差一点。"""
+        overall = self.base if self.overall is None else self.overall
+        at_pos = self.base if self.at_pos is None else self.at_pos
+        steps = [("pos", POSITION_STEP, at_pos), ("shrink", "冷门打折", self.base),
+                 ("counter", "克制", self.base + self.counter), ("syn", "配合", self.base + self.counter + self.synergy),
+                 ("other", "其他", self.score)]
+        out = [("start", "整体", sigmoid(overall) * 100)]
+        prev = overall
+        for kind, name, cum in steps:
+            out.append((kind, name, (sigmoid(cum) - sigmoid(prev)) * 100))
+            prev = cum
+            if kind == "shrink":
+                out.append(("base", "自身", sigmoid(self.base) * 100))
+        return out
+
+    @property
+    def situational_pct(self) -> float:
+        """克制 + 配合（+ 其他）合计多少个百分点：最终胜率 − 自身（和 breakdown 各项加起来一致）。「针对这局」按这个排"""
+        return self.winrate - sigmoid(self.base) * 100
+
+    def calc_text(self, position_name: str = "这个位置") -> str:
+        """一行字的算法：「自身 52.4%（整体 51.0、一号位 +2.0、冷门打折 −0.6）＋克制 6.2 ＋配合 3.1 ＝ 61.7%」，小于 0.05 的项不写"""
+        b = {k: (n, v) for k, n, v in self.breakdown()}
+        sub = [f"整体 {b['start'][1]:.1f}"] + [f"{position_name if k == 'pos' else b[k][0]} {b[k][1]:+.1f}"
+                                               for k in ("pos", "shrink") if abs(b[k][1]) >= 0.05]
+        text = f"自身 {b['base'][1]:.1f}%（{'、'.join(sub)}）"
+        for k in ("counter", "syn", "other"):
+            if abs(b[k][1]) >= 0.05:
+                text += f"{'＋' if b[k][1] >= 0 else '－'}{b[k][0]} {abs(b[k][1]):.1f} "
+        return text + f"＝ {self.winrate:.1f}%"
+
     def reason_parts(self) -> list[tuple[str, str]]:
-        """推荐理由的各段：[(种类, 文字)]，种类 = good 克 / syn 配 / bad 怕 / risk 易被反制 / meta 版本强势 / me 个人 / pool 英雄池"""
+        """推荐理由的各段：[(种类, 文字)]，种类 = unfamiliar 不熟 / good 克 / syn 配 / bad 怕 / risk 易被反制 / meta 版本强势 /
+        me 个人 / pool 英雄池。「不熟」放最前面：胜率是会玩的人打出来的，不熟的人拿去不一定有这么多"""
         parts = []
+        if self.unfamiliar is not None:
+            g, w = self.unfamiliar
+            parts.append(("unfamiliar", f"不熟：生涯 {g} 局 {w / g:.0%}" if g else "不熟：没玩过"))
         good = [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1]) if pct(v) >= 0.8][:2]
         bad = [(h, v) for h, v in sorted(self.vs, key=lambda t: t[1]) if pct(v) <= -1.5][:1]
         team = [(h, v) for h, v in sorted(self.syn, key=lambda t: -t[1]) if pct(v) >= 1.0][:1]
+        unteam = [(h, v) for h, v in sorted(self.syn, key=lambda t: t[1]) if pct(v) <= -1.5][:1]   # 负配合（和「但怕」一样的门槛）
         if good:
             parts.append(("good", "克 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in good)))
         if team:
             parts.append(("syn", "配 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in team)))
         if bad:
             parts.append(("bad", "但怕 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in bad)))
+        if unteam:
+            parts.append(("bad", "不配 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in unteam)))
         hard = [(h, v) for h, v in self.counters if pct(v) >= RISK_HINT]
         if self.enemies_left >= 3 and hard:
             parts.append(("risk", "易被反制：" + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in hard[:2])))
-        if not parts and pct(self.situational) >= 1.0:      # 单个都不显著，但几个小克制 / 配合加起来不少
+        why = [k for k, _ in parts if k != "unfamiliar"]
+        if not why and pct(self.situational) >= 1.0:      # 单个都不显著，但几个小克制 / 配合加起来不少
             parts.append(("good", f"克制 + 配合合计 {pct(self.situational):+.1f}%"))
-        if not parts:
+        elif not why:
             parts.append(("meta", f"版本强势（自身 {sigmoid(self.base) * 100:.1f}%）"))
-        if self.my_games:
-            parts.append(("me", f"你近期 {self.my_games} 局 {self.my_wins / self.my_games:.0%}"))
-        elif self.in_pool:
-            parts.append(("pool", "你的英雄池"))
+        if self.unfamiliar is None:                       # 不熟时已经说了生涯局数，近期局数不再重复
+            if self.my_games:
+                parts.append(("me", f"你近期 {self.my_games} 局 {self.my_wins / self.my_games:.0%}"))
+            elif self.in_pool:
+                parts.append(("pool", "你的英雄池"))
         return parts
 
     def reason(self) -> str:
@@ -133,6 +230,9 @@ class Engine:
             wins[a] += w
         # 每局里一个英雄对上 5 个敌人，所以这里的局数是真实局数的 5 倍
         self.games = {h: g // 5 for h, g in games.items()}
+        self.total = max(1, sum(self.games.values()) // 10)      # 统计期内总局数（每局 10 个英雄），算选取率用
+        rates = sorted(g / self.total for g in self.games.values() if g >= MIN_GAMES)
+        self.cold_rate = rates[COLD_RANK - 1] if len(rates) >= COLD_RANK else 0.0   # 冷门打折门槛；英雄不够 COLD_RANK 个时不打折
         self.base = {h: logit((wins[h] + 50) / (games[h] + 100)) for h in games}
         self._adv: dict[tuple[int, int], float] = {}
 
@@ -157,8 +257,12 @@ class Engine:
 
     def base_at(self, h: int, position: int) -> float:
         """英雄打这个位置的强度：整体强度 + 该位置相对整体的胜率差（来自 STRATZ，收缩过），
-        再按这个英雄打这个位置的局数（总局数 × 位置占比）向 50% 收缩，见 K_PICKS"""
-        base = self.base.get(h, 0)
+        再按这个位置的选取率给冷门的打折，见 COLD_MAX"""
+        return self.base_parts(h, position)[2]
+
+    def base_parts(self, h: int, position: int) -> tuple[float, float, float]:
+        """(整体强度, 加上位置差, 再给冷门打折 = base_at)，logit；给 Suggestion.breakdown 显示每一步"""
+        overall_base = base = self.base.get(h, 0)
         share = self.position_share(h, position)
         n = self.games.get(h, 0) * (1 if share is None else share)    # 没有分位置数据时按总局数
         per = (self.positions or {}).get(h)
@@ -168,7 +272,8 @@ class Engine:
             overall = (w_all + 50) / (g_all + 100)
             g, w = per.get(position, (0, 0))
             base += logit((w + K_POS * overall) / (g + K_POS)) - logit(overall)
-        return base * n / (n + K_PICKS)
+        k = min(1.0, n / self.total / self.cold_rate) if self.cold_rate else 1.0   # 这个位置的选取率 / 门槛
+        return overall_base, base, (max(0.0, base - COLD_MAX * (1 - k)) if base > 0 else base)
 
     def position_share(self, h: int, position: int) -> float | None:
         per = (self.positions or {}).get(h)
@@ -245,20 +350,34 @@ class Engine:
             if only_pool and (manual or history) and not mine:
                 continue
             g, w = history.get(hero.id, (0, 0))
-            s = Suggestion(hero, 0.0, self.base_at(hero.id, position), in_pool=mine, my_games=g, my_wins=w)
+            overall, at_pos, base = self.base_parts(hero.id, position)
+            s = Suggestion(hero, 0.0, base, in_pool=mine, my_games=g, my_wins=w, overall=overall, at_pos=at_pos)
             s.vs = [(e, self.advantage(hero.id, e.id)) for e in enemies]
             s.syn = [(a, self.synergy(hero.id, a.id)) for a in allies]
             s.enemies_left = 5 - len(enemies)
             s.risk, counters = self.counter_risk(hero.id, taken, s.enemies_left)
             s.counters = [(self.db.by_id[e], v) for e, v in counters if e in self.db.by_id]
-            s.score = (s.base + sum(self.lane_weight(e.id, position) * v for e, v in s.vs)
-                       + W_SYN * sum(v for _, v in s.syn) - s.risk
+            s.counter = sum(self.lane_weight(e.id, position) * v for e, v in s.vs)
+            s.synergy = W_SYN * sum(v for _, v in s.syn)
+            s.score = (s.base + s.counter + s.synergy - s.risk
                        + (POOL_BONUS if hero.id in manual else 0)
                        + FAMILIAR_BONUS * min(g, FAMILIAR_FULL) / FAMILIAR_FULL
                        + W_ME * self.personal(hero.id, g, w, position))
             out.append(s)
         out.sort(key=lambda s: -s.score)
         return out[:top]
+
+    def draft_rest(self, allies: list[tuple[int, int | None]],
+                   enemies: list[tuple[int, int | None]]) -> tuple[float, float]:
+        """候选英雄之外、已选阵容对全队胜率的贡献（logit）：(队友, 对面)，见 Suggestion.team_breakdown。
+        allies / enemies = [(英雄 id, 猜的位置)]，位置 None 时用整体强度。候选自己那块（自身 + 克制 + 配合）就是它的综合分"""
+        own = lambda h, p: self.base_at(h, p) if p else self.base.get(h, 0)
+        ally = (sum(own(h, p) for h, p in allies)
+                + sum(self.advantage(a, e) for a, _ in allies for e, _ in enemies)
+                + W_SYN * sum(self.synergy(a, b) for (a, _), (b, _) in itertools.combinations(allies, 2)))
+        enemy = -(sum(own(h, p) for h, p in enemies)
+                  + W_SYN * sum(self.synergy(a, b) for (a, _), (b, _) in itertools.combinations(enemies, 2)))
+        return ally, enemy
 
     def threats(self, enemies: list[Hero], allies: list[Hero]) -> list[tuple[Hero, float]]:
         """敌方英雄对我方当前阵容的总克制（正 = 对我们威胁大），用于提示"""

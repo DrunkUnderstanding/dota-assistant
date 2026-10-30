@@ -2909,7 +2909,8 @@
    "new_file": "dota_assistant/domain/engine.py",
    "tags": [
     "public"
-   ]
+   ],
+   "removed": "2026-10-30 冷门打折改成按选取率、最多扣 2 点（engine.COLD_RANK / COLD_MAX），这个常数删了"
   },
   {
    "old": "dota_assistant.engine",

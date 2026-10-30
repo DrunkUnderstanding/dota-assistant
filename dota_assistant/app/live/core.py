@@ -88,6 +88,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self.slots: dict[str, list[str]] = {s: [""] * 5 for s in consts.SIDES}
         self.hints: dict[str, list[dict]] = {s: [{} for _ in range(5)] for s in consts.SIDES}   # 识别给的猜测 / 相似度
         self.bans_text = ""
+        self.skipped: list[int] = []             # 这局不想玩的英雄 id（点推荐卡片上的 ×），新一局选人 / 清空时清掉
         self.position = cfg.position
         self.side_mode = "auto"
         self.mode = "auto"
@@ -327,6 +328,10 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             self.show_brief()
         elif t == "explain_pick":
             self.explain_pick(int(a["hero_id"]))
+        elif t == "skip_hero":
+            self.skip_hero(int(a["hero_id"]))
+        elif t == "unskip_hero":
+            self.unskip_hero(int(a["hero_id"]))
         elif t == "brief_page":
             self.set_brief_page(str(a.get("page")))
         elif t == "buyback":

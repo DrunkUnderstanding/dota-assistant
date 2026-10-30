@@ -14,6 +14,7 @@
 - imported=true：旧模块里本来就是 import 进来的、测试 patch 它的名字，只许基线的 data.DATA_DIR、webui.HTTPServer 两条。
 - per_module=true：logger 这类每个新文件各自定义一份的，只许 log / logger。
 - 表只追加不删：前 BASELINE_COUNT 条的（旧模块, 名字）摘要固定，删条目、挪顺序都会失败。
+  重构以后功能上删掉的名字不删条目，加 "removed": "日期 + 理由"，不再核对它在不在。
 - 完整性：tools/refactor/export_names.py 现在从还存在的旧模块里导出的每个名字都要在清单里。
 - ALL_MOVED：P4 结束、旧模块全删以后改成 True，打开「旧模块文件都不存在」的断言。
 """
@@ -186,6 +187,8 @@ class MovesTableTest(unittest.TestCase):
         bad = []
         moved_from = set()
         for e in self.entries:
+            if e.get("removed"):                    # 重构以后功能上删掉的（条目留着，写了理由）
+                continue
             name, imported = e["name"], bool(e.get("imported"))
             old_live = name.startswith("Live.")
             if has_name(e["new_file"], name, allow_import=imported):

@@ -14,6 +14,8 @@ only_pool = false     # true = 只在英雄池里推荐
 position_filter = true
 top = 3               # 「推荐」几个：按综合胜率排
 top_other = 3         # 「针对这局」几个：综合前 top 个之外，按克制 + 配合挑（综合胜率 ≥ 50%）
+familiar_games = 20   # 「推荐」只放你生涯打过这么多局的英雄（要填 account_id、资料公开），不熟的只进「针对这局」并标「不熟」；0 = 不分
+duo_account_id = 0    # 双排队友的好友代码：你选好以后「剩余位置」给队友的推荐按他会玩的分；0 = 不填
 
 # ---- 实时助手（python -m dota_assistant run）----
 monitor = 1           # 截哪块屏幕：1 = 主屏，多屏时 2、3…

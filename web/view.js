@@ -110,15 +110,19 @@ function slotsHTML(v) {
 
 // 对位克制：推荐英雄对每个已选敌人的胜率差，±1 个百分点以内算没明显关系
 const VS_EDGE = 1.0;
-function vsRow(item) {
-  if (!item.vs?.length) return '';
-  const cells = item.vs.map((e) => {
-    const cls = e.delta >= VS_EDGE ? 'vs-good' : e.delta <= -VS_EDGE ? 'vs-bad' : '';
+// 「配合」一行和「对位」一样：我方每个已选队友一格，正的（配得好）蓝、负的（相互拖累，例如抢同一个位置）红（玩家 2026-10-30：负的配合也要显示）
+function vsRow(item, syn = false) {
+  const list = syn ? item.syn : item.vs;
+  if (!list?.length) return '';
+  const cells = list.map((e) => {
+    const cls = e.delta >= VS_EDGE ? (syn ? 'vs-syn' : 'vs-good') : e.delta <= -VS_EDGE ? 'vs-bad' : '';
     const num = `${e.delta > 0 ? '+' : ''}${e.delta.toFixed(1)}`;
-    const tip = `${item.name} 对 ${e.name}：${num}%${e.delta >= VS_EDGE ? '（克）' : e.delta <= -VS_EDGE ? '（被克）' : ''}`;
-    return `<span class="vs ${cls}" title="${esc(tip)}">${face(e, 'face-xs')}<b>${num}</b></span>`;
+    const word = syn ? (e.delta >= VS_EDGE ? '（配）' : e.delta <= -VS_EDGE ? '（不配）' : '')
+      : (e.delta >= VS_EDGE ? '（克）' : e.delta <= -VS_EDGE ? '（被克）' : '');
+    const tip = `${item.name} ${syn ? '和' : '对'} ${e.name}：${num}%${word}`;
+    return `<span class="vs ${cls}" title="${esc(tip)}">${face(e, syn ? 'face-xs face-ally' : 'face-xs')}<b>${num}</b></span>`;
   }).join('');
-  return `<div class="pick-vs"><span class="pick-vs-label">对位</span>${cells}</div>`;
+  return `<div class="pick-vs"><span class="pick-vs-label">${syn ? '配合' : '对位'}</span>${cells}</div>`;
 }
 
 // 对面分路（按常见位置猜）：三路各一行，我这路高亮；我选好英雄后下面接我这路的对线提示（原句在悬停提示里）
@@ -148,7 +152,16 @@ function lanesHTML(l) {
 // 平时只露第一推荐，点行尾「▾」展开两排；展开了哪些位置记在这里，重画后保持（和要点卡片的展开一个思路）。
 // 我还没选：推荐是给我挑位置的，点空位置切过去；我选好以后：我那格是我的英雄，空位置的推荐是给队友的（不能点），一直留到进游戏
 const teamUnfolded = new Set();
-const teamPick = (p) => `<span class="team-pick">${face(p, 'face-sm')}<b>${p.winrate.toFixed(1)}</b></span>`;
+// 胜率怎么来的、熟不熟都直接写出来，不靠悬停（玩家 2026-10-30：「不能用悬停的方式，应该是直接显示」）。
+// 收起时只露第一推荐：头像 + 胜率 + 简短算法（自身＋克制＋配合）；展开后一个英雄一行：名字 + 胜率 + 完整算法（自身拆成整体 · 位置 · 冷门打折）。
+// 不熟的（生涯局数不到门槛，advisor.team_pick 的 unfamiliar = [局数, 胜场]）头像变暗、写「不熟 15 局」
+const unfamiliarText = (u) => (u[0] ? `不熟 ${u[0]} 局 ${Math.round((u[1] / u[0]) * 100)}%` : '不熟 没玩过');
+function teamPick(p, full) {
+  const u = p.unfamiliar;
+  const name = full ? `<span class="team-pick-name">${esc(p.name)}</span>` : '';
+  return `<span class="team-pick ${full ? 'is-line' : ''} ${u ? 'is-unfamiliar' : ''}">${face(p, 'face-sm')}${name}`
+    + `<b>${p.winrate.toFixed(1)}</b>${u ? `<i>${unfamiliarText(u)}</i>` : ''}${calcRow(p, !full)}</span>`;
+}
 function teamPicksHTML(t) {
   const targeted = t.targeted || [];
   if (!t.picks.length) return { body: '<span class="team-none">无候选</span>', fold: '' };
@@ -156,14 +169,14 @@ function teamPicksHTML(t) {
   const more = t.picks.length + targeted.length > 1;
   const fold = more ? `<button class="team-fold" type="button" data-team-fold="${t.position}" title="${open ? '收起' : '展开：推荐 + 针对这局'}">`
     + `${open ? '▴ 收起' : `▾ ${t.picks.length}+${targeted.length}`}</button>` : '';
-  const row = (label, ps) => `<div class="team-picks"><i class="team-grp">${label}</i>${ps.map(teamPick).join('')}</div>`;
+  const row = (label, ps) => `<div class="team-picks is-list"><i class="team-grp">${label}</i>${ps.map((p) => teamPick(p, true)).join('')}</div>`;
   const body = open
     ? `<div class="team-groups">${row('推荐', t.picks)}${targeted.length ? row('针对', targeted) : ''}</div>`
-    : `<div class="team-picks">${teamPick(t.picks[0])}</div>`;
+    : `<div class="team-picks">${teamPick(t.picks[0], false)}</div>`;
   return { body, fold, open };
 }
 
-function teamHTML(team, picked) {
+function teamHTML(team, picked, duo) {
   if (!team) return '';
   const rows = team.map((t) => {
     if (t.me) {
@@ -171,7 +184,11 @@ function teamHTML(team, picked) {
         + `<span class="lane-hero">${face(t.ally, 'face-sm')}</span><em class="team-cur">你</em></div>`;
     }
     const cur = t.current && !picked;
-    const flags = (cur ? '<em class="team-cur">当前</em>' : '') + (t.best && !cur ? '<em class="team-best">推荐</em>' : '');
+    const flags = cur ? '<em class="team-cur">当前</em>' : '';
+    if (t.mine) {          // 我还没选的当前位置：不列英雄，我的推荐看大卡片（玩家 2026-10-30：这里只看队友的）
+      return `<div class="team-row is-mine is-cur" title="你的位置：推荐看下面的卡片"><span class="team-label">${esc(t.name)}</span>`
+        + `<span class="team-none">你 · 推荐看下面</span>${flags}</div>`;
+    }
     if (t.ally) {
       const tip = `队友${t.ally.name}${t.ally.sure ? '' : `（猜的，${Math.round(t.ally.conf * 100)}% 把握）`}占了${t.name}`;
       const warn = cur ? '<span class="team-warn">队友占了你的位置</span>' : '';
@@ -184,34 +201,77 @@ function teamHTML(team, picked) {
       return `<div class="team-row is-ally-pick ${unfolded}" title="${esc(`队友打${t.name}可以选这些`)}">`
         + `<span class="team-label">${esc(t.name)}</span>${body}${fold}</div>`;
     }
-    const tip = cur ? `你现在按${t.name}推荐` : `点一下：改按${t.name}推荐`;
-    return `<div class="team-row is-open ${unfolded} ${cur ? 'is-cur' : ''} ${t.best ? 'is-best' : ''}" data-pos="${t.position}" title="${esc(tip)}">`
+    const tip = `这里是给队友的推荐；点一下：改成你打${t.name}`;
+    return `<div class="team-row is-open ${unfolded}" data-pos="${t.position}" title="${esc(tip)}">`
       + `<span class="team-label">${esc(t.name)}</span>${body}${flags}${fold}</div>`;
   }).join('');
-  const [hint, small] = picked
-    ? ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是给队友的推荐（算上和你的配合）', '给队友的推荐']
-    : ['队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是你打这个位置的推荐（▾ 展开看推荐 + 针对这局）', '点空位置切换'];
+  // 空位置都是给队友的推荐（我的推荐在下面的大卡片），同一个英雄只出现一次
+  const hint = '队友占了哪几个位置：选人界面认出来的优先，其余按常打位置猜；空位置后面是给队友的推荐（▾ 展开看推荐 + 针对这局）'
+    + (duo ? `；按双排队友${duo}生涯打过的英雄分「推荐 / 针对」，他不熟的标「不熟」` : '')
+    + (picked ? '' : '；点空位置可以把你的位置换过去');
+  const small = duo ? `给队友的推荐 · 按${duo}会玩的分` : '给队友的推荐';
   return `
-    <section class="ov-team" title="${hint}">
-      <h3>剩余位置<small>${small}</small></h3>${rows}
+    <section class="ov-team" title="${esc(hint)}">
+      <h3>剩余位置<small>${esc(small)}</small></h3>${rows}
     </section>`;
 }
 
-function card(item, rank) {
+// 胜率怎么来的（advisor.calc_view）：自身（整体 → 位置 → 冷门打折）＋克制＋配合＝最终，依次在 logit 里相加、每步换回胜率算差，
+// 所以这几项加起来正好等于卡片上的胜率；「对位」里单个敌人的数是按 50% 附近换算的，直接加会差一点
+// compact = 剩余位置收起时那一行：不拆自身、不写「＝」（胜率就在旁边）；
+const CALC_SIGN = (v) => (v >= 0 ? '＋' : '－');
+function calcRow(item, compact = false) {
+  if (!item.calc) return '';
+  const c = Object.fromEntries(item.calc.map((x) => [x.kind, x]));
+  const sub = [`整体 ${c.start.value.toFixed(1)}`]
+    .concat(['pos', 'shrink'].filter((k) => Math.abs(c[k].value) >= 0.05)
+      .map((k) => `${c[k].name} ${c[k].value > 0 ? '+' : ''}${c[k].value.toFixed(1)}`));
+  const terms = ['counter', 'syn', 'other'].filter((k) => Math.abs(c[k].value) >= 0.05)
+    .map((k) => `<span class="calc-${k}${c[k].value < 0 ? ' is-neg' : ''}">${CALC_SIGN(c[k].value)}${esc(c[k].name)} <b>${Math.abs(c[k].value).toFixed(1)}</b></span>`).join('');
+  const base = `<span class="calc-base">自身 <b>${c.base.value.toFixed(1)}</b>${compact ? '' : `<small>（${esc(sub.join(' · '))}）</small>`}</span>`;
+  const eq = compact ? '' : `<span class="calc-eq">＝ <b>${item.winrate.toFixed(1)}</b></span>`;
+  return `<span class="pick-calc ${compact ? 'is-compact' : ''}">${base}${terms}${eq}</span>`;
+}
+
+// 选它之后全队的胜率（advisor.team_rate_view）：从这张卡片的胜率起，加上已选队友、已选敌人、阵营，没选的人当平均水平；
+// 卡片右上角的胜率只算这个英雄自己，排名按它排（其余几项对每个候选都一样）
+function teamRow(item) {
+  if (!item.team) return '';
+  const [start, ...rest] = item.team.calc;
+  const terms = rest.filter((x) => Math.abs(x.value) >= 0.05)
+    .map((x) => `<span class="${x.value < 0 ? 'is-neg' : ''}">${CALC_SIGN(x.value)}${esc(x.name)} <b>${Math.abs(x.value).toFixed(1)}</b></span>`).join('');
+  return `<span class="pick-calc calc-team" title="选它之后我方整个阵容的胜率：这手（卡片上的胜率）加上已选队友、已选敌人和阵营，还没选的人按平均水平算">`
+    + `<span class="calc-eq">全队 <b>${item.team.winrate.toFixed(1)}</b></span><span>＝这手 <b>${start.value.toFixed(1)}</b></span>${terms}</span>`;
+}
+
+// targeted =「针对这局」：右上角胜率前面醒目地写这一手的克制、配合（这组就是按它俩挑的，玩家 2026-10-30 要一眼看到，
+// 而且要分开、不同颜色：克制绿、配合蓝，和理由标签「克 / 配」同色）。数值取 calc 里的克制 / 配合两步（百分点）
+const situBadge = (c, kind, label) => {
+  const v = c[kind]?.value ?? 0;
+  return `<span class="pick-situ situ-${kind} ${v < 0 ? 'is-neg' : ''}">${label} <b>${v >= 0 ? '+' : ''}${v.toFixed(1)}</b></span>`;
+};
+function card(item, rank, targeted = false) {
   const tags = item.tags.map((t) => `<span class="tag tag-${t.kind}">${esc(t.text)}</span>`).join('');
   // 机制上为什么克 / 怕（知识库原句放在悬停提示里）
   const why = (item.why || []).map((w) => `<p class="why why-${esc(w.kind)}" title="${esc(w.quote)}">${w.kind === 'good' ? '✓' : '✗'} ${esc(w.text)}</p>`).join('');
   return `
     <div class="pick ${rank === 0 ? 'pick-top' : ''}" data-id="${item.id}" title="点一下：看选${esc(item.name)}怎么打这套阵容">
-      <div class="pick-art"><img src="${portrait(item.id)}" alt="" onerror="this.remove()"></div>
+      <div class="pick-art"><img src="${portrait(item.id)}" alt="" onerror="this.remove()"><button class="pick-skip" type="button" data-skip="${item.id}" title="这局不想玩${esc(item.name)}：去掉，后面的顺位补上来">×</button></div>
       <div class="pick-body">
         <div class="pick-head">
           <span class="pick-name">${esc(item.name)}</span>
+          ${targeted && item.calc ? (() => {
+    const c = Object.fromEntries(item.calc.map((x) => [x.kind, x]));
+    return `<span class="pick-situs">${situBadge(c, 'counter', '克制')}${situBadge(c, 'syn', '配合')}</span>`;
+  })() : ''}
           <span class="pick-wr">${item.winrate.toFixed(1)}<small>%</small></span>
         </div>
         <div class="pick-bar"><i style="width:${barPct(item.winrate)}%"></i></div>
         <div class="pick-tags">${tags}</div>
+        ${calcRow(item)}
+        ${teamRow(item)}
         ${vsRow(item)}
+        ${vsRow(item, true)}
         ${why ? `<div class="pick-why">${why}</div>` : ''}
       </div>
     </div>`;
@@ -236,7 +296,7 @@ function draftHTML(v) {
     + lineup('禁', v.bans || [], 'lineup-ban');
   if (lines) a += `<section class="ov-lineups">${lines}</section>`;
   if (v.slots) a += pickerHTML(v.slots);
-  a += teamHTML(v.team, !!v.my_hero);
+  a += teamHTML(v.team, !!v.my_hero, v.duo);
   const lanes = lanesHTML(v.lanes);
   a += lanes.rows;
   html += lanes.tips;
@@ -249,9 +309,13 @@ function draftHTML(v) {
   }
   let rank = 0;
   for (const g of v.groups) {
-    html += `<section class="ov-group"><h3>${esc(g.title)}</h3>${g.items.map((it) => card(it, rank++)).join('')}</section>`;
+    const note = g.note ? `<small>${esc(g.note)}</small>` : '';
+    html += `<section class="ov-group"><h3>${esc(g.title)}${note}</h3>${g.items.map((it) => card(it, rank++, g.targeted)).join('')}</section>`;
   }
-  if (v.groups.length) html += `<div class="ov-tip">点推荐英雄看「选它怎么打」</div>`;
+  if (v.skipped?.length) {                           // 这局点 × 去掉的：点名字恢复，新一局自动清空
+    html += `<div class="ov-skipped"><span>这局不想玩</span>${v.skipped.map((h) => `<button type="button" data-unskip="${h.id}" title="恢复推荐${esc(h.name)}">${esc(h.name)} ↺</button>`).join('')}</div>`;
+  }
+  if (v.groups.length) html += `<div class="ov-tip">点推荐英雄看「选它怎么打」· 点 × 这局不推荐它</div>`;
   if (!v.groups.length && !v.my_hero) {
     html += `<div class="ov-empty">暂无推荐（数据没拉或者位置下没有候选）</div>`;
   }
@@ -317,7 +381,8 @@ export function renderOverlay(root, view) {
   return true;
 }
 
-// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，剩余位置 → 切位置，要点卡片的标签 → 翻页，
+// 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，推荐英雄的 × → 这局不想玩，「这局不想玩」里的名字 → 恢复，
+// 剩余位置 → 切位置，要点卡片的标签 → 翻页，
 // 要点小节 / 剩余位置的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
@@ -362,6 +427,10 @@ export function bindOverlayClicks(root, act) {
     const pos = e.target.closest('.team-row[data-pos]');
     if (pos) return act('set', { key: 'position', value: Number(pos.dataset.pos) });
     if (tab) return act('brief_page', { page: tab.dataset.page });
+    const skip = e.target.closest('.pick-skip[data-skip]');   // 在卡片里面，先拦下，不当成「如果选它」
+    if (skip) return act('skip_hero', { hero_id: Number(skip.dataset.skip) });
+    const unskip = e.target.closest('[data-unskip]');
+    if (unskip) return act('unskip_hero', { hero_id: Number(unskip.dataset.unskip) });
     const pick = e.target.closest('.pick[data-id]');
     if (pick) return act('explain_pick', { hero_id: Number(pick.dataset.id) });
     if (e.target.closest('.ov-close')) act('dismiss_coach');

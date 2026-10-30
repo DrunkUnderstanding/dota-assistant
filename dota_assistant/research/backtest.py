@@ -267,7 +267,50 @@ def report(rows: list[PickRow], drafts: dict, n_matches: int, train: dict) -> st
         sub = [w for x, w in full if lo <= sigmoid(x) < hi]
         if sub:
             L.append(f"    预测 {lo * 100:3.0f}%~{min(hi, 1) * 100:3.0f}%：实际 {sum(sub) / len(sub) * 100:5.1f}%（{len(sub)} 场）")
+    L += additivity(drafts)
     return "\n".join(L)
+
+
+def logistic_fit(X: np.ndarray, y: np.ndarray, offset: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
+    """逻辑回归（带截距，牛顿法）：(系数, 标准误)，系数[0] 是截距。offset = 固定系数 1 的那部分 logit"""
+    X = np.column_stack([np.ones(len(y)), X])
+    off = np.zeros(len(y)) if offset is None else offset
+    w = np.zeros(X.shape[1])
+    for _ in range(50):
+        p = 1 / (1 + np.exp(-(X @ w + off)))
+        H = X.T @ (X * (p * (1 - p))[:, None]) + 1e-9 * np.eye(len(w))
+        w -= np.linalg.solve(H, X.T @ (p - y))
+    return w, np.sqrt(np.diag(np.linalg.inv(H)))
+
+
+def additivity(drafts: dict) -> list[str]:
+    """逐项相加有没有算多：拿最终阵容的三项（强度 / 克制 / 配合，天辉 − 夜魇）拟合各自的系数。
+    5 个对位、10 对配合都是各自单独统计再相加的，如果彼此重复计算，系数会明显小于 1。截距 = 天辉自带的优势（engine.RADIANT_EDGE）"""
+    models = list(drafts.values())
+    if len(models) < 3 or len(models[0]) < 100:
+        return []
+    m = np.array([[x for x, _ in preds] for preds in models[:3]])          # 三行：强度、强度 + 克制、强度 + 克制 + 配合
+    y = np.array([w for _, w in models[0]], float)
+    parts = np.column_stack([m[0], m[1] - m[0], m[2] - m[1]])              # 强度、克制、配合
+    total = m[2]
+    L = ["\n【五、逐项相加有没有算多：拟合每项的系数（1 = 直接相加刚好，< 1 = 加多了，> 1 = 加少了；± 为 95% 区间）】"]
+    w, se = logistic_fit(np.zeros((len(y), 0)), y, offset=total)
+    L.append(f"  天辉截距（各项系数固定 1）：{w[0]:+.3f} ±{1.96 * se[0]:.3f} logit ≈ {(sigmoid(w[0]) - 0.5) * 100:+.1f} 个百分点"
+             f"（引擎里 RADIANT_EDGE = {E.RADIANT_EDGE}）")
+    edge = w[0]
+    w, se = logistic_fit(total[:, None], y)
+    L.append(f"  三项合计一个系数：{w[1]:.2f} ±{1.96 * se[1]:.2f}")
+    w, se = logistic_fit(parts, y)
+    L.append("  分开拟合：" + "  ".join(f"{n} {w[i + 1]:.2f} ±{1.96 * se[i + 1]:.2f}" for i, n in enumerate(("强度", "克制", "配合"))))
+    L.append("  按克制合计（天辉 − 夜魇，logit）分档：逐项相加的预测（加天辉截距）→ 实际天辉胜率；看克制叠多了是不是有上限")
+    pred = 1 / (1 + np.exp(-(total + edge)))
+    for lo, hi in ((-9, -0.6), (-0.6, -0.4), (-0.4, -0.2), (-0.2, 0), (0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 9)):
+        s = (parts[:, 1] >= lo) & (parts[:, 1] < hi)
+        if s.sum():
+            a = y[s].mean()
+            L.append(f"    克制 {lo:+.1f}~{hi:+.1f}：预测 {pred[s].mean() * 100:5.1f}%  实际 {a * 100:5.1f}% "
+                     f"±{1.96 * math.sqrt(a * (1 - a) / s.sum()) * 100:.1f}（{int(s.sum())} 场）")
+    return L
 
 
 def run(cfg: Config, n: int = 3000, log=print, do_tune: bool = False) -> str:
