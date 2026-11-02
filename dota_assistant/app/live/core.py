@@ -363,7 +363,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             self.save_settings(a)
         elif t == "upgrade_check":
             if not self.updater.check_async(asked=True):
-                raise ValueError("正在检查 / 下载，等一下")
+                raise ValueError("正在下载 / 安装更新，等一下")
         elif t == "upgrade_install":
             if not self.updater.install_async(self.quit_requested.set):
                 raise ValueError("现在没有能装的新版本（或者正在下载）")

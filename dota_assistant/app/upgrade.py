@@ -499,24 +499,34 @@ class Updater:
     def _start(self, fn: Callable, *args) -> bool:
         if not self._busy.acquire(blocking=False):
             return False
+        self._spawn(fn, *args)
+        return True
 
+    def _spawn(self, fn: Callable, *args) -> None:
+        """调用前已经拿到 _busy，fn 跑完放掉"""
         def work():
             try:
                 fn(*args)
             finally:
                 self._busy.release()
         threading.Thread(target=work, daemon=True, name="upgrade").start()
-        return True
 
     def check_async(self, delay: float = 0.0, asked: bool = False) -> bool:
-        """False = 正在检查 / 下载，这次不查。asked = 玩家手动点的「检查更新」"""
-        if self.state in ("restarting",):
+        """False = 正在下载 / 安装 / 重启，这次不查。asked = 玩家手动点的「检查更新」。
+        已经有一次检查在等 / 在查（比如启动后延迟 5 秒那次），手动点的并进去，结果按手动的算"""
+        if self.state == "restarting":
             return False
-        return self._start(self._check, delay, asked)
+        if not self._busy.acquire(blocking=False):
+            if self.state != "checking":
+                return False
+            self.asked = self.asked or asked
+            return True
+        self.state, self.error, self.asked = "checking", "", asked   # 延迟期间就算在查：按钮变灰，手动点的能并进来
+        self._spawn(self._check, delay)
+        return True
 
-    def _check(self, delay: float, asked: bool = False) -> None:
+    def _check(self, delay: float) -> None:
         time.sleep(delay)
-        self.state, self.error, self.asked = "checking", "", asked
         try:
             self.info = check(self.root, self.frozen)
         except Exception as e:

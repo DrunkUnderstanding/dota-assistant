@@ -352,6 +352,26 @@ class UpdaterTest(unittest.TestCase):
         self.assertFalse(quit_evt.is_set())
         self.assertTrue(u.view()["available"])            # 还能再试
 
+    def test_manual_check_joins_pending(self):
+        u = upgrade.Updater(Path(tempfile.mkdtemp()))
+        u.later = "v2"
+        c = upgrade.Check("package", current="v1", latest="v2", available=True)
+        with mock.patch.object(upgrade, "check", return_value=c):
+            self.assertTrue(u.check_async(delay=0.3))       # 启动时那次：先等一会儿
+            self.assertEqual(u.state, "checking")          # 等的时候就算在查（检查更新按钮变灰）
+            self.assertTrue(u.check_async(asked=True))      # 这时手动点：不报错，并进去
+            until(lambda: u.state == "available")
+        self.assertTrue(u.view()["remind"] and u.view()["asked"])  # 按手动的算：以后再说过也弹
+        u.info = upgrade.Check("package", available=True)
+        release = threading.Event()
+        with mock.patch.object(upgrade, "prepare", side_effect=lambda *a, **k: release.wait(5) and None), \
+                mock.patch.object(upgrade, "spawn"):
+            self.assertTrue(u.install_async(lambda: None))
+            until(lambda: u.state == "downloading")
+            self.assertFalse(u.check_async(asked=True))     # 下载中：这次不查
+            release.set()
+            until(lambda: u.state == "restarting")
+
 
     def test_remind_until_later(self):
         root = Path(tempfile.mkdtemp())

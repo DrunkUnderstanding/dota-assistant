@@ -2020,7 +2020,7 @@ OpenDota `/search` 按名字搜一个常见名返回 50 个人，认不准路人
 玩家需求（原话）：「能否帮我弄一个更新功能，这个功能是针对可执行包的，但是应该github的也能用上」。
 做法：**打包版**走 GitHub Release，**源码版**（git clone、用「启动助手.bat」跑）走 git pull；都从控制面板点、点完自己重启。下载源码 zip 解压的没法自动更新，只提示去 GitHub 下。
 
-**什么时候查**：`run` / `start`（`webui.run`）起来 5 秒后在后台查一次（`Updater.check_async`）；设置里「版本」那节有「检查更新」；命令行 `upgrade [--check] [--yes] [--zip 压缩包]`。
+**什么时候查**：`run` / `start`（`webui.run`）起来 5 秒后在后台查一次（`Updater.check_async`；等的这 5 秒状态就是 `checking`，「检查更新」按钮变灰，这时手动点的并进那次、结果按手动的算——以前会报「正在检查 / 下载」的 ERROR，2026-11-02 修）；设置里「版本」那节有「检查更新」；命令行 `upgrade [--check] [--yes] [--zip 压缩包]`。
 有新版本时顶栏设置按钮左边出绿色「有新版本」，点开是更新内容（Release 说明 / 新提交标题）+「更新并重启」，下载时按钮和窗口里有进度。
 
 **打包版怎么判新旧**：`VERSION.txt` 是 `<打包日期>-<提交>`，用 GitHub compare 接口比 `本地提交...最新 Release 的 tag`：ahead / diverged = 有新版本，identical = 最新，behind = 本地更新；
