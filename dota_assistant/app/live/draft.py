@@ -5,6 +5,7 @@ import json
 import logging
 import threading
 import time
+from collections import Counter
 from datetime import datetime
 
 from ...domain import advisor as adv
@@ -38,9 +39,39 @@ class DraftMixin:
         # 队友排的位置（OCR）：格子顺序和 team_roles 一一对应
         ally_pos = {h.id: r for t, r in zip(self.slots[side], self.team_roles)
                     if r and (h := self._hero(t)) and h in allies}
+        # 玩家在叠加层上定的位置（set_hero_pos）盖过认出来的：认出来的谁占了同一个位置就不算了
+        ids = lambda hs: {h.id for h in hs}
+        mine = {h: p for h, p in self.hero_pos.items() if h in ids(allies)}
+        theirs = {h: p for h, p in self.hero_pos.items() if h in ids(team[other])}
+        ally_pos = {h: p for h, p in ally_pos.items() if h not in mine and p not in mine.values()} | mine
         taken = {h.id for h in (*team["radiant"], *team["dire"], *bans)}
         skip = [self.db.by_id[i] for i in self.skipped if i in self.db.by_id and i not in taken]
-        return adv.Draft(allies, team[other], bans, my, ally_pos, skip)
+        not_next = [self.db.by_id[i] for i in self.not_next if i in self.db.by_id and i not in taken]
+        return adv.Draft(allies, team[other], bans, my, ally_pos, skip, not_next=not_next,
+                         enemy_pos=theirs, manual_pos=mine | theirs)
+
+    def set_hero_pos(self, hero_id: int, pos: int | None) -> None:
+        """叠加层「剩余位置」/「对面分路」上点英雄改位置（2026-11-02 玩家：「你的位置判断可能有误，我需要你能够让我主动调整」）。
+        pos = 1~5 定成这个位置，同一边本来定在这个位置的人改回自动猜；pos 为空 / 0 = 改回自动猜。只管这一局（新一局选人 / 清空时清掉）"""
+        h = self.db.by_id.get(hero_id)
+        if h is None:
+            raise ValueError("没有这个英雄")
+        if not pos:
+            if self.hero_pos.pop(hero_id, None) is not None:
+                log.info("%s 的位置改回自动猜", h.name_cn)
+            self.refresh()
+            return
+        if not 1 <= pos <= 5:
+            raise ValueError("位置是 1~5")
+        draft = self.current_draft()
+        team = next((t for t in (draft.allies, draft.enemies) if h in t), None)
+        if team is None:
+            raise ValueError(f"这局阵容里没有{h.name_cn}")
+        for other in [o.id for o in team if o.id != hero_id and self.hero_pos.get(o.id) == pos]:
+            del self.hero_pos[other]
+        self.hero_pos[hero_id] = pos
+        log.info("%s%s 定成 %d 号位", "对面 " if team is draft.enemies else "队友 ", h.name_cn, pos)
+        self.refresh()
 
     def refresh(self, force_speech: bool = False) -> None:
         draft = self.current_draft()
@@ -55,7 +86,7 @@ class DraftMixin:
             log.info("局面：我 %s · 队友 %s · 对面 %s · 禁用 %s · %d 号位 → 推荐 %s",
                      draft.my_hero.name_cn if draft.my_hero else "未选", consts._names(draft.allies), consts._names(draft.enemies),
                      consts._names(draft.bans), self.position,
-                     "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.picks + advice.targeted) or "无")
+                     "、".join(f"{s.hero.name_cn}({s.winrate:.1f}%)" for s in advice.shown()) or "无")
         if force_speech or changed:
             text = adv.speech(self.prev_draft, advice, force=force_speech)
             if text:
@@ -133,12 +164,30 @@ class DraftMixin:
             log.info("恢复推荐 %s", self.db.by_id[hero_id].name_cn)
         self.refresh()
 
+    def skip_guess(self, hero_id: int) -> None:
+        """「对面最后一手（猜）」头像上点 ×：觉得对面不会拿它，不再猜它，后面的补上来（玩家 2026-11-02）"""
+        h = self.db.by_id.get(hero_id)
+        if h is None:
+            raise ValueError("没有这个英雄")
+        if hero_id not in self.not_next:
+            self.not_next.append(hero_id)
+        log.info("对面最后一手不猜 %s（已排除 %d 个）", h.name_cn, len(self.not_next))
+        self.refresh()
+
+    def unskip_guess(self, hero_id: int) -> None:
+        if hero_id in self.not_next:
+            self.not_next.remove(hero_id)
+            log.info("对面最后一手恢复猜 %s", self.db.by_id[hero_id].name_cn)
+        self.refresh()
+
     def clear(self) -> None:
         self.slots = {s: [""] * 5 for s in consts.SIDES}
         self._named.clear()
         self.hints = {s: [{} for _ in range(5)] for s in consts.SIDES}
         self.bans_text = ""
         self.skipped.clear()
+        self.not_next.clear()
+        self.hero_pos.clear()
         self.grid.reset()
         self.prev_draft = None
         self.refresh()
@@ -154,7 +203,7 @@ class DraftMixin:
             return False
         if self.gsi and self.gsi.state.alive:
             return self.gsi.state.in_draft
-        return self.scan_without_gsi
+        return self._scan_blind()
 
     def should_scan_bans(self) -> bool:
         """禁用只在选人阶段出现；不需要顶栏校准"""
@@ -162,7 +211,18 @@ class DraftMixin:
             return False
         if self.gsi and self.gsi.state.alive:
             return self.gsi.state.game_state == SELECTION_STATE
-        return self.scan_without_gsi
+        return self._scan_blind()
+
+    def _scan_blind(self) -> bool:
+        """GSI 没在推送时要不要照样截屏认（「无 GSI 也识别」，给 GSI 没装好的时候兜底）。
+        不认的：这次开助手 GSI 推送过（现在没推送 = Dota 关了 / 在重开，不是 GSI 坏了）、找不到 Dota 窗口（没开 / 最小化）。
+        2026-11-01 实战：打完一局关了 Dota，助手开着 8 个小时每秒都在认桌面 / 网页，又在 Dota 重开的加载画面上认出一堆英雄"""
+        if not self.scan_without_gsi or (self.gsi and self.gsi.state.updated):
+            return False
+        if self.screen is None:
+            self.screen = self._screen_factory()
+        dota_open = getattr(self.screen, "dota_open", None)
+        return dota_open() if dota_open else True
 
     def tick(self) -> None:
         self.coach_tick()                        # 先更新阶段（进新一局选人要先清掉上一局的禁用）
@@ -282,12 +342,16 @@ class DraftMixin:
         self.pending_key = key
         if not stable:
             return
-        self._keep_crops(view, "strat" if only_empty else "sel")
-        # 玩家告诉过的格子：头像后来变了样（刚选时盖着的数字徽章没了、策略时间换了样子、帮认时那格还没出头像）也接着记，
-        # 已经认得出的 learn_slot 自己跳过，不会每秒重复存
-        for side, i in sorted(self._named):
-            if h := self._hero(self.slots[side][i]):
-                self.learn_slot(side, i, h)
+        # 裁图（帮认时记成模板用的）只在 GSI 确认在选人 / 策略时间时留。2026-10-31 实战：一局赛后帮认了齐天大圣，
+        # 之后 13 个小时 GSI 没在选人（主菜单 / Dota 关了截整块桌面），每秒都把那格裁到的东西（黑屏、网页、加载画面）
+        # 记成齐天大圣，攒了 440 张，下一局空位、龙骑士全认成齐天大圣
+        if game_state in (SELECTION_STATE, STRATEGY_STATE):
+            self._keep_crops(view, "strat" if only_empty else "sel")
+            # 玩家告诉过的格子：头像后来变了样（刚选时盖着的数字徽章没了、策略时间换了样子、帮认时那格还没出头像）也接着记，
+            # 已经认得出的 learn_slot 自己跳过，不会每秒重复存
+            for side, i in sorted(self._named):
+                if h := self._hero(self.slots[side][i]):
+                    self.learn_slot(side, i, h)
         changed = self.last_view is None or self.last_view.key() != key
         self.last_view = view
         if changed or force:
@@ -312,7 +376,7 @@ class DraftMixin:
     def learn_slot(self, side: str, index: int, h: Hero) -> int:
         """玩家告诉我们顶栏这格是 h：把这局在这格裁到的头像记成 h 的模板，返回记了几张。
         不记的：和这局一开始（还没人选）一样的（那格根本没出头像，例如 2026-10-28 断线的那个人，记了会把空位认成他）、
-        两张一样的、本来就认得出的、像别的格子的（见 _like_other_slot）"""
+        两张一样的、本来就认得出的、像别的格子的（见 _like_other_slot）；一格一局最多记 LEARN_PER_SLOT 张"""
         blank = self._crops["blank"].get((side, index))
         fb = feature(blank) if blank is not None else None
         seen, n = [], 0
@@ -320,6 +384,10 @@ class DraftMixin:
             c = self._crops[phase].get((side, index))
             if c is None:
                 continue
+            if self._slot_learned.get((side, index), 0) + n >= consts.LEARN_PER_SLOT:
+                log.warning("%s第 %d 格这局已经记了 %d 张%s模板，不再记（多半裁到的不是头像）", consts._side_cn(side),
+                            index + 1, consts.LEARN_PER_SLOT, h.name_cn)
+                break
             f = feature(c)
             if (fb is not None and float(f @ fb) > consts.SAME_CROP) or any(float(f @ g) > consts.SAME_CROP for g in seen):
                 continue
@@ -334,6 +402,7 @@ class DraftMixin:
             self.bank.learn(h.id, c)
             n += 1
         if n:
+            self._slot_learned[(side, index)] = self._slot_learned.get((side, index), 0) + n
             log.info("记住%s第 %d 格是%s：存了 %d 张模板（共学习 %d 张）",
                      consts._side_cn(side), index + 1, h.name_cn, n, self.bank.learned)
         return n
@@ -407,9 +476,16 @@ class DraftMixin:
 
     def _confirm_with_grid(self, view: DraftView) -> None:
         """顶栏分数没过阈值、但最像的英雄在选人网格里确实已被选走（变暗没斜线）的，也算认出来。
-        2026-10-23 实测：拉比克在顶栏只有 0.63（阈值 0.70），网格里已经变暗。"""
-        for s in view.radiant + view.dire:
-            if s.hero_id is None and not s.clash and s.guess in self.grid.taken and s.score >= consts.GRID_CONFIRM_MIN:
+        2026-10-23 实测：拉比克在顶栏只有 0.63（阈值 0.70），网格里已经变暗。
+        一个英雄只补进一格：最像它的有好几格、或者它在别的格子认出过 / 认进好几格（clash）都不补。2026-10-31 实战：
+        学坏的齐天大圣模板让好几格都最像它，认得有把握的两格互相作废了，没把握的三格又被网格（真有人选了齐天大圣）补了回来"""
+        slots = view.radiant + view.dire
+        blocked = {s.hero_id for s in slots if s.hero_id} | {s.guess for s in slots if s.clash}
+        cands = [s for s in slots if s.hero_id is None and not s.clash and s.guess in self.grid.taken
+                 and s.score >= consts.GRID_CONFIRM_MIN]
+        n = Counter(s.guess for s in cands)
+        for s in cands:
+            if n[s.guess] == 1 and s.guess not in blocked:
                 s.hero_id = s.guess
 
     def fill_slots(self, view: DraftView, only_empty: bool = False) -> None:

@@ -122,8 +122,10 @@ def guess(hero_ids: list[int], positions: dict[int, dict[int, tuple[int, int]]] 
 
 
 def assign(enemy_ids: list[int], ally_ids: list[int], my_pos: int, side: str | None,
-           positions: dict[int, dict[int, tuple[int, int]]] | None, ally_pos: dict[int, int] | None = None) -> Lanes:
-    return Lanes(my_pos, side, guess(enemy_ids, positions),
+           positions: dict[int, dict[int, tuple[int, int]]] | None, ally_pos: dict[int, int] | None = None,
+           enemy_pos: dict[int, int] | None = None) -> Lanes:
+    """ally_pos = 已知的队友位置（选人界面认出的 / 玩家在叠加层上定的），enemy_pos = 玩家定的对面位置；其余按常打位置猜"""
+    return Lanes(my_pos, side, guess(enemy_ids, positions, fixed=enemy_pos),
                  guess(ally_ids, positions, taken={my_pos}, fixed=ally_pos))
 
 
@@ -261,12 +263,12 @@ def lane_line(lanes: Lanes, name) -> str:
     return "；".join(parts)
 
 
-def view(lanes: Lanes, hero_ref, tips: list[Why] = ()) -> dict:
-    """叠加层用：三路（地图从上到下）+ 同路队友 + 我这路的提示"""
+def view(lanes: Lanes, hero_ref, tips: list[Why] = (), manual: set[int] | frozenset = frozenset()) -> dict:
+    """叠加层用：三路（地图从上到下）+ 同路队友 + 我这路的提示。manual = 玩家在叠加层上定了位置的英雄（标出来、能改回自动猜）"""
     out = {"my_pos": lanes.my_pos, "my_pos_name": POSITION_NAMES.get(lanes.my_pos, ""),
            "rows": [{"label": r.label, "mine": r.mine, "missing": r.missing,
-                     "heroes": [{**hero_ref(g.hero), "pos": g.pos, "conf": round(g.conf, 2), "sure": g.conf >= SURE}
-                                for g in r.heroes]} for r in lanes.rows()],
+                     "heroes": [{**hero_ref(g.hero), "pos": g.pos, "conf": round(g.conf, 2), "sure": g.conf >= SURE,
+                                 "manual": g.hero in manual} for g in r.heroes]} for r in lanes.rows()],
            "partner": None, "tips": [w.__dict__ for w in tips]}
     if p := lanes.partner():
         out["partner"] = {**hero_ref(p.hero), "pos": p.pos, "conf": round(p.conf, 2), "sure": p.conf >= SURE}

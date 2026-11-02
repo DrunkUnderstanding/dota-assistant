@@ -425,6 +425,8 @@ function paintOverlayStyle(style) {
 const upDlg = $('#upgrade');
 const UP_BUSY = { checking: '正在检查…', downloading: '正在下载', installing: '正在安装…', restarting: '马上重启…' };
 let closing = false;
+let upLast = {};          // 最近一次的更新状态（关窗口时看要不要记「以后再说」）
+let upDismissed = '';     // 这个版本刚说过以后再说：Python 那边记下之前别又弹出来
 
 function upgradeLine(u) {
   if (!u || u.state === 'idle') return '还没检查过';
@@ -446,7 +448,7 @@ function paintUpgrade(u) {
   line.classList.toggle('is-error', u.state === 'error');
   $('#btn-upgrade-check').disabled = ['checking', 'downloading', 'installing', 'restarting'].includes(u.state);
   $('#version-sub').textContent = { package: '免安装版：从 GitHub Release 下载新版本，替换后自动重启',
-    git: '源码版：git pull 拉 GitHub 上的新提交，然后自动重启' }[u.mode] || '每次启动会在后台看一眼 GitHub 有没有新版本';
+    git: '源码版：git pull 拉 GitHub 上的新提交，然后自动重启' }[u.mode] || '每次启动会在后台看一眼 GitHub，有新版本会弹窗告诉你';
 
   $('#upgrade-ver').textContent = u.current ? `${u.current} → ${u.latest}${u.size_mb ? `（下载 ${u.size_mb} MB）` : ''}` : '';
   // Release 说明是 Markdown：粗体 / 行内代码的记号去掉再显示（纯文本，不当 HTML）
@@ -463,6 +465,8 @@ function paintUpgrade(u) {
   $('#upgrade-go').disabled = busy || !u.available;
   $('#upgrade-go').textContent = u.state === 'error' ? '再试一次' : '更新并重启';
   $('#upgrade-later').disabled = u.state === 'restarting';
+  upLast = u;
+  remindUpgrade();
   // 新版本准备好了：关掉控制面板，Electron 退出、助手退出，收尾窗口接手（Python 那边几秒后也会强制关）
   if (u.state === 'restarting' && !closing) {
     closing = true;
@@ -470,8 +474,24 @@ function paintUpgrade(u) {
   }
 }
 
+// 查到新版本自己弹出来（Python 那边已经排除了「以后再说」过的版本和在一局里的时候）；
+// 自动检查的等别的窗口（比如第一次启动的设置）关了再弹，手动「检查更新」的直接盖在设置上
+function remindUpgrade() {
+  const u = upLast;
+  const otherOpen = $$('dialog[open]').some((d) => d !== upDlg);
+  if (u.remind && !upDlg.open && u.latest !== upDismissed && (u.asked || !otherOpen)) upDlg.showModal();
+}
+// 别的窗口关了马上看一眼（状态没变时 Python 不推新快照）
+$$('dialog').forEach((d) => { if (d !== upDlg) d.addEventListener('close', remindUpgrade); });
+
 $('#btn-upgrade').addEventListener('click', () => { if (!upDlg.open) upDlg.showModal(); });
 $('#upgrade-later').addEventListener('click', () => upDlg.close());
+// 不更新就关掉（「以后再说」或 Esc）：这个版本以后不再自己弹，顶栏「有新版本」按钮还在
+upDlg.addEventListener('close', () => {
+  if (!upLast.available || ['downloading', 'installing', 'restarting'].includes(upLast.state)) return;
+  upDismissed = upLast.latest;
+  act('upgrade_later');
+});
 $('#upgrade-go').addEventListener('click', async () => {
   $('#upgrade-go').disabled = true;
   const res = await act('upgrade_install');
@@ -479,6 +499,7 @@ $('#upgrade-go').addEventListener('click', async () => {
 });
 $('#btn-upgrade-check').addEventListener('click', async () => {
   $('#btn-upgrade-check').disabled = true;
+  upDismissed = '';
   const res = await act('upgrade_check');
   if (!res.ok) showMessage(res.message, true);
 });

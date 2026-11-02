@@ -89,6 +89,8 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self.hints: dict[str, list[dict]] = {s: [{} for _ in range(5)] for s in consts.SIDES}   # 识别给的猜测 / 相似度
         self.bans_text = ""
         self.skipped: list[int] = []             # 这局不想玩的英雄 id（点推荐卡片上的 ×），新一局选人 / 清空时清掉
+        self.not_next: list[int] = []            # 对面最后一手不会拿的英雄 id（「对面最后一手（猜）」头像上点 ×），同上清掉
+        self.hero_pos: dict[int, int] = {}       # 这局玩家在叠加层上定的位置 {英雄 id: 位置}（双方的，set_hero_pos），新一局选人 / 清空时清掉
         self.position = cfg.position
         self.side_mode = "auto"
         self.mode = "auto"
@@ -161,6 +163,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self._picked_cache: tuple = (None, {})
         # 玩家在叠加层 / 顶栏 / 控制面板告诉我们的格子（这局）：选人时识别整排重写格子也不冲掉它们
         self._named: set[tuple[str, int]] = set()
+        self._slot_learned: dict[tuple[str, int], int] = {}   # 这局每格记了几张模板（learn_slot 封顶用）
         self.fix_file = consts.FIX_FILE
         # 选人网格上的禁用（红斜线），见 grid.py；新布局在后台建图
         self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher()
@@ -332,6 +335,12 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             self.skip_hero(int(a["hero_id"]))
         elif t == "unskip_hero":
             self.unskip_hero(int(a["hero_id"]))
+        elif t == "set_hero_pos":
+            self.set_hero_pos(int(a["hero_id"]), int(a.get("pos") or 0))
+        elif t == "skip_guess":
+            self.skip_guess(int(a["hero_id"]))
+        elif t == "unskip_guess":
+            self.unskip_guess(int(a["hero_id"]))
         elif t == "brief_page":
             self.set_brief_page(str(a.get("page")))
         elif t == "buyback":
@@ -353,12 +362,14 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         elif t == "save_settings":
             self.save_settings(a)
         elif t == "upgrade_check":
-            if not self.updater.check_async():
+            if not self.updater.check_async(asked=True):
                 raise ValueError("正在检查 / 下载，等一下")
         elif t == "upgrade_install":
             if not self.updater.install_async(self.quit_requested.set):
                 raise ValueError("现在没有能装的新版本（或者正在下载）")
             self.message = "开始更新，好了以后助手会自己重启"
+        elif t == "upgrade_later":
+            self.updater.dismiss()
         elif t == "open_logs":
             self.message = f"已打开日志文件夹 {logs.open_dir()}（出问题时把最新的 .log 发给开发者）"
         else:
@@ -434,8 +445,15 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},
             "status": self.status(),
-            "upgrade": self.updater.view(),
+            "upgrade": self._upgrade_view(),
         }
+
+    def _upgrade_view(self) -> dict:
+        v = self.updater.view()
+        st = self.gsi.state if self.gsi else None
+        if v.get("remind") and st and st.alive and st.game_state not in (None, "DOTA_GAMERULES_STATE_POST_GAME"):
+            del v["remind"]                    # 在一局里（等加载 / 选人 / 比赛）不弹：选人时控制面板还要用来改格子，打完再弹
+        return v
 
     def heroes(self) -> list[dict]:
         return sorted(({"id": h.id, "name": h.name_cn, "en": h.name_en, "key": h.key, "attr": h.attr} for h in self.db),

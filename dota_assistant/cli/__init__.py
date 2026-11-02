@@ -14,6 +14,7 @@
   say <文字>                   测试语音
   backtest [--matches N]       用统计之后的新对局检验推荐和胜负的关系
   lanes-test [--matches N]     用同一批对局检验「对面分路」猜得准不准
+  next-test [--matches N]      用同一批对局检验「对面最后一手」猜得准不准
   lane-test [--matches N]      回测：3 / 6 分钟时看击杀 / 死亡 / 等级能不能猜出对线优劣；屯野 / 莲花和对线结果
   lane-review                  实战记录（3 / 6 / 10 分钟自己的数据）对照 STRATZ 赛后的对线结果
   backtest-ai [--moments N]    大模型选人盲测（用 Claude Code 订阅，和统计引擎同题对比）
@@ -44,7 +45,7 @@ from ..sources import stats as stats_mod
 
 # 这些命令写日志文件；查询类命令（suggest / kb / say …）只在控制台显示警告，免得把有用的日志挤掉
 FILE_LOG_COMMANDS = {"start", "run", "demo", "update", "calibrate", "label", "gsi-dump", "backtest", "backtest-ai",
-                     "coach-sim", "brief-sim", "lanes-test", "lane-test", "upgrade"}
+                     "coach-sim", "brief-sim", "lanes-test", "next-test", "lane-test", "upgrade"}
 
 
 def _split(s: str | None) -> list[str]:
@@ -296,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     bp.add_argument("--tune", action="store_true", help="网格搜对线权重 / 反制风险权重（一半调参一半验证）")
     lt = sub.add_parser("lanes-test", help="回测：对面分路猜得准不准")
     lt.add_argument("--matches", type=int, default=3000)
+    nt = sub.add_parser("next-test", help="回测：对面最后一手猜得准不准")
+    nt.add_argument("--matches", type=int, default=4000)
     lv = sub.add_parser("lane-test", help="回测：3 / 6 分钟时看击杀 / 死亡 / 等级能不能猜出对线优劣，屯野 / 莲花和对线结果")
     lv.add_argument("--matches", type=int, default=3000)
     sub.add_parser("lane-review", help="实战记录：3 / 6 / 10 分钟记下的自己数据，对照 STRATZ 赛后的对线结果")
@@ -386,6 +389,10 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         matches = backtest.fetch_matches(cfg, stats["hi_id"], args.matches)
         print(lanes.evaluate(matches, stats_mod.load_positions(cfg)))
+        return 0
+    if args.cmd == "next-test":
+        from ..research.nextpick import run as next_test
+        print(next_test(cfg, args.matches))
         return 0
     if args.cmd == "lane-test":
         from ..research.lanestate import run as lane_test

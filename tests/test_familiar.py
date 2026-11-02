@@ -9,7 +9,7 @@ from dota_assistant.core.config import Config
 from dota_assistant.domain import advisor as adv
 from dota_assistant.domain import engine as E
 from dota_assistant.domain.engine import Engine, Suggestion, sigmoid
-from dota_assistant.core.heroes import HeroDB
+from dota_assistant.core.heroes import Hero, HeroDB
 from dota_assistant.sources import http, player
 from tests.test_engine import AXE, CM, HEROES, PL, TIDE, WK, make_stats
 from tests.test_webui import fake_advisor
@@ -40,6 +40,37 @@ class SplitTest(unittest.TestCase):
                          adv.split_targeted(self.RES, 2, 2, True))
 
 
+class SplitFourTest(unittest.TestCase):
+    """给我的推荐四小组（2026-11-02）：熟的分 胜率最高 / 克制最强，不熟的分 克制最强 / 胜率最高"""
+    F = [Hero(100 + i, f"f{i}", f"熟{i}", f"F{i}", (), "str") for i in range(5)]
+    U = [Hero(200 + i, f"u{i}", f"生{i}", f"U{i}", (), "str") for i in range(4)]
+    # (英雄, 综合分, 自身)：克制 + 配合 = 两者之差（换成百分点）
+    RES = sorted([Suggestion(F[0], 0.20, 0.18), Suggestion(F[1], 0.15, 0.14), Suggestion(F[2], 0.10, -0.10),
+                  Suggestion(F[3], 0.05, 0.00), Suggestion(F[4], -0.02, -0.30),
+                  Suggestion(U[0], 0.30, 0.29), Suggestion(U[1], 0.12, -0.20), Suggestion(U[2], 0.08, 0.05),
+                  Suggestion(U[3], -0.05, -0.40)], key=lambda s: -s.score)
+    FAMILIAR = {h.id for h in F}
+
+    def heroes(self, groups):
+        return [[s.hero.name_cn for s in g] for g in groups]
+
+    def test_four_groups(self):
+        # 熟 4 克制最大（+5），但熟 0 / 熟 1 胜率更高先进「胜率最高」；熟 4 克制更大但总胜率不到 50%，不进克制组；
+        # 不熟的里生 1 克制最大（+8），生 0 总胜率最高但克制小；生 3 不到 50% 哪组都不进
+        self.assertEqual(self.heroes(adv.split_four(self.RES, 2, 2, True, self.FAMILIAR)),
+                         [["熟0", "熟1"], ["熟2", "熟3"], ["生1", "生2"], ["生0"]])
+        self.assertEqual(self.heroes(adv.split_four(self.RES, 1, 1, True, self.FAMILIAR)),
+                         [["熟0"], ["熟2"], ["生1"], ["生0"]])
+
+    def test_no_draft_and_fallback(self):
+        # 还没人选：只有「推荐 · 胜率最高」，只出会玩的，一共 2 × (top + other) 个
+        self.assertEqual(self.heroes(adv.split_four(self.RES, 1, 1, False, self.FAMILIAR)),
+                         [["熟0", "熟1", "熟2", "熟3"], [], [], []])
+        # 不分 / 这个位置一个会玩的都没有：全部当「推荐」，两组各 top + other 个，「针对这局」空着
+        self.assertEqual(self.heroes(adv.split_four(self.RES, 1, 1, True)), [["生0", "熟0"], ["生1", "熟2"], [], []])
+        self.assertEqual(adv.split_four(self.RES, 1, 1, True, set()), adv.split_four(self.RES, 1, 1, True))
+
+
 class AdviseTest(unittest.TestCase):
     def test_unfamiliar_counter_goes_to_targeted_with_tag(self):
         # 潮汐克幻影长矛手、综合第一，但我生涯只打过 5 局：不进推荐，进「针对这局」并标「不熟」
@@ -51,9 +82,9 @@ class AdviseTest(unittest.TestCase):
         self.assertTrue(all(s.unfamiliar is None for s in advice.picks))
         v = adv.render_view(advice, None)
         self.assertEqual([(g["title"], g["note"]) for g in v["groups"]],
-                         [("推荐", "你打过 20 局以上的"), ("针对这局", "克制 + 配合最多的，不管熟不熟")])
+                         [("熟练 · 胜率最高", "你打过 20 局以上的"), ("不熟练 · 克制最强", "克制 + 配合最多的")])
         lines = [t for _, t in adv.render_lines(advice, None)]
-        self.assertIn("推荐（你打过 20 局以上的）", lines)
+        self.assertIn("熟练 · 胜率最高（你打过 20 局以上的）", lines)
         # 两组显示一样（总胜率 + 同一行算法），「针对这局」只是按克制 + 配合（= 总胜率 − 自身）排
         b = {k: val for k, _, val in tide.breakdown()}
         self.assertIn(f"潮汐猎人  {tide.winrate:.1f}%（克制 {b['counter']:+.1f} 配合 {b['syn']:+.1f}）　不熟", "\n".join(lines))

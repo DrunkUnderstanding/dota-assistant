@@ -63,6 +63,13 @@ class WindowGrabber:
             self.hwnd = self.u.FindWindowW(None, self.title)
         return self.hwnd
 
+    def open(self) -> bool:
+        """窗口在、没最小化。不是 Windows 时不知道，当它在"""
+        if not self.ok:
+            return True
+        hwnd = self._window()
+        return bool(hwnd) and not self.u.IsIconic(hwnd)
+
     def grab(self) -> np.ndarray | None:
         if not self.ok:
             return None
@@ -104,6 +111,10 @@ class Screen:
         self.monitor = mons[monitor] if monitor < len(mons) else mons[1]
         self.window = window if window is not None else WindowGrabber()
         self.source = ""                                # 最近一次截的是什么：window / screen
+
+    def dota_open(self) -> bool:
+        """Dota 开着（窗口在、没最小化）。独占全屏截不到窗口画面、退回整屏截图时也算开着"""
+        return self.window.open()
 
     def grab(self) -> np.ndarray:
         """优先 Dota 窗口，退回整块屏幕；BGR"""

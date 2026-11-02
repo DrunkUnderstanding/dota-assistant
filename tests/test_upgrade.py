@@ -353,6 +353,38 @@ class UpdaterTest(unittest.TestCase):
         self.assertTrue(u.view()["available"])            # 还能再试
 
 
+    def test_remind_until_later(self):
+        root = Path(tempfile.mkdtemp())
+        u = upgrade.Updater(root)
+        c = upgrade.Check("package", current="v1", latest="v2", available=True)
+        with mock.patch.object(upgrade, "check", return_value=c):
+            u.check_async()
+            until(lambda: u.state == "available")
+        self.assertTrue(u.view()["remind"])                # 查到新版本：面板自己弹
+        self.assertFalse(u.view()["asked"])
+        u.dismiss()                                        # 以后再说
+        self.assertNotIn("remind", u.view())
+        self.assertEqual((root / upgrade.LATER_FILE).read_text(encoding="utf-8"), "v2\n")
+        u2 = upgrade.Updater(root)                         # 下次启动：同一个版本不弹
+        with mock.patch.object(upgrade, "check", return_value=c):
+            u2.check_async()
+            until(lambda: u2.state == "available")
+        self.assertNotIn("remind", u2.view())
+        self.assertTrue(u2.view()["available"])            # 顶栏按钮还在
+        with mock.patch.object(upgrade, "check", return_value=c):
+            u2.check_async(asked=True)                     # 手动检查更新：照样弹
+            until(lambda: u2.state == "available" and u2.asked)
+        self.assertTrue(u2.view()["remind"] and u2.view()["asked"])
+        c3 = upgrade.Check("package", current="v1", latest="v3", available=True)
+        with mock.patch.object(upgrade, "check", return_value=c3):
+            u2.check_async()                               # 又出了更新的版本：再弹
+            until(lambda: u2.state == "available" and u2.info is c3)
+        self.assertTrue(u2.view()["remind"])
+        u3 = upgrade.Updater(Path(tempfile.mkdtemp()))
+        u3.dismiss()                                       # 没查过 / 没有新版本：什么都不记
+        self.assertFalse((u3.root / upgrade.LATER_FILE).exists())
+
+
 class LiveTest(unittest.TestCase):
     def test_actions(self):
         quiet = mock.patch.object(upgrade, "_say")
@@ -368,6 +400,16 @@ class LiveTest(unittest.TestCase):
             live.action({"type": "upgrade_check"})
             until(lambda: live.updater.state == "available")
         self.assertTrue(live.snapshot()["upgrade"]["available"])
+        self.assertTrue(live.snapshot()["upgrade"]["remind"])
+        live.gsi = mock.Mock()
+        live.gsi.state.alive, live.gsi.state.game_state = True, "DOTA_GAMERULES_STATE_HERO_SELECTION"
+        self.assertNotIn("remind", live.snapshot()["upgrade"])     # 选人时不弹
+        live.gsi.state.game_state = "DOTA_GAMERULES_STATE_POST_GAME"
+        self.assertTrue(live.snapshot()["upgrade"]["remind"])      # 打完了再弹
+        live.gsi = None
+        live.action({"type": "upgrade_later"})
+        self.assertNotIn("remind", live.snapshot()["upgrade"])
+        self.assertEqual((live.updater.root / upgrade.LATER_FILE).read_text(encoding="utf-8"), "b\n")
         with mock.patch.object(upgrade, "prepare", return_value=["x"]), mock.patch.object(upgrade, "spawn"):
             live.action({"type": "upgrade_install"})
             self.assertTrue(live.quit_requested.wait(5))

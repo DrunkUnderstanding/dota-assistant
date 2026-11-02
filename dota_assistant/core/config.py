@@ -32,9 +32,9 @@ class Config:
     pool: list[str] = field(default_factory=list)   # 我的英雄池（中文名 / 英文名 / 别名）
     only_pool: bool = False           # True=只在英雄池里推荐
     position_filter: bool = True      # True=按位置粗筛候选
-    top: int = 3                      # 「推荐」几个：按综合胜率排
-    top_other: int = 3                # 「针对这局」几个：综合前 top 个之外按克制 + 配合挑（advisor.split_targeted）
-    familiar_games: int = 20          # 「推荐」只放生涯打过这么多局的英雄（OpenDota），不熟的只进「针对这局」并标出来；0 = 不分（advisor.split_targeted）
+    top: int = 3                      # 「熟练 · 胜率最高」「熟练 · 克制最强」各几个（会玩的英雄，advisor.split_four）
+    top_other: int = 3                # 「不熟练 · 克制最强」「不熟练 · 胜率最高」各几个（不熟的英雄）
+    familiar_games: int = 20          # 生涯打过这么多局的英雄（OpenDota）进「推荐」，不熟的进「针对这局」并标出来；0 = 不分（advisor.split_four）
     duo_account_id: int = 0           # 双排队友的好友代码：我选好以后「剩余位置」给队友的推荐按他会玩的分；0 = 不填
 
     # ---- 实时助手（python -m dota_assistant run）----
@@ -46,6 +46,7 @@ class Config:
     voice: bool = False               # 语音播报先关掉、面板开关也隐藏了（玩家 2026-10-22 决定），这里改 true 能打开
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
+    ingame_tips: bool = False         # 局内弹打法 / 出装卡片（缺口提醒、死亡复盘、中后期本局要点）；先关着（玩家 2026-11-02），野区提醒不受影响
     jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野 / 抢莲花，jungle.py）；局内点 × 能按种类关掉这一局的
     stack_second: int = 53            # 屯野提醒的秒数（x:53 拉）
     pull_second: int = 15             # 拉野提醒的秒数（x:15 拉）；不同野点 / 阵营差几秒，按自己那边调

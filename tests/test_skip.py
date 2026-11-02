@@ -70,6 +70,20 @@ class LiveSkipTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.live.skip_hero(999999)
 
+    def test_skip_guess(self):
+        # 「对面最后一手（猜）」头像上的 ×：Live 记下、Draft 带上，点两次不重复，恢复，新一局清空
+        self.act("skip_guess", AXE.id)
+        self.act("skip_guess", AXE.id)
+        self.assertEqual(self.live.not_next, [AXE.id])
+        self.assertEqual(self.live.current_draft().not_next, [AXE])
+        self.act("unskip_guess", AXE.id)
+        self.assertEqual(self.live.current_draft().not_next, [])
+        self.act("skip_guess", AXE.id)
+        wait(self.live.submit(self.live.clear))
+        self.assertEqual(self.live.not_next, [])
+        with self.assertRaises(ValueError):
+            self.live.skip_guess(999999)
+
     def test_picked_by_someone_drops_from_list(self):
         # 不想玩的被别人选了：不再列在「这局不想玩」里
         self.act("skip_hero", AXE.id)

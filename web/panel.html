@@ -53,7 +53,7 @@
   </div>
   <div class="field field-toggles">
     <label class="switch" hidden><input type="checkbox" id="opt-voice"><i></i>语音</label>
-    <label class="switch" title="没连上 GSI 时也按间隔截屏识别"><input type="checkbox" id="opt-scan"><i></i>无 GSI 也识别</label>
+    <label class="switch" title="GSI 没装好、一直没连上时，Dota 开着就按间隔截屏识别（这次开助手 GSI 连上过就不用；Dota 没开不识别）"><input type="checkbox" id="opt-scan"><i></i>无 GSI 也识别</label>
   </div>
 </section>
 
@@ -169,7 +169,7 @@
 
       <section class="dlg-sec" id="version-head">
         <div class="sec-head">
-          <div><h3>版本</h3><p class="dlg-sub" id="version-sub">每次启动会在后台看一眼 GitHub 有没有新版本</p></div>
+          <div><h3>版本</h3><p class="dlg-sub" id="version-sub">每次启动会在后台看一眼 GitHub，有新版本会弹窗告诉你</p></div>
           <button type="button" class="btn btn-small" id="btn-upgrade-check">检查更新</button>
         </div>
         <p class="row-hint version-line" id="version-line"></p>
@@ -209,7 +209,7 @@
       </section>
     </div>
     <footer class="dlg-actions">
-      <button type="button" class="btn btn-ghost" id="upgrade-later">以后再说</button>
+      <button type="button" class="btn btn-ghost" id="upgrade-later" title="这个版本不再自己弹出来；想更新时点顶栏「有新版本」">以后再说</button>
       <button type="button" class="btn btn-primary" id="upgrade-go">更新并重启</button>
     </footer>
   </form>

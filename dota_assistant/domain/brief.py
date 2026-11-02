@@ -209,9 +209,11 @@ def _line(x: tuple) -> dict:
 
 
 def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], pos: int,
-          base: kb.KnowledgeBase | None = None, side: str | None = None, ally_pos: dict[int, int] | None = None) -> Brief:
+          base: kb.KnowledgeBase | None = None, side: str | None = None, ally_pos: dict[int, int] | None = None,
+          enemy_pos: dict[int, int] | None = None) -> Brief:
     """要联网（有缓存），放后台线程调。拿不到的部分跳过，不编。
-    side = 我方阵营（分路写成上 / 中 / 下路）；ally_pos = 已知的队友位置（选人界面 OCR 认出来的）"""
+    side = 我方阵营（分路写成上 / 中 / 下路）；ally_pos = 已知的队友位置（选人界面 OCR 认出来的 / 玩家在叠加层上定的）；
+    enemy_pos = 玩家在叠加层上定的对面位置（其余按常打位置猜）"""
     base = base or kb.KnowledgeBase.load()
     if base is None:
         raise RuntimeError("还没有知识库，先运行 python -m dota_assistant kb update")
@@ -239,7 +241,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
                                "下面是按双方技能 / 物品机制给的提醒（「设置」里填了就有）")])
 
     # 1. 对线：三路分路 → 我这路的对手 / 队友 → 对线数据 → 硬规则提示
-    lane = lanes.assign(enemy_ids, ally_ids, pos, side, stats_mod.load_positions(cfg), ally_pos)
+    lane = lanes.assign(enemy_ids, ally_ids, pos, side, stats_mod.load_positions(cfg), ally_pos, enemy_pos)
     guessed = {g.hero: g.pos for g in lane.enemies}
     opp = [g.hero for g in lane.opponents()]
     partner = lane.partner()

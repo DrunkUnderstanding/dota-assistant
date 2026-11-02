@@ -26,7 +26,10 @@ class InGameMixin:
             self.grid.reset()                    # 新一局：上一局的禁用不算
             self._crops = {"blank": {}, "sel": {}, "strat": {}, "game": {}}
             self._named.clear()
-            self.skipped.clear()                 # 上一局「不想玩」的不带到这一局
+            self._slot_learned.clear()
+            self.skipped.clear()                 # 上一局「不想玩」「对面不会拿」的不带到这一局
+            self.not_next.clear()
+            self.hero_pos.clear()                # 上一局在叠加层上改的位置也是
             # 上一局点 × 收起的叠加层、点开的「如果选它」卡片，新一局选人时自动恢复，不用再按热键
             self.user_hidden = False
             self.pick_key = None
@@ -91,7 +94,7 @@ class InGameMixin:
     def _stage_tick(self, minute: float) -> None:
         """到了中期 / 后期弹一次本局要点的那一页；正弹着别的卡片（死亡复盘、缺口提醒）就等它关了再弹"""
         stage, order = brief.stage_at(minute), [p for p, _ in brief.STAGES]
-        if not self.brief or order.index(stage) <= order.index(self._brief_stage):
+        if not self.cfg.ingame_tips or not self.brief or order.index(stage) <= order.index(self._brief_stage):
             return
         if self.coach_card and not self._showing_brief():
             return
@@ -222,6 +225,9 @@ class InGameMixin:
 
     def _show_coach(self, title: str, lines: list[tuple], on_death: bool = False) -> None:
         """lines：(kind, 文字或片段列表)，片段里的装备在界面上显示图标（itembuild.line_view）"""
+        if not self.cfg.ingame_tips:             # 局内打法 / 出装卡片先不弹（config 的 ingame_tips），只记日志
+            log.info("局内提示「%s」没弹（ingame_tips = false）：%s", title, " / ".join(itembuild.text(t) for _, t in lines))
+            return
         self.coach_card = {"kind": "notice", "title": title, "closable": True, "death": on_death,
                            "lines": [{"kind": k, **itembuild.line_view(t)} for k, t in lines]}
         self._death_shown = time.monotonic() if on_death else 0.0

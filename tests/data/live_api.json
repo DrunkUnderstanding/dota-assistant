@@ -147,6 +147,10 @@
   "kind": "method",
   "signature": "(self) -> 'None'"
  },
+ "_scan_blind": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
  "_scan_buyback": {
   "kind": "method",
   "signature": "(self, clock: 'float', me) -> 'None'"
@@ -206,6 +210,10 @@
  "_ult_view": {
   "kind": "method",
   "signature": "(self, side: 'str', index: 'int', clock: 'float') -> 'dict | None'"
+ },
+ "_upgrade_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
  },
  "action": {
   "kind": "method",
@@ -339,6 +347,10 @@
   "kind": "method",
   "signature": "(self, page: 'str') -> 'None'"
  },
+ "set_hero_pos": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int', pos: 'int | None') -> 'None'"
+ },
  "set_locked": {
   "kind": "method",
   "signature": "(self, locked: 'bool') -> 'None'"
@@ -379,6 +391,10 @@
   "kind": "method",
   "signature": "(self) -> 'str | None'"
  },
+ "skip_guess": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int') -> 'None'"
+ },
  "skip_hero": {
   "kind": "method",
   "signature": "(self, hero_id: 'int') -> 'None'"
@@ -418,6 +434,10 @@
  "toggle_overlay": {
   "kind": "method",
   "signature": "(self) -> 'None'"
+ },
+ "unskip_guess": {
+  "kind": "method",
+  "signature": "(self, hero_id: 'int') -> 'None'"
  },
  "unskip_hero": {
   "kind": "method",

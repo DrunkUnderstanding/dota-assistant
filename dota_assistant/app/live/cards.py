@@ -21,7 +21,7 @@ class CardsMixin:
         self.brief_match, self.brief, self._brief_stage = key, None, "lane"
         self.pick_key = None                     # 真的选完了，「如果选它」的卡片就不用了
         ids = (draft.my_hero.id, [h.id for h in draft.allies], [h.id for h in draft.enemies])
-        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
+        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos, "enemy_pos": draft.enemy_pos}
         log.info("比赛 %s：做本局要点（%s · 队友 %s · 对面 %s）", key, draft.my_hero.name_cn, consts._names(draft.allies),
                  consts._names(draft.enemies))
 
@@ -122,7 +122,7 @@ class CardsMixin:
         self.pick_key, self.pick_brief, self.pick_page = key, None, "lane"
         self.pick_note = f"正在整理选{h.name_cn}的对线 / 装备数据…"
         ids = (hero_id, [a.id for a in draft.allies], [e.id for e in draft.enemies])
-        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos}
+        lane_info = {"side": self.side(), "ally_pos": draft.ally_pos, "enemy_pos": draft.enemy_pos}
         log.info("如果选%s：做要点卡片（%d 号位）", h.name_cn, self.position)
 
         def work():

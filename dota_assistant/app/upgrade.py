@@ -40,6 +40,7 @@ REPO = "DrunkUnderstanding/dota-assistant"
 API = f"https://api.github.com/repos/{REPO}"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
 STAGE = "_update"                    # 运行目录下放下载 / 解压 / 换下来的旧文件，下次启动删掉
+LATER_FILE = "data/.upgrade_later"   # 弹窗里点过「以后再说」的版本：同一个版本不再自己弹（打包版换文件时 data/ 不覆盖，留得住）
 KEEP_IF_EXISTS = {"calibration.json"}
 MERGE_MISSING = {"data"}
 FREE_MB = 1500                       # 下载 + 解压要的空间（zip 约 250 MB、解压约 600 MB，留余量）
@@ -477,6 +478,8 @@ class Updater:
         self.info: Check | None = None
         self.progress = 0.0
         self.error = ""
+        self.asked = False         # 这次是手动「检查更新」的：查到新版本照样弹窗，不管以前说没说过以后再说
+        self.later = ""            # 「以后再说」过的版本（检查完从 LATER_FILE 读）
         self._busy = threading.Lock()
 
     def view(self) -> dict:
@@ -484,6 +487,9 @@ class Updater:
         if c := self.info:
             v.update(mode=c.mode, current=c.current, latest=c.latest, available=c.available, reason=c.reason,
                      notes=c.notes, size_mb=round(c.size / 2**20), page=RELEASES_PAGE)
+            if self.state == "available" and (self.asked or c.latest != self.later):
+                v["remind"] = True                 # 控制面板自己弹出更新窗口
+                v["asked"] = self.asked
         if self.state == "downloading":
             v["progress"] = round(self.progress, 2)
         if self.error:
@@ -502,15 +508,15 @@ class Updater:
         threading.Thread(target=work, daemon=True, name="upgrade").start()
         return True
 
-    def check_async(self, delay: float = 0.0) -> bool:
-        """False = 正在检查 / 下载，这次不查"""
+    def check_async(self, delay: float = 0.0, asked: bool = False) -> bool:
+        """False = 正在检查 / 下载，这次不查。asked = 玩家手动点的「检查更新」"""
         if self.state in ("restarting",):
             return False
-        return self._start(self._check, delay)
+        return self._start(self._check, delay, asked)
 
-    def _check(self, delay: float) -> None:
+    def _check(self, delay: float, asked: bool = False) -> None:
         time.sleep(delay)
-        self.state, self.error = "checking", ""
+        self.state, self.error, self.asked = "checking", "", asked
         try:
             self.info = check(self.root, self.frozen)
         except Exception as e:
@@ -519,9 +525,28 @@ class Updater:
                 self.info = local(self.root, self.frozen)
             self.state, self.error = "error", f"检查更新失败：{e}"
             return
+        if self.info.available:
+            try:
+                self.later = (self.root / LATER_FILE).read_text(encoding="utf-8").strip()
+            except OSError:
+                self.later = ""
         self.state = "available" if self.info.available else "latest"
         log.info("检查更新：%s → %s，%s", self.info.current, self.info.latest or "-",
                  "有新版本" if self.info.available else self.info.reason)
+
+    def dismiss(self) -> None:
+        """更新窗口里点了「以后再说」：记下这个版本，以后自动检查到它不再弹（顶栏按钮照旧）"""
+        self.asked = False
+        if not (self.info and self.info.available) or self.info.latest == self.later:
+            return
+        self.later = self.info.latest
+        path = self.root / LATER_FILE
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.later + "\n", encoding="utf-8")
+        except OSError as e:
+            log.warning("记不下「以后再说」的版本（%s）：%s", path, e)
+        log.info("新版本 %s 以后再说", self.later)
 
     def install_async(self, on_quit: Callable[[], None]) -> bool:
         if not (self.info and self.info.available) or self.state == "restarting":

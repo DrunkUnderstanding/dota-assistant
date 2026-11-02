@@ -62,15 +62,19 @@ ACTIONS_BASE = frozenset(
     "name_slot ult_set toggle_overlay toggle_lock close_overlay overlay_moved save_settings open_logs"
     " upgrade_check upgrade_install"           # 2026-10-29 更新助手（app/upgrade.py）
     " skip_hero unskip_hero"                   # 2026-10-30 推荐卡片上点 × 这局不想玩 / 点名字恢复
+    " skip_guess unskip_guess"                 # 2026-11-02「对面最后一手（猜）」头像上点 × 排除 / 点名字恢复
+    " set_hero_pos"                            # 2026-11-02 对面分路 / 剩余位置里点英雄改位置
+    " upgrade_later"                           # 2026-11-02 新版本弹窗里点「以后再说」，同一版本不再弹
     .split())
 # 一定要有的子命令（列表本身是动态取的，这里只防「取到的是空的 / 取错了 parser」）
 KEY_COMMANDS = {"suggest", "kb", "run", "start", "update", "demo", "recognize", "logs"}
 SUGGEST_CASES = (    # (参数, 输出里必须有的片段)
-    # 填了好友代码、有生涯数据时标题是「【推荐（你打过 N 局以上的）】」，没有时是「【推荐】」，所以只认前缀
-    (["--enemy", "PA,莱恩,风行者", "--ally", "敌法师,冰女", "--pos", "3"], ["【推荐", "【针对这局", "算法 自身", "＋克制"]),
+    # 填了好友代码、有生涯数据时标题是「【熟练 · 胜率最高（你打过 N 局以上的）】」「【不熟练 · …】」，没有时是「【推荐 · 胜率最高】」，
+    # 所以只认「 · 胜率最高」
+    (["--enemy", "PA,莱恩,风行者", "--ally", "敌法师,冰女", "--pos", "3"], [" · 胜率最高", " · 克制最强", "算法 自身", "＋克制"]),
     (["--enemy", "末日,沉默", "--pos", "1", "--me", "卓尔", "--side", "radiant"], ["【你已选：卓尔游侠】"]),
-    (["--pos", "1"], ["【推荐", "算法 自身"]),
-    (["--pos", "5", "--ban", "小小,斧王"], ["【推荐"]),
+    (["--pos", "1"], [" · 胜率最高", "算法 自身"]),
+    (["--pos", "5", "--ban", "小小,斧王"], [" · 胜率最高"]),
 )
 # logs.setup 之后控制台 handler 是 brief 格式：崩溃时 stderr 只有这一句、没有 Traceback（见 log.py 的 excepthook）
 CRASH_MARKS = ("Traceback", "程序出错退出")

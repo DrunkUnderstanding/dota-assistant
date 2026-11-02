@@ -180,6 +180,20 @@ img { display: block; }
   font: 600 9px/12px var(--num); text-align: center; color: var(--text); background: rgba(0, 0, 0, 0.75);
 }
 .lane-hero.is-unsure { opacity: 0.6; }
+/* 点头像改位置：头像能点；玩家定过的金色角标「n改」、不再半透明；正在改的金框，下面一行 1~5 号位 / 自动猜 */
+.lane-hero[data-hpos] { cursor: pointer; }
+.lane-hero[data-hpos]:hover .face-sm { outline: 1px solid var(--line-strong); }
+.lane-hero.is-manual { opacity: 1; }
+.lane-hero.is-manual b { color: #1a1206; background: var(--gold); }
+.lane-hero.is-picking .face-sm { outline: 2px solid var(--gold); }
+.pos-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 2px 0 4px 6px; font-size: 11px; color: var(--text-faint); }
+.pos-picker span { margin-right: 2px; }
+.pos-picker button {
+  padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim); font: 11px/1.5 var(--font); cursor: pointer;
+}
+.pos-picker button:hover { color: var(--text); border-color: var(--gold); }
+.pos-picker button.is-on { color: var(--gold); border-color: rgba(216, 167, 78, 0.6); background: var(--gold-soft); }
 .lane-empty {
   width: 40px; height: 22px; border-radius: 4px; border: 1px dashed var(--line-strong);
   display: grid; place-items: center; font-size: 11px; color: var(--text-faint);
@@ -291,6 +305,24 @@ img { display: block; }
   color: var(--text-dim); font: 15px/1 var(--font); cursor: pointer;
 }
 .pick-skip:hover { color: #fff; border-color: var(--bad); background: rgba(229, 103, 92, 0.85); }
+/* 对面最后一手（猜）：猜的几个英雄一排（头像 + 概率），选中的金边；下面一行说现在假设的是谁 */
+.next-guesses { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.next-guess {
+  display: flex; align-items: center; gap: 5px; padding: 3px 7px 3px 3px; cursor: pointer;
+  border-radius: 6px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.035); color: var(--text-dim);
+}
+.next-guess:hover { border-color: var(--line-strong); background-color: rgba(255, 255, 255, 0.07); }
+.next-guess.is-on { border-color: rgba(216, 167, 78, 0.6); background: var(--gold-soft); color: var(--gold); }
+.next-guess b { font: 600 12px/1 var(--num); font-variant-numeric: tabular-nums; }
+/* 猜的头像后面的 ×：对面不会拿它，排除。18px，叠加层缩小时也点得到 */
+/* 收起后推荐小头像后面的 ×（这局不想玩）也用这个样子 */
+.next-skip, .mini-skip {
+  width: 18px; height: 18px; padding: 0; margin-left: 1px; border-radius: 4px; cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(10, 14, 20, 0.5); color: var(--text-faint); font: 13px/1 var(--font);
+}
+.next-skip:hover, .mini-skip:hover { color: #fff; border-color: var(--bad); background: rgba(229, 103, 92, 0.85); }
+.next-head { margin: 0 2px 6px; font-size: 11px; color: var(--text-faint); }
+.next-head b { color: var(--text); font-weight: 600; }
 .ov-skipped { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; font-size: 11px; color: var(--text-faint); }
 .ov-skipped span { margin-right: 2px; }
 .ov-skipped button {

@@ -126,9 +126,18 @@ function vsRow(item, syn = false) {
 }
 
 // 对面分路（按常见位置猜）：三路各一行，我这路高亮；我选好英雄后下面接我这路的对线提示（原句在悬停提示里）
+// 点英雄头像改他的位置（2026-11-02 玩家：「你的位置判断可能有误，我需要你能够让我主动调整」）：对面分路、剩余位置里的队友都能点，
+// 下面接一行「1~5 号位 / 自动猜」（posPick = 正在改谁，只在页面里记），点了回传 set_hero_pos；改过的标金色「改」，只管这一局
+let posPick = null;
 function laneFace(h) {
-  const tip = `${h.name}：猜 ${h.pos} 号位（${Math.round(h.conf * 100)}% 把握）`;
-  return `<span class="lane-hero ${h.sure ? '' : 'is-unsure'}" title="${esc(tip)}">${face(h, 'face-sm')}<b>${h.pos}${h.sure ? '' : '?'}</b></span>`;
+  const tip = h.manual ? `${h.name}：你定的 ${h.pos} 号位` : `${h.name}：猜 ${h.pos} 号位（${Math.round(h.conf * 100)}% 把握）`;
+  return `<span class="lane-hero ${h.sure ? '' : 'is-unsure'} ${h.manual ? 'is-manual' : ''} ${posPick === h.id ? 'is-picking' : ''}" data-hpos="${h.id}" `
+    + `title="${esc(`${tip}\n点一下：改他的位置`)}">${face(h, 'face-sm')}<b>${h.pos}${h.manual ? '改' : h.sure ? '' : '?'}</b></span>`;
+}
+function posPickerHTML(h, pos) {
+  const btn = (p, text) => `<button type="button" class="${p === pos && (p || h.manual) ? 'is-on' : ''}" data-setpos="${p}" data-hero="${h.id}">${text}</button>`;
+  return `<div class="pos-picker"><span>${esc(h.name)} 打</span>${[1, 2, 3, 4, 5].map((p) => btn(p, `${p}号位`)).join('')}`
+    + `${h.manual ? btn(0, '自动猜') : ''}</div>`;
 }
 
 function lanesHTML(l) {
@@ -136,7 +145,9 @@ function lanesHTML(l) {
   const rows = l.rows.map((r) => {
     const empty = '<span class="lane-empty" title="对面这个位置还没选">?</span>'.repeat(r.missing);
     const mine = r.mine ? `<em>你这路${l.partner ? ` · 队友 ${esc(l.partner.name)}` : ''}</em>` : '';
-    return `<div class="lane ${r.mine ? 'is-mine' : ''}"><span class="lane-label">${esc(r.label)}</span><div class="lane-faces">${r.heroes.map(laneFace).join('')}${empty}</div>${mine}</div>`;
+    const picking = r.heroes.find((h) => h.id === posPick);
+    return `<div class="lane ${r.mine ? 'is-mine' : ''}"><span class="lane-label">${esc(r.label)}</span><div class="lane-faces">${r.heroes.map(laneFace).join('')}${empty}</div>${mine}</div>`
+      + (picking ? posPickerHTML(picking, picking.pos) : '');
   }).join('');
   const tips = (l.tips || []).map((w) => `<p class="why why-${esc(w.kind)}" title="${esc(w.quote)}">${w.kind === 'good' ? '✓' : '✗'} ${esc(w.text)}</p>`).join('');
   return {
@@ -190,10 +201,14 @@ function teamHTML(team, picked, duo) {
         + `<span class="team-none">你 · 推荐看下面</span>${flags}</div>`;
     }
     if (t.ally) {
-      const tip = `队友${t.ally.name}${t.ally.sure ? '' : `（猜的，${Math.round(t.ally.conf * 100)}% 把握）`}占了${t.name}`;
+      const a = t.ally;
+      const how = a.manual ? '（你定的）' : a.sure ? '' : `（猜的，${Math.round(a.conf * 100)}% 把握）`;
+      const tip = `队友${a.name}${how}占了${t.name}\n点头像：改他的位置`;
       const warn = cur ? '<span class="team-warn">队友占了你的位置</span>' : '';
       return `<div class="team-row is-taken ${cur ? 'is-cur' : ''}" title="${esc(tip)}"><span class="team-label">${esc(t.name)}</span>`
-        + `<span class="lane-hero ${t.ally.sure ? '' : 'is-unsure'}">${face(t.ally, 'face-sm')}${t.ally.sure ? '' : '<b>?</b>'}</span>${warn}${flags}</div>`;
+        + `<span class="lane-hero ${a.sure ? '' : 'is-unsure'} ${a.manual ? 'is-manual' : ''} ${posPick === a.id ? 'is-picking' : ''}" data-hpos="${a.id}">`
+        + `${face(a, 'face-sm')}${a.manual ? '<b>改</b>' : a.sure ? '' : '<b>?</b>'}</span>${warn}${flags}</div>`
+        + (posPick === a.id ? posPickerHTML(a, t.position) : '');
     }
     const { body, fold, open } = teamPicksHTML(t);
     const unfolded = open ? 'is-unfolded' : '';
@@ -233,7 +248,7 @@ function calcRow(item, compact = false) {
   return `<span class="pick-calc ${compact ? 'is-compact' : ''}">${base}${terms}${eq}</span>`;
 }
 
-// targeted =「针对这局」：右上角胜率前面醒目地写这一手的克制、配合（这组就是按它俩挑的，玩家 2026-10-30 要一眼看到，
+// targeted = 按克制挑的组（「熟练 · 克制最强」和「不熟练」两组，advisor.Group.counter）：右上角胜率前面醒目地写这一手的克制、配合（玩家 2026-10-30 要一眼看到，
 // 而且要分开、不同颜色：克制绿、配合蓝，和理由标签「克 / 配」同色）。数值取 calc 里的克制 / 配合两步（百分点）
 const situBadge = (c, kind, label) => {
   const v = c[kind]?.value ?? 0;
@@ -265,19 +280,49 @@ function card(item, rank, targeted = false) {
     </div>`;
 }
 
-// 「推荐」「针对这局」等推荐组可以收起（玩家 2026-10-30 要的）：收起后一个英雄一个小头像 + 胜率，点了照样看「选它怎么打」。
-// 收起了哪几组按组名记在浏览器本地存储里，换局 / 重开助手都保持（存不了就只在这次开着时记）
-const FOLD_KEY = 'ov-folded-groups';
-const groupFolded = (() => {
-  try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); }
+// 推荐四小组（「熟练 · 胜率最高」……）和「对面最后一手（猜）」可以各自展开 / 收起（玩家 2026-10-30 要的）：收起后一个英雄一个小头像 + 胜率，点了照样看「选它怎么打」。
+// 默认全部收起（玩家 2026-11-02：「太长了」→「全部折叠吧」），展开了哪几组按组名记在浏览器本地存储里，换局 / 重开助手都保持（存不了就只在这次开着时记）。
+// 以前记的是「收起了哪几组」（ov-folded-groups，默认展开），换了键，旧记录不再用
+const OPEN_KEY = 'ov-open-groups';
+const groupOpen = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem(OPEN_KEY) || '[]')); } catch { return new Set(); }
 })();
 function toggleGroup(title) {
-  if (!groupFolded.delete(title)) groupFolded.add(title);
-  try { localStorage.setItem(FOLD_KEY, JSON.stringify([...groupFolded])); } catch { /* 存不了就算了 */ }
+  if (!groupOpen.delete(title)) groupOpen.add(title);
+  try { localStorage.setItem(OPEN_KEY, JSON.stringify([...groupOpen])); } catch { /* 存不了就算了 */ }
 }
 function mini(item, rank) {
   return `<span class="pick-mini ${rank === 0 ? 'is-top' : ''}" data-id="${item.id}" title="${esc(`${item.name} ${item.winrate.toFixed(1)}%\n点一下：看选${item.name}怎么打这套阵容`)}">`
-    + `${face(item)}<b>${item.winrate.toFixed(1)}</b></span>`;
+    + `${face(item)}<b>${item.winrate.toFixed(1)}</b>`
+    // 收起时也能点 × 这局不想玩（玩家 2026-11-02），和卡片上的 × 一样
+    + `<button class="mini-skip" type="button" data-skip="${item.id}" title="这局不想玩${esc(item.name)}：去掉，后面的顺位补上来">×</button></span>`;
+}
+
+// 「对面最后一手（猜）」（advisor.next_view，我是我方最后一手、对面还剩 1 手时才有）：猜的几个英雄 + 概率一排，
+// 下面是假设对面拿了选中那个、给我的推荐卡片。默认第一个；点别的头像只在页面里换（每个猜的推荐 Python 都算好了），
+// 选的那个不在新的猜测里（局面变了）就回到第一个。和推荐组一样默认收起：只留猜的头像 + 假设下的推荐小头像。
+// 每个猜的头像上有 ×（展开 / 收起都有，玩家 2026-11-02）：觉得对面不会拿它就排除（回传 skip_guess），后面的补上来、概率重新算；
+// 排除了的列在这一节下面「对面不会拿」，点名字恢复，新一局自动清空
+let nextChosen = null;
+function nextHTML(n, rank) {
+  const g = n.guesses.find((x) => x.id === nextChosen) || n.guesses[0];
+  const folded = !groupOpen.has(n.title);
+  const fold = `<button class="group-fold" type="button" data-group-fold="${esc(n.title)}" title="${folded ? '展开：看每个推荐的理由' : '收起：只留头像和胜率'}">`
+    + `${folded ? `▾ 展开 ${g.items.length}` : '▴ 收起'}</button>`;
+  const chips = n.guesses.map((x) => `<span class="next-guess ${x === g ? 'is-on' : ''}" role="button" data-next="${x.id}" `
+    + `title="${esc(`对面最后一手拿${x.name}的可能 ${x.prob.toFixed(1)}%（这个位置谁选得多 + 克我方 4 人的程度）\n它克我方已选 4 人合计 ${x.threat > 0 ? '+' : ''}${x.threat.toFixed(1)}%\n点一下：看假设对面拿它时的推荐`)}">`
+    + `${face(x, 'face-sm')}<b>${x.prob.toFixed(0)}%</b>`
+    + `<button class="next-skip" type="button" data-skip-guess="${x.id}" title="${esc(`对面不会拿${x.name}：不再猜它，后面的补上来`)}">×</button></span>`).join('');
+  const items = folded ? `<div class="pick-minis">${g.items.map((it) => mini(it, rank + 1)).join('')}</div>`
+    : g.items.map((it) => card(it, rank + 1, true)).join('');
+  const excluded = n.excluded?.length ? `<div class="ov-skipped"><span>对面不会拿</span>${n.excluded.map((h) =>
+    `<button type="button" data-unskip-guess="${h.id}" title="恢复猜${esc(h.name)}">${esc(h.name)} ↺</button>`).join('')}</div>` : '';
+  return `<section class="ov-group ov-next ${folded ? 'is-folded' : ''}">`
+    + `<h3><span>${esc(n.title)}<small>按我方 4 人推算 · 前 ${n.guesses.length} 个合计 ${n.cover}%</small></span>${fold}</h3>`
+    + (n.open?.length ? `<div class="next-head" title="对面已选 4 人按常打位置排，剩下的就是对面最后一手的位置；猜错了在上面「对面分路」点英雄改位置">`
+      + `对面空着：${n.open.map((o) => `<b>${esc(o.name)}</b> ${o.prob}%`).join(' · ')}</div>` : '')
+    + `<div class="next-guesses">${chips}</div>`
+    + `<div class="next-head">假设对面拿 <b>${esc(g.name)}</b>（${g.prob.toFixed(1)}%），给你的推荐：</div>${items}${excluded}</section>`;
 }
 
 // 内容分两栏：A = 阵容 + 分路，B = 我这路怎么打 / 推荐 / 威胁。窄的时候上下接着排（顺序不变），
@@ -314,13 +359,14 @@ function draftHTML(v) {
   let rank = 0;
   for (const g of v.groups) {
     const note = g.note ? `<small>${esc(g.note)}</small>` : '';
-    const folded = groupFolded.has(g.title);
+    const folded = !groupOpen.has(g.title);
     const fold = `<button class="group-fold" type="button" data-group-fold="${esc(g.title)}" title="${folded ? '展开：看每个推荐的理由' : '收起：只留头像和胜率'}">`
       + `${folded ? `▾ 展开 ${g.items.length}` : '▴ 收起'}</button>`;
     const items = folded ? `<div class="pick-minis">${g.items.map((it) => mini(it, rank++)).join('')}</div>`
       : g.items.map((it) => card(it, rank++, g.targeted)).join('');
     html += `<section class="ov-group ${folded ? 'is-folded' : ''}"><h3><span>${esc(g.title)}${note}</span>${fold}</h3>${items}</section>`;
   }
+  if (v.next?.guesses?.length) html += nextHTML(v.next, rank);
   if (v.skipped?.length) {                           // 这局点 × 去掉的：点名字恢复，新一局自动清空
     html += `<div class="ov-skipped"><span>这局不想玩</span>${v.skipped.map((h) => `<button type="button" data-unskip="${h.id}" title="恢复推荐${esc(h.name)}">${esc(h.name)} ↺</button>`).join('')}</div>`;
   }
@@ -441,11 +487,31 @@ export function bindOverlayClicks(root, act) {
       toggleGroup(groupFold.dataset.groupFold);
       return renderOverlay(root, root._view);
     }
+    const setPos = e.target.closest('[data-setpos]');         // 改位置那一行：定成几号位 / 改回自动猜
+    if (setPos) {
+      posPick = null;
+      return act('set_hero_pos', { hero_id: Number(setPos.dataset.hero), pos: Number(setPos.dataset.setpos) });
+    }
+    const hpos = e.target.closest('[data-hpos]');              // 点对面分路 / 剩余位置里的英雄：打开 / 关上改位置那一行
+    if (hpos) {
+      const id = Number(hpos.dataset.hpos);
+      posPick = posPick === id ? null : id;
+      return renderOverlay(root, root._view);
+    }
+    const skipGuess = e.target.closest('[data-skip-guess]');   // 在猜的头像里面，先拦下，不当成「换假设」
+    if (skipGuess) return act('skip_guess', { hero_id: Number(skipGuess.dataset.skipGuess) });
+    const unskipGuess = e.target.closest('[data-unskip-guess]');
+    if (unskipGuess) return act('unskip_guess', { hero_id: Number(unskipGuess.dataset.unskipGuess) });
+    const guess = e.target.closest('.next-guess[data-next]');
+    if (guess) {                                        // 换一个「假设对面拿它」，只在本地重画
+      nextChosen = Number(guess.dataset.next);
+      return renderOverlay(root, root._view);
+    }
     const tab = e.target.closest('.brief-tab[data-page]');
     const pos = e.target.closest('.team-row[data-pos]');
     if (pos) return act('set', { key: 'position', value: Number(pos.dataset.pos) });
     if (tab) return act('brief_page', { page: tab.dataset.page });
-    const skip = e.target.closest('.pick-skip[data-skip]');   // 在卡片里面，先拦下，不当成「如果选它」
+    const skip = e.target.closest('.pick-skip[data-skip], .mini-skip[data-skip]');   // 在卡片 / 小头像里面，先拦下，不当成「如果选它」
     if (skip) return act('skip_hero', { hero_id: Number(skip.dataset.skip) });
     const unskip = e.target.closest('[data-unskip]');
     if (unskip) return act('unskip_hero', { hero_id: Number(unskip.dataset.unskip) });

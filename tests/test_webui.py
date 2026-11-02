@@ -73,7 +73,7 @@ def no_brief(*args, **kw):
 
 
 def make_live(overlay_file: Path | None = None, coach_prepare=None, brief_build=no_brief, plan_build=no_brief) -> Live:
-    cfg = Config(position_filter=False, top=2, top_other=2, voice=True)
+    cfg = Config(position_filter=False, top=2, top_other=2, voice=True, ingame_tips=True)   # 局内卡片默认关，这里测开着的
     live = Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
                 advisor=fake_advisor(cfg), bank=FakeBank(), calibration=Calibration(),   # 空校准，不读本机 calibration.json
                 overlay_file=overlay_file or TMP / f"overlay-{time.monotonic_ns()}.json",
@@ -113,9 +113,20 @@ class RenderViewTest(unittest.TestCase):
         self.assertEqual(adv.split_targeted(res, 2, 2, has_draft=False), (res[:4], []))   # 没人选：只有综合推荐
         self.assertEqual(targeted[0].reason(), "克制 + 配合合计 +2.5%")       # 单项都不显著时说合计，不说「版本强势」
         advice = adv.Advice(1, adv.Draft(enemies=[]), picks, targeted, None)
-        self.assertEqual([g["title"] for g in adv.render_view(advice, None)["groups"]], ["推荐", "针对这局"])
-        self.assertIn(("head", "针对这局（克制 + 配合最多的）"), adv.render_lines(advice, None))
+        self.assertEqual([g["title"] for g in adv.render_view(advice, None)["groups"]], ["推荐 · 胜率最高", "不熟练 · 克制最强"])
+        self.assertIn(("head", "不熟练 · 克制最强（克制 + 配合最多的）"), adv.render_lines(advice, None))
         self.assertEqual(adv.best(advice), picks)                             # 播报只念综合推荐
+        # 四小组：克制组（推荐 · 克制最强、针对这局两组）卡片上单独标克制 / 配合，「推荐 · 胜率最高」不标
+        # 标题头：按熟练度分了是「熟练 / 不熟练」，没分（familiar_min = 0）前两组写「推荐」
+        advice = adv.Advice(1, adv.Draft(enemies=[PL]), res[:1], res[2:3], None, picks_counter=res[1:2], targeted_rate=res[3:4],
+                            familiar_min=20)
+        v = adv.render_view(advice, None)["groups"]
+        self.assertEqual([(g["title"], g["targeted"], g["items"][0]["id"]) for g in v],
+                         [("熟练 · 胜率最高", False, PL.id), ("熟练 · 克制最强", True, TIDE.id),
+                          ("不熟练 · 克制最强", True, CM.id), ("不熟练 · 胜率最高", True, AXE.id)])
+        advice.familiar_min = 0
+        self.assertEqual([g["title"] for g in adv.render_view(advice, None)["groups"]][:2], ["推荐 · 胜率最高", "推荐 · 克制最强"])
+        self.assertEqual(adv.best(advice), res[:2])
 
     def test_lanes_view(self):
         from dota_assistant.domain import explain
@@ -655,6 +666,92 @@ class CoachLiveTest(unittest.TestCase):
         self.assertEqual(self.live.bank.match(wk)[0], WK.id)
         self.assertNotEqual(self.live.bank.match(jitter(empty))[0], WK.id)
 
+    def test_named_slot_not_learned_outside_draft(self):
+        # 2026-10-31 实战：赛后帮认了天辉第 1 格是齐天大圣，之后十几个小时没在选人（主菜单 / Dota 关了截整块桌面），
+        # 每秒都把那格裁到的东西记成齐天大圣，攒了 440 张；下一局空位、龙骑士全认成齐天大圣
+        from dota_assistant.vision.recognize import DraftView, Slot, TemplateBank, write_image
+        rng = np.random.default_rng(11)
+        def rand_pic():
+            return cv2.resize(rng.integers(0, 255, (6, 8, 3), dtype=np.uint8), (64, 36), interpolation=cv2.INTER_NEAREST)
+        pdir, tdir = Path(tempfile.mkdtemp(dir=TMP)), Path(tempfile.mkdtemp(dir=TMP))
+        for h in (AXE, CM, PL, TIDE):
+            write_image(pdir / f"{h.id}.png", rand_pic())
+        self.live.bank = TemplateBank(pdir, tdir)
+        self.live.cal = SimpleNamespace(ready=True)
+        frames = []
+        def fake_recognize(*a, **kw):                                     # 每帧 10 格都是没见过的乱图，认不出
+            return frames[-1]
+        orig, live_draft.recognize = live_draft.recognize, fake_recognize
+        self.addCleanup(setattr, live_draft, "recognize", orig)
+        def scan():
+            frames.append(DraftView([Slot(None, 0.3, 0, rand_pic()) for _ in range(5)],
+                                    [Slot(None, 0.3, 0, rand_pic()) for _ in range(5)], []))
+            wait(self.live.submit(self.live.scan, True, object()))
+        st = self.live.gsi.state
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "dire"}})
+        wait(self.live.submit(self.live.coach_tick))
+        scan(); scan()                                                    # 第一帧是开局（blank），第二帧有人选了
+        wait(self.live.submit(self.live.action, {"type": "name_slot", "side": "radiant", "index": 0, "hero_id": WK.id}))
+        self.assertEqual(self.live.bank.learned, 1)
+        sel = self.live._crops["sel"][("radiant", 0)]
+        # 比赛结束回到主菜单（GSI 还连着、没有阶段）：照样识别，但不留裁图、不接着记
+        st.update({"player": {}})
+        self.assertIsNone(st.game_state)
+        for _ in range(3):
+            scan()
+        self.assertEqual(self.live.bank.learned, 1)
+        self.assertIs(self.live._crops["sel"][("radiant", 0)], sel)
+        # 这时在控制面板改这格，记的也是选人时那张（已经记过了），不是桌面
+        wait(self.live.submit(self.live.action, {"type": "set_slot", "side": "radiant", "index": 0, "text": WK.name_cn}))
+        self.assertEqual(self.live.bank.learned, 1)
+        # 选人阶段里那格一直在变、一直认不出（比如帮认错了格子）：一局最多记 LEARN_PER_SLOT 张
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "dire"}})
+        for _ in range(live_consts.LEARN_PER_SLOT + 3):
+            scan()
+        self.assertEqual(self.live.bank.learned, live_consts.LEARN_PER_SLOT)
+        # 新一局重新数
+        self.live._in_selection = False
+        st.update({"map": {"matchid": "2", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
+                   "player": {"team_name": "dire"}})
+        wait(self.live.submit(self.live.coach_tick))
+        self.assertEqual(self.live._slot_learned, {})
+
+    def test_no_blind_scan_when_dota_closed(self):
+        # 2026-11-01 实战：打完一局关了 Dota，GSI 不推送了，「无 GSI 也识别」让助手 8 个小时每秒都在认桌面
+        self.live.cal = SimpleNamespace(ready=True)
+        dota = {"open": True}
+        self.live.screen = SimpleNamespace(grab=lambda: None, dota_open=lambda: dota["open"])
+        st = self.live.gsi.state
+        self.assertEqual(st.updated, 0)
+        self.assertTrue(self.live.should_scan() and self.live.should_scan_bans())     # GSI 一直没连上、Dota 开着：照旧
+        dota["open"] = False                                                          # Dota 没开 / 最小化：不认
+        self.assertFalse(self.live.should_scan() or self.live.should_scan_bans())
+        dota["open"] = True
+        st.update({"map": {"matchid": "1", "game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"}})
+        self.assertTrue(self.live.should_scan())
+        st.updated -= 60                                                              # 连上过、后来不推送了（Dota 关了 / 在重开）
+        self.assertFalse(self.live.should_scan() or self.live.should_scan_bans())
+        self.live.screen = SimpleNamespace(grab=lambda: None)                         # 截图对象不知道 Dota 开没开（测试 / 回放）：照旧
+        self.live.gsi.state = GameState()
+        self.assertTrue(self.live.should_scan())
+
+    def test_grid_confirm_one_slot_per_hero(self):
+        # 2026-10-31 实战：学坏的齐天大圣模板让好几格最像它；有把握的两格互相作废（clash），没把握的三格又被网格补成了齐天大圣
+        from dota_assistant.vision.recognize import DraftView, Slot
+        self.live.grid.taken = {WK.id, PL.id, CM.id}
+        view = DraftView([Slot(None, 0.72, WK.id, clash=True), Slot(None, 0.66, WK.id), Slot(None, 0.6, PL.id),
+                          Slot(None, 0.3, 0), Slot(None, 0.62, WK.id)],
+                         [Slot(CM.id, 0.85, CM.id), Slot(None, 0.6, CM.id)] + [Slot(None, 0.3, 0)] * 3, [])
+        self.live._confirm_with_grid(view)
+        self.assertEqual([s.hero_id for s in view.radiant], [None, None, PL.id, None, None])   # 认进好几格的一个不补
+        self.assertEqual([s.hero_id for s in view.dire[:2]], [CM.id, None])                    # 别的格子认出过的不补
+        view = DraftView([Slot(None, 0.66, WK.id), Slot(None, 0.62, WK.id)] + [Slot(None, 0.3, 0)] * 3,
+                         [Slot(None, 0.3, 0)] * 5, [])
+        self.live._confirm_with_grid(view)
+        self.assertEqual([s.hero_id for s in view.radiant[:2]], [None, None])                  # 两格都最像它：不知道是哪格
+
     def test_slots_view_marks_unrecognized(self):
         # 选人界面叠加层的「顶栏对照」：没认出的格子要让玩家看得出来（金色 ?），帮填的格子选人时识别也不冲掉
         from dota_assistant.vision.recognize import DraftView, Slot
@@ -784,6 +881,21 @@ class CoachLiveTest(unittest.TestCase):
         self.assertIsNone(self.live.jungle_cue)
         self.assertEqual(self.push(5 + 45 / 60)["view"]["title"], "屯野 5:53 / 抢莲花 6:00")  # 5:45 正好提前 15 秒（秒数换算不能差 1 秒）
         self.assertEqual(self.push(7 + 45 / 60)["view"]["title"], "屯野 · 7:53")
+
+    def test_ingame_tips_off(self):
+        """ingame_tips = false（默认）：开局提示、死亡复盘、时间点缺口都不弹，野区提醒照弹"""
+        self.live.cfg.ingame_tips = False
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        self.assertIsNone(self.live.coach_card)                                   # 「开局提示」没弹
+        ov = self.push(-0.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.assertTrue(ov["visible"] and ov["view"]["jungle"])                   # 封野照弹
+        self.assertFalse(self.push(1.5)["visible"])
+        self.assertFalse(self.push(5.1, deaths=1, alive=False)["visible"])        # 死了 + 过了 5 分钟：不弹卡片
+        self.assertIsNone(self.live.coach_card)
+        self.assertFalse(self.push(20.1)["visible"])                              # 缺黑皇杖也不弹
+        self.assertIsNone(self.live.coach_card)
 
     def test_no_jungle_cues_for_carry_without_data(self):
         self.push(0)
@@ -1112,6 +1224,19 @@ class BriefLiveTest(unittest.TestCase):
         time.sleep(0.1)                                         # 后台线程做完再排进来
         wait(self.live.submit(lambda: None))
         return json.loads(self.live.current_snapshot)["overlay"]
+
+    def test_stage_brief_off_in_game(self):
+        """ingame_tips = false：策略时间照弹本局要点、F6 照样能看，开打后到中期不自己弹"""
+        self.live.cfg.ingame_tips = False
+        self.plan_go.set()
+        self.push("HERO_SELECTION")
+        self.assertEqual(self.push("STRATEGY_TIME")["view"]["kind"], "brief")
+        self.assertFalse(self.push("GAME_IN_PROGRESS", 0.2)["visible"])          # 号角响：收起
+        self.assertFalse(self.push("GAME_IN_PROGRESS", 10.1)["visible"])         # 到中期：不弹
+        self.assertIsNone(self.live.coach_card)
+        wait(self.live.submit(self.live.show_brief))                             # 自己按 F6 能看
+        ov = json.loads(self.live.current_snapshot)["overlay"]
+        self.assertTrue(ov["visible"] and ov["view"]["page"] == "mid")
 
     def test_strategy_brief_then_horn(self):
         self.assertIsNone(self.push("HERO_SELECTION")["view"].get("sections"))   # 选人中不做
