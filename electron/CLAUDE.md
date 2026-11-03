@@ -22,6 +22,8 @@
 | 窗口 | 页面 | 特性 |
 |---|---|---|
 | 叠加层 | `/overlay.html` | 透明、置顶、鼠标穿透、不抢焦点；点锁（或 F7）解锁后可拖动（能拖到别的屏）、拉右边 / 下边 / 右下角改宽高；固定状态下只有锁和 × 接点击 |
+| 游戏画面野点 | `/world.html` | 透明置顶不抢焦点、**一直点穿**，盖满 Dota 所在的屏（`createWorld`）；`setContentProtection(true)` 不进截图 |
+| 小地图野点 | `/minimap.html?scale=…&left=…&top=…` | 透明置顶不抢焦点、**一直点穿**（没有可点的东西），按 config 的 `minimap_x / y / size` 盖住 Dota 小地图 + 四周留边（`createMinimap`），放在 Dota 所在的屏；`setContentProtection(true)` 不进截图 |
 | 买活 / 大招计时条 | `/topbar.html?scale=…` | 同样透明置顶不抢焦点，盖在屏幕最上面一条（游戏顶栏）；只有小条和打开的菜单接鼠标；不能拖，放在 Dota 所在的屏（config 的 `monitor`），不跟着叠加层走 |
 | 控制面板 | `/panel.html` | 普通窗口，**关掉它 = 退出助手** |
 | 队友战绩 | `/mates.html` | 控制面板 `window.open` 开的普通窗口，可以单独关；`setWindowOpenHandler` 只放行本机服务地址 |

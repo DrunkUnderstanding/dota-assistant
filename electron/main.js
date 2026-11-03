@@ -1,5 +1,5 @@
 // 界面外壳：由 python -m dota_assistant run 启动，参数 --server=http://127.0.0.1:端口。
-// 只开三个窗口加载 Python 服务的页面，逻辑全在 Python 那边。
+// 只开几个窗口加载 Python 服务的页面，逻辑全在 Python 那边。
 //   叠加层：透明、置顶、鼠标穿透、不抢焦点。它是一个普通的桌面窗口，盖在「无边框窗口」模式的 Dota 上面，
 //           不注入游戏、不读游戏内存（独占全屏下看不到，这是 Windows 的限制）。
 //           卡片右上角有把锁：点开（或按 F7）后整个窗口显示成一个金色虚线框，按住框里任意处拖动（能拖到别的屏），
@@ -11,6 +11,10 @@
 //           页面以为鼠标离开了按钮又切回穿透，按钮永远点不到（2026-10-22 实测出的问题）。
 //   买活 / 大招计时条：和叠加层一样透明、置顶、不抢焦点，盖在屏幕最上面一条（游戏顶栏），每个英雄头像下面一个买活小条、对面的再加一个大招小条；
 //           只有小条接鼠标（页面报区域，同上），不能拖，位置按屏幕高度换算（web/topbar.html）。
+//   游戏画面野点：整屏透明、置顶、不抢焦点、一直点穿，盖在 Dota 所在的屏上；野区提醒到点时在游戏画面里的野点 / 莲花池上画圈、
+//           写几秒打（web/world.html，每 0.1 秒拉一次 /api/world，镜头位置 Python 那边从英雄血条认）。
+//   小地图野点：同样透明、置顶、不抢焦点，盖在 Dota 小地图那一块（config 的 minimap_x / y / size），整个窗口一直点穿；
+//           同样的圈画在小地图上（web/minimap.html，config 的 minimap_marks，默认关）。
 //   控制面板：普通窗口，关掉它 = 退出助手。
 //   队友战绩：控制面板点「队友战绩」window.open 开的普通窗口（web/mates.html），可以单独关。
 // 日志：往 stdout 写「级别 内容」一行，Python（webui._pipe_electron）收进 logs/ 下的日志文件；页面脚本报错也转过去。
@@ -38,6 +42,10 @@ let grabbing = false;    // 窗口现在是否接鼠标
 let topbar = null;       // 买活计时条
 let topbarRects = [];    // 它的可点区域（小条）
 let topbarGrabbing = false;
+let world = null;        // 游戏画面野点
+let minimap = null;      // 小地图野点
+const MINIMAP_PAD = 24;  // 小地图野点窗口比小地图四周多出来的（1080 高时的像素）：圈和字靠边时别被切掉
+const MINIMAP_TAG = 110; // 右边再多留这么宽给字（靠右的野点字写在圈左边）
 const TOPBAR_HEIGHT = 410; // 买活 / 大招计时条窗口高（1080 高的屏幕上；Dota 顶栏头像高 40、下面 40~66 是复活倒计时，买活小条在 69~93、
                           // 对面大招小条在 96~120，右键大招小条弹的菜单从 124 往下到约 305，挑英雄菜单最长的力量列 6 行到约 390）；
                           // 只有小条和打开的菜单接鼠标，其余透明点穿
@@ -175,6 +183,64 @@ function createTopbar() {
     if (topbar && !topbar.isDestroyed()) topbar.moveTop();
   }, 3000);
   topbar.on('closed', () => { clearInterval(timer); clearInterval(hitTimer); topbar = null; });
+}
+
+// 小地图野点：config 的 minimap = [x, y, 边长]（1080 高时的像素，整张地图正方形），窗口盖住它露在屏幕里的那块 + 四周留点边；
+// 窗口左上角和缩放传给页面换算标记位置
+function createMinimap(rect) {
+  const { bounds } = gameDisplay;
+  const scale = bounds.height / 1080;
+  const [mx, my, size] = Array.isArray(rect) && rect.length === 3 && rect.every(Number.isFinite) ? rect : [-9, 790, 296];
+  const sw = bounds.width / scale;   // 屏幕宽（1080 高时的像素）
+  const left = clamp(mx - MINIMAP_PAD, 0, sw);
+  const top = clamp(my - MINIMAP_PAD, 0, 1080);
+  const right = clamp(mx + size + MINIMAP_PAD + MINIMAP_TAG, left + 1, sw);
+  const bottom = clamp(my + size + MINIMAP_PAD, top + 1, 1080);
+  const win = {
+    x: bounds.x + Math.round(left * scale), y: bounds.y + Math.round(top * scale),
+    width: Math.round((right - left) * scale), height: Math.round((bottom - top) * scale),
+  };
+  minimap = new BrowserWindow({
+    ...win,
+    transparent: true, frame: false, resizable: false, movable: false, focusable: false,
+    skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    webPreferences: { backgroundThrottling: false },
+  });
+  log('INFO', `小地图野点：(${win.x},${win.y}) ${win.width}x${win.height}，小地图 ${JSON.stringify([mx, my, size])}，缩放 ${scale.toFixed(3)}`);
+  watch(minimap, '小地图野点');
+  minimap.setAlwaysOnTop(true, 'screen-saver');
+  minimap.setContentProtection(true);      // 同叠加层：不进截图
+  minimap.setIgnoreMouseEvents(true);      // 没有要点的东西，一直点穿
+  minimap.loadURL(`${SERVER}/minimap.html?scale=${scale}&left=${left}&top=${top}`);
+  minimap.once('ready-to-show', () => minimap.showInactive());
+  const timer = setInterval(() => {
+    if (minimap && !minimap.isDestroyed()) minimap.moveTop();
+  }, 3000);
+  minimap.on('closed', () => { clearInterval(timer); minimap = null; });
+}
+
+// 游戏画面野点：盖满 Dota 那块屏（假设 Dota 无边框窗口占满它，和顶栏计时条一样），什么都不接
+function createWorld() {
+  const { bounds } = gameDisplay;
+  world = new BrowserWindow({
+    x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height,
+    transparent: true, frame: false, resizable: false, movable: false, focusable: false,
+    skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    webPreferences: { backgroundThrottling: false },
+  });
+  log('INFO', `游戏画面野点：(${bounds.x},${bounds.y}) ${bounds.width}x${bounds.height}`);
+  watch(world, '游戏画面野点');
+  world.setAlwaysOnTop(true, 'screen-saver');
+  world.setContentProtection(true);        // 同叠加层：不进截图（Python 那边截 Dota 窗口认血条，也不会截到它）
+  world.setIgnoreMouseEvents(true);
+  world.loadURL(`${SERVER}/world.html`);
+  world.once('ready-to-show', () => world.showInactive());
+  const timer = setInterval(() => {
+    if (world && !world.isDestroyed()) world.moveTop();
+  }, 3000);
+  world.on('closed', () => { clearInterval(timer); world = null; });
 }
 
 function applyTopbarMouse() {
@@ -337,6 +403,8 @@ app.whenReady().then(async () => {
   gameDisplay = pickDisplay(cfg.monitor);
   createOverlay(cfg);
   createTopbar();   // 买活 / 大招都关着也开：控制面板能随时打开，关着时页面什么都不画、整条点穿
+  createWorld();                // 没有要圈的野点 / 认不出镜头时页面什么都不画
+  createMinimap(cfg.minimap);   // 同上；config 的 minimap_marks 默认关
   createPanel();
 });
 

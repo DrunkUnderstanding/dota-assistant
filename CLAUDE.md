@@ -91,7 +91,7 @@ graph TD
 | [game](dota_assistant/game/CLAUDE.md) | 和游戏 / 系统打交道：GSI 本地服务 + cfg 安装、全局热键、语音 |
 | [research](dota_assistant/research/CLAUDE.md) | 回测与研究：样本外回测、AI 选人盲测、对线优劣回测 / 实战复盘 |
 | [app](dota_assistant/app/CLAUDE.md) | 编排：本地网页服务、一键启动、演示、数据更新、助手自更新 |
-| [app/live](dota_assistant/app/live/CLAUDE.md) | 实时主控 `Live`：类本体 + 六个 mixin（选人 / 局内 / 计时 / 卡片 / 叠加层 / 设置）+ consts |
+| [app/live](dota_assistant/app/live/CLAUDE.md) | 实时主控 `Live`：类本体 + 七个 mixin（选人 / 局内 / 计时 / 卡片 / 叠加层 / 设置 / 游戏画面野点）+ consts |
 | [cli](dota_assistant/cli/CLAUDE.md) | 最上层：`python -m dota_assistant <命令>` 全部命令入口 |
 | [web](web/CLAUDE.md) | 原生 HTML/CSS/JS 页面：叠加层、顶栏计时、控制面板、队友战绩 |
 | [electron](electron/CLAUDE.md) | 界面外壳：只开透明 / 置顶 / 穿透窗口，无业务逻辑 |

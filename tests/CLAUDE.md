@@ -24,7 +24,8 @@
 |---|---|
 | `test_engine.py` `test_familiar.py` `test_skip.py` | `domain/engine`、`domain/advisor`（打分回归、熟练度分组 + 胜率拆解、这局不想玩） |
 | `test_lanes.py` `test_explain.py` `test_teamfight.py` | `domain/lanes` `explain` `teamfight`（有本地知识库时抽查真实阵容） |
-| `test_itembuild.py` `test_coach.py` `test_brief.py` `test_death.py` `test_jungle.py` | 出装、缺口提醒、本局要点、死亡复盘、野区 |
+| `test_itembuild.py` `test_coach.py` `test_brief.py` `test_death.py` `test_jungle.py` `test_camps.py` | 出装、缺口提醒、本局要点、死亡复盘、野区、野点标记（位置 / 秒数） |
+| `test_camera.py` | 游戏画面里的镜头：投影、反推镜头、认自己的血条（用 `tests/data/healthbars_own_and_ally.png`） |
 | `test_buyback.py` `test_ultcd.py` | 买活计时（含 `vision/buybackscan`、`gsi_fields.buyback_left`）、对面大招（含 `kb/cd_ops`） |
 | `test_mates.py` | `domain/mates` + webui 的 `/api/mates` |
 | `test_kb.py` `test_gameplan.py` `test_llm.py` | 知识库、AI 打法（不调大模型）、AI 来源 + `config.toml` 写回 |

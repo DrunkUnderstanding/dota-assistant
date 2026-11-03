@@ -16,10 +16,11 @@
 | `core.py` | 类本体 `class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin)`：`__init__`（各依赖可注入，测试 / 回放用）、工作线程（`start` / `submit` / `_loop` / `_run`）、订阅推送（`subscribe` / `unsubscribe` / `publish` / `current_snapshot`）、`action` 分发、`snapshot` / `status` / `heroes` / `side` / `save_shot` / `close` |
 | `consts.py` | 模块级常量和小函数：`SHOTS_DIR` `OVERLAY_FILE`（`data/overlay.json`）`FIX_FILE`（`data/fixes.jsonl` 帮认流水）`OVERLAY_WIDTH`（下限 400）`EMPTY_LIKE` `PICKED_COLOR_GAIN` `DEATH_SHOT_DELAYS` `SIDE_MODES` `SCAN_MODES` `SECRET_FIELDS` `TIMER_SWITCHES` `HOTKEY_ACTIONS`、`plan_error` 等 |
 | `draft.py` | 选人：`current_draft` / `refresh` / `draft_view` / `slots_view`、`should_scan` / `tick` / `scan` / `scan_bans` / `scan_role`、帮认和记模板（`learn_slot` / `name_slot` / `learn` / `pick_candidates` / `fill_slots`）、`skip_hero` / `unskip_hero`、`clear` |
-| `ingame.py` | 局内：`coach_tick`（缺口提醒）、`_stage_tick`（按阶段弹本局要点）、`_jungle_tick` / `mute_cue`（野区）、`_lane_log`（对线记录）、`_death_recap` / `_take_death_shots`（死亡复盘和死亡截图） |
+| `ingame.py` | 局内：`coach_tick`（缺口提醒）、`_stage_tick`（按阶段弹本局要点）、`_jungle_tick` / `mute_cue`（野区，顺带算小地图野点 `camp_marks`）、`minimap_view`（给 minimap.html）、`_lane_log`（对线记录）、`_death_recap` / `_take_death_shots`（死亡复盘和死亡截图） |
 | `timers.py` | 顶栏计时：买活（`mark_buyback`、`_buyback_tick`、截图 / 消息栏自动记 `_scan_buyback` / `_check_feed`）、对面大招（`mark_ult` / `set_ult` / `_ult_check`）、`set_timer`（顶栏计时开关）、`buyback_view` |
 | `cards.py` | 本局要点 / 「如果选它」卡片：`show_brief`、`explain_pick`、`set_brief_page`、`pick_view`；后台出数据页 / AI 打法页（`_start_brief` / `_start_plan` …） |
 | `overlay.py` | 叠加层：显隐（`toggle_overlay` / `close_overlay` / `overlay_visible`）、固定 / 解锁（`toggle_lock` / `set_locked`）、拖动后的位置（`overlay_moved`）、底色样式（`set_overlay_style` / `overlay_style`）、`overlay_view` |
+| `world.py` | 游戏画面里的野点框：`start_world`（`webui.run` 起，测试不起）单独一个线程，有标记时每 0.1 秒截 Dota 窗口认镜头（`vision/camera.py`）；`world_view` 给 `/api/world`（网页请求线程里调，只读 `_world` / `camp_marks`）；`_hero_now` 按 GSI 推送速度推英雄坐标（HANDOFF 第 54 节） |
 | `settings.py` | 设置：`save_settings`（写回 `config.toml`）、`settings_view`、Dota 目录、热键注册 |
 
 ## 网页动作（`Live.action`）
@@ -28,7 +29,7 @@
 
 ## 依赖与分层
 
-- 属于 `app` 层：用 `domain`（advisor、brief、buyback、coach、jungle、ultcd、engine）、`vision`（recognize、grid、roles、buybackscan、capture）、`game`（gsi、speech、hotkeys）、`ai`（gameplan、llm）、`core`、`app.upgrade`。
+- 属于 `app` 层：用 `domain`（advisor、brief、buyback、camps、coach、jungle、ultcd、engine）、`vision`（recognize、grid、roles、buybackscan、capture）、`game`（gsi、speech、hotkeys）、`ai`（gameplan、llm）、`core`、`app.upgrade`。
 - 被 `app/webui.py` 持有（`WebServer.live`），`tools/golden/replay_live.py`、`tools/browser_check.py` 也会造一个。
 
 ## 对应测试 / 守门
@@ -46,7 +47,8 @@
 - 宽度下限 `OVERLAY_WIDTH[0] = 400` 要和 `electron/main.js` 的 `MIN_WIDTH` 一致（HANDOFF 第 46 节）。
 - 帮认会学坏模板：像空位的裁图（`EMPTY_LIKE`）不记、同一英雄认进好几格不算（HANDOFF 第 40 节）。出了选人不再认顶栏，策略时间只补空格（HANDOFF 第 37 节）。
 - 没 GSI 时阵营按 `SIDE_FALLBACK = "radiant"` 先当，卡片和面板上要标出来。
-- HANDOFF 第 4 节的表里写「其余方法在下面七个 mixin 里」，实际是六个（原计划的 `mates` mixin 没有了，同一格里有说明）。
+- HANDOFF 第 4 节的表里写「其余方法在下面七个 mixin 里」：2026-11-03 加了 `world` 以后正好七个（选人 / 局内 / 计时 / 卡片 / 叠加层 / 设置 / 游戏画面野点）。
+- `world.py` 的线程不走工作线程：只读整个换掉的引用（`camp_marks`、GSI 历史），只写自己的 `_world`；截图句柄在这个线程里建。
 - 2026-10-28 拆分的核对脚本：`tools/refactor/check_live_split.py`。
 
 ## 相关 HANDOFF 节

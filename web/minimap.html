@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选人助手 · 小地图野点</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* 透明窗口盖在 Dota 小地图那一块，野区提醒到点时在野点 / 莲花池上画圈 + 一行字；整个窗口点穿（Electron 那边一直穿透） */
+  html, body { background: transparent; overflow: hidden; height: 100%; }
+  /* ?preview=1：浏览器里预览，垫一张图当小地图（&bg=图片地址，没有就是一块深色），塞几个假标记 */
+  body.preview { background: #1d2430 no-repeat; }
+  .mk { position: absolute; width: 0; height: 0; }
+  .ring {
+    position: absolute; left: calc(-11px * var(--s)); top: calc(-11px * var(--s));
+    width: calc(22px * var(--s)); height: calc(22px * var(--s)); border-radius: 50%;
+    border: calc(2.5px * var(--s)) solid var(--c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.75), 0 0 calc(6px * var(--s)) var(--c);
+  }
+  .mk.dim .ring { border-style: dashed; border-width: calc(1.5px * var(--s)); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6); opacity: 0.85; }
+  /* 最后 3 秒（该动手了）圈一闪一闪 */
+  .mk.now .ring { animation: blink 0.5s steps(2, jump-none) infinite alternate; }
+  @keyframes blink { to { transform: scale(1.35); opacity: 0.55; } }
+  .tag {
+    position: absolute; top: calc(-9px * var(--s)); left: calc(13px * var(--s)); white-space: nowrap;
+    padding: 0 calc(4px * var(--s)); height: calc(18px * var(--s)); display: flex; align-items: center; gap: calc(3px * var(--s));
+    font: 600 calc(12px * var(--s)) / 1 var(--font); color: #10141a; background: var(--c);
+    border-radius: calc(3px * var(--s)); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.7);
+  }
+  .mk.left .tag { left: auto; right: calc(13px * var(--s)); }
+  .mk.dim .tag { font-weight: 400; color: var(--c); background: rgba(10, 13, 18, 0.85); }
+  /* 次要的（双拉、附近别的野点）字写在圈上面：主标记的字在右边，两个野点挨得近时别叠在一起（2026-11-03 实测远古 / 中野叠了） */
+  .mk.dim .tag, .mk.dim.left .tag { top: calc(-32px * var(--s)); left: 0; right: auto; transform: translateX(-50%); }
+  .tag b[hidden] { display: none; }
+  .tag b { font: 700 calc(12px * var(--s)) / 1 var(--num); font-variant-numeric: tabular-nums; }
+  .stack { --c: var(--gold); }
+  .pull { --c: #5eaeea; }
+  .block { --c: #e5675c; }
+  .lotus { --c: #5cc77f; }
+</style>
+</head>
+<body>
+<script type="module">
+import { connect } from './api.js';
+// 窗口在屏幕上的位置由 Electron 按 config 的 minimap_x / y / size 算（electron/main.js createMinimap），
+// 把窗口左上角（1080 高时的像素）和缩放传进来；标记的位置 = 整张地图正方形（rect）里的 u / v，减去窗口左上角。
+const params = new URLSearchParams(location.search);
+const preview = params.has('preview');
+const s = Number(params.get('scale')) || screen.height / 1080 || 1;
+const left = Number(params.get('left')) || 0, top = Number(params.get('top')) || 0;
+document.documentElement.style.setProperty('--s', String(s));
+if (preview) {
+  document.body.classList.add('preview');
+  if (params.get('bg')) document.body.style.backgroundImage = `url("${params.get('bg')}")`;
+}
+let state = preview ? demo() : { show: false };
+connect((snap) => {
+  state = snap.minimap || { show: false };
+  if (preview && !state.show) state = demo();
+  render();
+}, () => {});
+setInterval(render, 250);   // 倒数自己走（快照只在圈的内容变了才推）
+
+function demo() {
+  // 预览：天辉五号位 1:08，拉野点（下路小野）+ 双拉的大野；英雄在天辉远古旁边准备屯野
+  const now = Date.now();
+  const m = (kind, x, y, label, at, main = true) => ({ kind, u: (x + 9472) / 18944, v: (9472 - y) / 18944, label, at, main });
+  return { show: true, anchor: now - 68 * 1000, paused: null, rect: [-9, 790, 296],
+           marks: [m('pull', 3978, -5027, '拉 :15', 75), m('pull', 4649, -3699, '双拉', null, false),
+                   m('stack', -5015, -96, '远古 :51', 111), m('stack', -4013, 992, '中野 :53', 113, false),
+                   m('lotus', -7548, 4209, '莲花 3:00', 180)] };
+}
+
+const els = [];
+function render() {
+  const marks = state.show ? state.marks || [] : [];
+  const clock = state.paused ?? (Date.now() - state.anchor) / 1000;
+  const [x0, y0, size] = state.rect || [0, 0, 0];
+  while (els.length < marks.length) {
+    const el = document.createElement('div');
+    const ring = document.createElement('div');
+    ring.className = 'ring';
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    const label = document.createElement('span');
+    const count = document.createElement('b');
+    tag.append(label, count);
+    el.append(ring, tag);
+    document.body.append(el);
+    els.push({ el, tag, label, count, text: '', num: '', cls: '' });
+  }
+  els.forEach((e, i) => {
+    const d = marks[i];
+    e.el.hidden = !d;
+    if (!d) return;
+    e.el.style.left = `${(x0 + d.u * size - left) * s}px`;
+    e.el.style.top = `${(y0 + d.v * size - top) * s}px`;
+    e.tag.style.marginTop = `${-(d.row || 0) * 20 * s}px`;   // 同一个野点的第几样：牌子往上叠一行
+    // 倒数：还有几秒；在时间段里（at ~ end）写「打」；过了只留名字
+    const rem = d.at == null ? null : Math.ceil(d.at - clock);
+    const during = rem != null && rem <= 0 && clock <= (d.end ?? d.at) + 1;
+    const num = rem == null ? '' : rem > 0 ? String(rem) : during ? '打' : '';
+    if (d.label !== e.text) e.label.textContent = e.text = d.label;
+    if (num !== e.num) e.count.textContent = e.num = num;
+    e.count.hidden = !num;
+    const cls = `mk ${d.kind}${d.main ? '' : ' dim'}${(rem != null && rem > 0 && rem <= 3) || during ? ' now' : ''}${d.u > 0.72 ? ' left' : ''}`;
+    if (cls !== e.cls) e.el.className = e.cls = cls;
+  });
+}
+render();
+</script>
+</body>
+</html>

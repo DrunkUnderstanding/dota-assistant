@@ -46,14 +46,50 @@ class CueTest(unittest.TestCase):
         self.assertIsNone(p.cue(at(jungle.STACK_UNTIL, 50)))                # 过了对线期不提醒
         self.assertIsNone(p.cue(at(0, 50), muted={"block"}))                 # 0:53 还没刷过野，屯不了
 
-    def test_pull_and_double_pull_for_five(self):
+    def test_pull_fallback_for_five(self):
+        """读不到游戏文件：五号位按 pull_second ~ +5 秒拉自家拉野点，别的位置不提醒拉野"""
         p = jungle.make(5, None)
         c = p.cue(at(1, 10))
-        self.assertEqual((c.kind, c.title), ("pull", "拉野 · 1:15"))
-        self.assertTrue(any("双拉" in t for _, t in c.lines))
-        self.assertEqual(p.cue(at(3, 15)).key, "pull:3")
-        self.assertIsNone(jungle.make(4, None).cue(at(3, 15)))              # 四号位不拉
+        self.assertEqual((c.kind, c.title), ("pull", "拉野 · 1:15~1:20"))
+        self.assertTrue(c.lines[0][1].startswith("1:15~1:20 "))
+        self.assertEqual(p.cue(at(3, 20)).key, "pull:3:15")                 # 一段时间里一直亮着
+        self.assertIsNone(jungle.make(4, None).cue(at(3, 15)))
         self.assertIsNone(p.cue(at(jungle.PULL_UNTIL, 15)))
+
+    def test_pull_windows_from_game_file(self):
+        """游戏文件给的时间段：五号位小野 + 大野合成一张，劣势路（三 / 四号位）拉对面大野"""
+        safe = (jungle.Pull("good_1", "small", 19, 21), jungle.Pull("good_2", "big", 27, 29))
+        p = jungle.make(5, None, pulls=safe)
+        c = p.cue(at(2, 11))                                                 # 最早那次前 8 秒亮
+        self.assertEqual(c.title, "拉野 · 2:19 / 2:27")
+        self.assertEqual([t[:9] for _, t in c.lines[:2]], ["2:19~2:21", "2:27~2:29"])
+        self.assertEqual(p.cue(at(2, 32)).key, "pull:2:19")                 # 最晚那次过完 3 秒才收
+        self.assertIsNone(p.cue(at(2, 33)))
+
+    def test_two_pulls_a_minute(self):
+        """游戏文件里每分钟两波兵：:19 / :27 一张，:49 / :57 另一张"""
+        P = jungle.Pull
+        p = jungle.make(5, None, pulls=(P("good_1", "small", 19, 21), P("good_2", "big", 27, 29),
+                                        P("good_1", "small", 49, 51), P("good_2", "big", 57, 59)))
+        self.assertEqual([len(g) for g in p.pull_groups()], [2, 2])
+        first, second = p.cue(at(3, 20)), p.cue(at(3, 45))
+        self.assertEqual((first.key, first.title), ("pull:3:19", "拉野 · 3:19 / 3:27"))
+        self.assertEqual((second.key, second.title), ("pull:3:49", "拉野 · 3:49 / 3:57"))
+        self.assertEqual([t[:9] for _, t in second.lines], ["3:49~3:51", "3:57~3:59"])
+        self.assertEqual(p.cue(at(4, 2)).key, "pull:3:49")                  # :59 过完 3 秒才收（到下一分钟 :02）
+        self.assertEqual(p.cue(at(3, 47)).key, "pull:3:49")                 # 和 :53 屯野同时亮：先到的拉野在前
+        self.assertIsNone(p.cue(at(3, 36)))                                  # 两波中间不亮
+        self.assertEqual(p.cue(at(3, 52)).key, "stack:3")                   # :51 拉完了，:53 的屯野接上
+        self.assertEqual(len(p.cue(at(1, 45)).lines), 2)                     # 1 分钟的第二张不再多说一句
+        off = jungle.make(4, None, pulls=(P("evil_1", "off", 19, 20), P("evil_1", "off", 49, 50)))
+        self.assertEqual(off.cue(at(4, 45)).title, "劣势路拉野 · 4:49~4:50")
+        off = jungle.make(4, None, pulls=(jungle.Pull("evil_1", "off", 19, 20),))
+        self.assertIn("pull", off.kinds)
+        c = off.cue(at(1, 15))
+        self.assertEqual(c.title, "劣势路拉野 · 1:19~1:20")
+        self.assertIn("对面野区", c.lines[0][1])
+        self.assertEqual(jungle.make(3, None, pulls=(jungle.Pull("evil_1", "off", 19, 20),)).kinds, {"lotus", "pull"})
+        self.assertEqual(jungle.make(1, None, pulls=()).kinds, set())
 
     def test_lotus_at_3_and_6(self):
         p = jungle.make(4, None)
@@ -75,7 +111,7 @@ class CueTest(unittest.TestCase):
     def test_muted_and_custom_seconds(self):
         p = jungle.make(5, None, stack_second=54, pull_second=17)
         self.assertEqual(p.cue(at(4, 50)).title, "屯野 · 4:54")
-        self.assertEqual(p.cue(at(4, 12)).title, "拉野 · 4:17")
+        self.assertEqual(p.cue(at(4, 12)).title, "拉野 · 4:17~4:22")
         self.assertIsNone(p.cue(at(4, 50), muted={"stack"}))
         self.assertEqual(p.cue(at(4, 12), muted={"stack"}).kind, "pull")
 

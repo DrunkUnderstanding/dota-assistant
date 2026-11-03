@@ -46,13 +46,14 @@ from .timers import TimersMixin
 from .cards import CardsMixin
 from .overlay import OverlayMixin
 from .settings import SettingsMixin
+from .world import WorldMixin
 from . import consts
 from .. import upgrade
 
 log = logging.getLogger(__name__)
 
 
-class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin):
+class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin, WorldMixin):
     def __init__(self, cfg: Config, screen_factory=None, use_gsi: bool = True, use_hotkeys: bool = True,
                  speaker: Speaker | None = None, advisor: adv.Advisor | None = None,
                  bank: TemplateBank | None = None, calibration: Calibration | None = None,
@@ -129,6 +130,11 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self._death_shots: list[tuple[float, Path]] = []   # 待截的死亡画面：(到点时间, 存到哪)
         self.jungle: jungle.Plan | None = None   # 这局提醒哪些野区动作（局内提醒准备好时按位置 + 同分段数据定）
         self.jungle_cue: jungle.Cue | None = None   # 正显示的那条
+        self.camp_marks: list[dict] = []         # 正圈着的野点 / 莲花池（camps.py；游戏画面里 world.html、小地图上 minimap.html 画）
+        self._jungle_team: str | None = None     # 野区计划按哪个阵营定的（阵营变了重算）
+        self._camp_timings: dict | None = None   # 每个野点几秒屯 / 拉（游戏文件，第一次要用时读；读不到是空表）
+        self._world: dict | None = None          # 游戏画面里的镜头位置（world 线程写，world_view 读）
+        self._world_thread: threading.Thread | None = None
         self._cue_muted: set[str] = set()        # 这局点 × 关掉的种类
         self._lane_logged: set[int] = set()      # 这局 3 / 6 / 10 分钟哪几个已经记进 data/lane_log.jsonl（lanestate.py）
         self.buyback = buyback.Tracker()          # 双方买活冷却（顶栏头像下面的小条）
@@ -441,6 +447,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             "slots": slots,
             "bans_text": self.bans_text,
             "buyback": self.buyback_view(),
+            "minimap": self.minimap_view(),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

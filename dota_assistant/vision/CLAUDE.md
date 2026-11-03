@@ -16,6 +16,7 @@
 | `gamefiles.py` | 从 Dota 资源包导出选人网格用的英雄图到 `data/portraits_grid/`（`GRID_PORTRAIT_DIR`；VTEX 里的 YCoCg-DXT5 解码 `dxt5` / `decode_vtex` / `extract_selection`） |
 | `roles.py` | 自动认位置：Windows OCR（PowerShell 调 `Windows.Media.Ocr`）认顶栏名字下面的「优势路 / 中路 / 劣势路 / 辅助 / 纯辅助」，按 GSI 玩家名找自己那格（`ocr` / `find_roles` / `find_name` / `read_roles`） |
 | `buybackscan.py` | 买活自动记：`Watcher` 每秒看顶栏头像变灰 / 变回彩色 + OCR 复活倒计时；`FeedCheck` / `read_feed` 认左侧消息栏「买活了」+ 行首英雄小图；样本存 `shots/buyback/` |
+| `camera.py` | 游戏画面里的镜头：`find_bars` 认自己英雄的血条（白外框，队友 / 小兵的不认）、`target_from_bar` / `Tracker` 用血条 + GSI 英雄坐标反推镜头对着哪、`project` 世界坐标 → 屏幕像素；镜头常数是 2026-11-03 在游戏里量的（HANDOFF 第 54 节） |
 | `calibrate.py` | 校准窗口（PySide6）：在选人截图上框每排首尾两个格子，中间等距补齐，存 `calibration.json` |
 
 ## 对外接口
@@ -36,6 +37,7 @@
 - `tests/test_grid.py`：合成网格画面认禁用 + 游戏资源解码。
 - `tests/test_roles.py`：假 OCR 结果 → 每格位置、哪格是我。
 - `tests/test_capture.py`：`Screen` / `WindowGrabber`。
+- `tests/test_camera.py`：投影 / 反投影、按游戏里量的点反推镜头、真实截图里只认自己的血条（`tests/data/healthbars_own_and_ally.png`）。
 - `tests/test_buyback.py`：含 `buybackscan`；`tests/test_webui.py` 里有帮认 / 记模板 / 买活自动记的 Live 流程。
 
 ## 注意事项 / 坑

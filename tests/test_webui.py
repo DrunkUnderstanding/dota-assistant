@@ -15,6 +15,7 @@ from dota_assistant.domain import advisor as adv
 from dota_assistant.vision import grid
 from dota_assistant.core import config
 from dota_assistant.domain import brief
+from dota_assistant.domain import camps
 from dota_assistant.vision import buybackscan
 from dota_assistant.domain import lanelog
 from dota_assistant.domain import coach
@@ -455,11 +456,13 @@ class CoachLiveTest(unittest.TestCase):
         self.live.close()
 
     def push(self, minute, state="DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", deaths=0, items=(), hp=None, alive=True,
-             now=None):
+             now=None, xy=None):
         st = self.live.gsi.state
         hero = {"name": "npc_dota_hero_phantom_lancer", "alive": alive}
         if hp is not None:
             hero |= {"health": hp, "max_health": 100}
+        if xy is not None:
+            hero |= {"xpos": xy[0], "ypos": xy[1]}
         st.update({"map": {"matchid": "123", "game_state": state, "clock_time": int(minute * 60)},
                    "player": {"team_name": "radiant", "deaths": deaths, "last_hits": 40},
                    "hero": hero,
@@ -870,7 +873,7 @@ class CoachLiveTest(unittest.TestCase):
         self.live.coach_card = {"kind": "notice", "title": "局内提醒", "lines": [], "closable": True}
         ov = self.push(2 + 10 / 60)
         self.assertEqual(ov["view"]["title"], "局内提醒")                          # 卡片还在，提醒叠在顶上
-        self.assertEqual(ov["view"]["cue"]["title"], "拉野 · 2:15")
+        self.assertEqual(ov["view"]["cue"]["title"], "拉野 · 2:15~2:20")
         wait(self.live.submit(self.live.toggle_overlay))                          # 先关卡片
         self.assertEqual(self.live.jungle_cue.kind, "pull")
         wait(self.live.submit(self.live.toggle_overlay))                          # 再关提醒：这局不再提醒拉野
@@ -881,6 +884,61 @@ class CoachLiveTest(unittest.TestCase):
         self.assertIsNone(self.live.jungle_cue)
         self.assertEqual(self.push(5 + 45 / 60)["view"]["title"], "屯野 5:53 / 抢莲花 6:00")  # 5:45 正好提前 15 秒（秒数换算不能差 1 秒）
         self.assertEqual(self.push(7 + 45 / 60)["view"]["title"], "屯野 · 7:53")
+
+    def test_minimap_marks(self):
+        """小地图野点：天辉五号位拉野时圈下路小野；屯野圈英雄附近的；关掉 minimap_marks / 死了不画"""
+        self.live.position = 5
+        self.live.cfg.minimap_marks = True
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        mm = lambda: json.loads(self.live.current_snapshot)["minimap"]
+        self.push(-0.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.assertEqual([m["label"] for m in mm()["marks"]], ["被封没"])
+        self.push(2 + 2 / 60)
+        v = mm()
+        self.assertTrue(v["show"])
+        self.assertEqual(v["rect"], [-9, 790, 296])
+        self.assertEqual([(m["label"], m["at"]) for m in v["marks"]], [("拉 :15~:20", 135)])
+        self.assertIsInstance(v["anchor"], int)
+        self.push(2.5)
+        self.assertFalse(mm()["show"])                                            # 2:30 拉野过了、屯野还早
+        self.push(3 + 40 / 60, xy=camps._BY_NAME["good_8"][2:4])                    # 站在天辉远古旁边
+        self.assertEqual(mm()["marks"][0]["label"], "远古 :51~:53")
+        self.push(4 + 40 / 60, xy=camps._BY_NAME["good_8"][2:4], alive=False)
+        self.assertFalse(mm()["show"])
+        self.live.cfg.minimap_marks = False
+        self.push(5 + 47 / 60, xy=camps._BY_NAME["good_8"][2:4])
+        self.assertTrue(self.live.jungle_cue)                                     # 卡片照弹，小地图不画
+        self.assertFalse(mm()["show"])
+
+    def test_world_marks(self):
+        """游戏画面野点：镜头位置（world 线程从血条认的）+ 要圈的野点 → 刷新框四个角的像素；镜头位置旧了 / 关掉不画"""
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        self.push(2 + 2 / 60)
+        self.assertEqual(self.live.world_view(), {"show": False})            # 还没认出镜头
+        x0, y0, x1, y1 = camps._BY_NAME["good_1"][4]
+        self.live._world = {"t": time.time(), "target": ((x0 + x1) / 2, (y0 + y1) / 2), "size": (1920, 1080)}
+        v = self.live.world_view()
+        self.assertTrue(v["show"])
+        m = v["marks"][0]
+        self.assertEqual((m["label"], m["cx"], m["cy"]), ("拉 :15~:20", 960, 540))   # 镜头正对着框中心
+        (ax, ay), (bx, by), (cx, cy), (dx, dy) = m["poly"]
+        self.assertTrue(ay == by > cy == dy and bx - ax > cx - dx > 0)           # 近的那边（南）在下面、更宽
+        self.assertEqual(m["sy"], cy)                                             # 牌子挂在框上边
+        self.live._world["target"] = ((x0 + x1) / 2, y1 + 200)                    # 框在画面下沿、中心在操作栏后面：上半截露着照样画
+        low = next(m for m in self.live.world_view()["marks"] if m["label"] == "拉 :15~:20")
+        self.assertGreater(low["cy"], 1080 - 150)
+        self.assertLess(low["sy"], 1080 - 150)                                     # 牌子挂在露出来的上边
+        self.live._world["target"] = (x0 - 3000, y0)                              # 镜头拉到西边：野点出了画面
+        self.assertFalse(self.live.world_view()["show"])
+        self.live._world["target"] = ((x0 + x1) / 2, (y0 + y1) / 2)
+        self.live._world["t"] -= 5
+        self.assertFalse(self.live.world_view()["show"])
+        self.live._world["t"] += 5
+        self.live.cfg.world_marks = False
+        self.assertFalse(self.live.world_view()["show"])
 
     def test_ingame_tips_off(self):
         """ingame_tips = false（默认）：开局提示、死亡复盘、时间点缺口都不弹，野区提醒照弹"""

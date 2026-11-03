@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选人助手 · 游戏画面野点</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* 整屏透明窗口盖在 Dota 上，野区提醒到点时在游戏画面里描出野点的刷新框（和按住 Alt 时 Dota 自己画的黄框同一个框）、
+     莲花池画一个地面上的圈，框上边挂一块牌子写几秒打；整个窗口点穿 */
+  html, body { background: transparent; overflow: hidden; height: 100%; }
+  /* ?preview=1&bg=图片：浏览器里预览，垫一张游戏截图、塞几个假标记 */
+  body.preview { background: #1d2430 no-repeat; background-size: 100% 100%; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .shape { fill: color-mix(in srgb, var(--c) 14%, transparent); stroke: var(--c); stroke-width: calc(4.5px * var(--s)); stroke-linejoin: round;
+           filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)); }
+  .dim .shape { fill: none; stroke-dasharray: calc(12px * var(--s)) calc(8px * var(--s)); stroke-width: calc(3px * var(--s)); opacity: 0.9; }
+  /* 最后 3 秒（该动手了）框一闪一闪 */
+  .now .shape { animation: blink 0.5s steps(2, jump-none) infinite alternate; }
+  @keyframes blink { to { opacity: 0.55; } }
+  .tag {
+    position: absolute; transform: translate(-50%, calc(-100% - 6px * var(--s))); white-space: nowrap;
+    padding: 0 calc(8px * var(--s)); height: calc(30px * var(--s)); display: flex; align-items: center; gap: calc(6px * var(--s));
+    font: 700 calc(18px * var(--s)) / 1 var(--font); color: #10141a; background: var(--c);
+    border-radius: calc(5px * var(--s)); box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.75), 0 3px 10px rgba(0, 0, 0, 0.45);
+  }
+  .tag.dim { font-weight: 500; font-size: calc(15px * var(--s)); height: calc(24px * var(--s)); color: var(--c); background: rgba(10, 13, 18, 0.82); }
+  .tag b { font: 800 calc(20px * var(--s)) / 1 var(--num); font-variant-numeric: tabular-nums; }
+  .tag b[hidden] { display: none; }
+  .stack { --c: var(--gold); }
+  .pull { --c: #5eaeea; }
+  .block { --c: #e5675c; }
+  .lotus { --c: #5cc77f; }
+</style>
+</head>
+<body>
+<svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+<script type="module">
+// Python 那边给每个标记在 Dota 画面里的像素：野点是刷新框四个角 poly，莲花池是中心 cx / cy + 横竖半径 rx / ry，牌子挂在 sx / sy；
+// 画面大小 size。窗口盖满 Dota 那块屏，按 窗口宽 / 画面宽 缩放就行。倒数按时钟锚点自己走。
+const params = new URLSearchParams(location.search);
+const preview = params.has('preview');
+if (preview) {
+  document.body.classList.add('preview');
+  if (params.get('bg')) document.body.style.backgroundImage = `url("${params.get('bg')}")`;
+}
+const NS = 'http://www.w3.org/2000/svg';
+const svg = document.getElementById('svg');
+let state = { show: false };
+const els = [];
+
+async function poll() {
+  if (preview) {
+    state = demo();
+  } else {
+    try {
+      const res = await fetch('/api/world', { cache: 'no-store' });
+      state = await res.json();
+    } catch {
+      state = { show: false };   // 助手退出了 / 一时连不上：先不画
+    }
+  }
+  render();
+  setTimeout(poll, preview ? 1000 : 100);
+}
+
+function demo() {
+  // 预览：一个野点刷新框 + 一个莲花池，坐标是 1920×1080 截图里的
+  const now = Date.now();
+  return { show: true, size: [1920, 1080], anchor: now - 128 * 1000, paused: null,
+           marks: [{ kind: 'pull', label: '拉 :19~:21', at: 139, end: 141, main: true, poly: [[900, 820], [1500, 820], [1440, 450], [940, 450]], sx: 1190, sy: 450 },
+                   { kind: 'lotus', label: '莲花 3:00', at: 180, main: false, cx: 400, cy: 300, rx: 220, ry: 120, sx: 400, sy: 180 }] };
+}
+
+function render() {
+  const marks = state.show ? state.marks || [] : [];
+  const k = state.size ? window.innerWidth / state.size[0] : 1;
+  document.documentElement.style.setProperty('--s', String(k * (state.size ? state.size[1] / 1080 : 1)));
+  const clock = state.paused ?? (Date.now() - state.anchor) / 1000;
+  while (els.length < marks.length) {
+    const g = document.createElementNS(NS, 'g');
+    const poly = document.createElementNS(NS, 'polygon');
+    const ell = document.createElementNS(NS, 'ellipse');
+    poly.classList.add('shape');
+    ell.classList.add('shape');
+    g.append(poly, ell);
+    svg.append(g);
+    const tag = document.createElement('div');
+    const label = document.createElement('span');
+    const count = document.createElement('b');
+    tag.append(label, count);
+    document.body.append(tag);
+    els.push({ g, poly, ell, tag, label, count, text: '', num: '', cls: '' });
+  }
+  els.forEach((e, i) => {
+    const d = marks[i];
+    e.g.style.display = e.tag.style.display = d ? '' : 'none';
+    if (!d) return;
+    if (d.poly) {
+      e.poly.setAttribute('points', d.poly.map(([x, y]) => `${x * k},${y * k}`).join(' '));
+      e.poly.style.display = '';
+      e.ell.style.display = 'none';
+    } else {
+      for (const [a, v] of [['cx', d.cx], ['cy', d.cy], ['rx', d.rx], ['ry', d.ry]]) e.ell.setAttribute(a, String(v * k));
+      e.ell.style.display = '';
+      e.poly.style.display = 'none';
+    }
+    e.tag.style.left = `${d.sx * k}px`;
+    e.tag.style.top = `${d.sy * k - (d.row || 0) * 34 * k * (state.size[1] / 1080)}px`;   // 同一个野点的第几样：往上叠一行
+    // 还没到：倒数几秒；在时间段里（at ~ end）：写「打」、框一直闪；过了：只留名字，几秒后 Python 那边收起
+    const rem = d.at == null ? null : Math.ceil(d.at - clock);
+    const during = rem != null && rem <= 0 && clock <= (d.end ?? d.at) + 1;
+    const num = rem == null ? '' : rem > 0 ? String(rem) : during ? '打' : '';
+    if (d.label !== e.text) e.label.textContent = e.text = d.label;
+    if (num !== e.num) e.count.textContent = e.num = num;
+    e.count.hidden = !num;
+    const cls = `${d.kind}${d.main ? '' : ' dim'}${(rem != null && rem > 0 && rem <= 3) || during ? ' now' : ''}`;
+    if (cls !== e.cls) {
+      e.g.setAttribute('class', cls);
+      e.tag.className = `tag ${cls}`;
+      e.cls = cls;
+    }
+  });
+}
+poll();
+setInterval(render, 250);   // 两次拉取之间倒数也走
+</script>
+</body>
+</html>

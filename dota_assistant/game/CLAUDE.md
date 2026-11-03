@@ -26,6 +26,7 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 ## 依赖与分层
 
 - `gsi.py` 依赖 `core.dota_install`、`core.gsi_fields`（阶段常量、`buyback_left`）、`core.log.HTTPServer`。
+- GSI 推送间隔（cfg 的 throttle）2026-11-03 从 0.5 秒改成 0.1 秒：游戏画面里的野点框靠英雄坐标反推镜头，0.5 秒一推英雄在走时会落后 100 多像素（HANDOFF 第 54 节）。cfg 内容变了 `ensure_cfg` 会重写，**要重开 Dota 才生效**；历史里的推送多几倍（60 秒约 600 份）。
 - import 它的：`app/live`（`core` 用 `GSIServer` / `Speaker`，`consts` 用 `vk_code`，`settings` 用 `ensure_cfg` / `Hotkeys`）、`app/start.py`（`ensure_cfg`）、`cli`。`app/demo.py` 不 import，而是按 GSI 格式把录像 POST 到本地端口（当「假 Dota」）。
 
 ## 对应测试

@@ -67,6 +67,10 @@
   "kind": "method",
   "signature": "(self, key: 'str', download: 'bool' = True)"
  },
+ "_hero_now": {
+  "kind": "method",
+  "signature": "(self, at: 'float') -> 'tuple[float, float] | None'"
+ },
  "_ids": {
   "kind": "method",
   "signature": "(self, ids) -> 'list[Hero]'"
@@ -106,6 +110,10 @@
  "_loop": {
   "kind": "method",
   "signature": "(self) -> 'None'"
+ },
+ "_make_jungle": {
+  "kind": "method",
+  "signature": "(self, verb: 'str') -> 'None'"
  },
  "_my_slot": {
   "kind": "method",
@@ -215,6 +223,14 @@
   "kind": "method",
   "signature": "(self) -> 'dict'"
  },
+ "_world_active": {
+  "kind": "method",
+  "signature": "(self) -> 'bool'"
+ },
+ "_world_loop": {
+  "kind": "method",
+  "signature": "(self, grabber_factory) -> 'None'"
+ },
  "action": {
   "kind": "method",
   "signature": "(self, a: 'dict') -> 'str | None'"
@@ -282,6 +298,10 @@
  "mark_ult": {
   "kind": "method",
   "signature": "(self, side: 'str', index: 'int') -> 'None'"
+ },
+ "minimap_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
  },
  "mute_cue": {
   "kind": "method",
@@ -411,6 +431,10 @@
   "kind": "method",
   "signature": "(self) -> 'Live'"
  },
+ "start_world": {
+  "kind": "method",
+  "signature": "(self, grabber_factory=None) -> 'None'"
+ },
  "status": {
   "kind": "method",
   "signature": "(self) -> 'dict'"
@@ -446,5 +470,9 @@
  "unsubscribe": {
   "kind": "method",
   "signature": "(self, q: 'queue.Queue') -> 'None'"
+ },
+ "world_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
  }
 }

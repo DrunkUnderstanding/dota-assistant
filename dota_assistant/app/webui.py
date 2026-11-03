@@ -7,12 +7,15 @@
         ├ /items/<key>.png              装备图标（data/items）
         ├ /icons/abilities/<key>.png    技能图标 / 金币图标（icons/gold.png）：第一次从 Valve CDN 下，存 data/icons
         ├ /api/events                   SSE：状态一变就推一份完整快照
+        ├ /api/world                    GET 游戏画面里野点标记的像素位置（world.html 每 0.1 秒拉）
         ├ /api/action                   POST：控制面板的操作
         ├ /api/mates                    GET 查过的队友 / POST 查一个人、删一个人（队友战绩页 mates.html）
         └ /api/match/<比赛编号>?p=<好友代码>  GET 那一整局 10 个人的数据（p = 从谁的战绩点进来的，高亮他）
     └ Electron（electron/main.js）：开三个窗口加载上面的页面
         ├ 叠加层：透明、置顶、鼠标穿透、不抢焦点（普通窗口，不注入游戏）；解锁后可以拖动，固定后恢复穿透
         ├ 买活 / 大招计时条：同样透明置顶，盖在游戏顶栏上，每个英雄头像下面一个买活小条、对面的再加一个大招小条（topbar.html）
+        ├ 游戏画面野点：整屏透明置顶、整个点穿，野区提醒到点时在游戏画面里的野点 / 莲花池上画圈（world.html，拉 /api/world）
+        ├ 小地图野点：同样透明置顶、整个点穿，盖在 Dota 小地图上（minimap.html，默认关）
         └ 控制面板：普通窗口，关掉它整个助手退出
 
 没装 Electron 时可以 --browser 用浏览器打开（叠加层只能当预览看，盖不到游戏上）。
@@ -57,7 +60,7 @@ def overlay_config(cfg: Config, pos: dict | None = None) -> dict:
     拉过高度才有 height（没有 = 到屏幕底），拖到过别的屏才有 screen（那块屏左上角，没有 = monitor 那块）"""
     pos = pos or {"x": cfg.overlay_x, "y": cfg.overlay_y}
     out = {"monitor": cfg.monitor, "x": pos["x"], "y": pos["y"], "width": pos.get("width", cfg.overlay_width),
-           "opacity": cfg.overlay_opacity}
+           "opacity": cfg.overlay_opacity, "minimap": [cfg.minimap_x, cfg.minimap_y, cfg.minimap_size]}
     out.update({k: pos[k] for k in ("height", "screen") if k in pos})
     return out
 
@@ -84,6 +87,10 @@ class WebServer:
                     self._send(200, server.live.current_snapshot or "{}", JSON_TYPE)
                 elif path == "/api/heroes":
                     self._json(200, server.live.heroes())
+                elif path == "/api/world":
+                    # 游戏画面里的野点标记：页面每 0.1 秒拉一次（镜头一直在变，不走快照推送）
+                    view = server.live.world_view() if hasattr(server.live, "world_view") else {"show": False}
+                    self._json(200, view)
                 elif path == "/api/config":
                     self._json(200, overlay_config(server.live.cfg, server.live.overlay_pos))
                 elif path == "/api/mates":
@@ -222,6 +229,7 @@ def serve(live, browser: bool = False) -> int:
     """起服务 + 打开界面，直到控制面板关掉（Electron）或 Ctrl+C（浏览器模式）"""
     srv = WebServer(live).start()
     live.start()
+    live.start_world()
     try:
         if browser:
             webbrowser.open(srv.url + "/panel.html")

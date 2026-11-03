@@ -24,7 +24,7 @@
 | 路径 | 内容 |
 |---|---|
 | `/` | 302 跳到 `/panel.html` |
-| `/overlay.html` `/panel.html` `/topbar.html` `/mates.html` … | `web/` 下的静态文件 |
+| `/overlay.html` `/panel.html` `/topbar.html` `/minimap.html` `/mates.html` … | `web/` 下的静态文件 |
 | `/portraits/<id>.png`、`/items/<key>.png` | `data/portraits/`、`data/items/` |
 | `/icons/...` | 技能 / 金币图标，第一次从 Valve CDN 下（`sources.assets.fetch_icon`），存 `data/icons/` |
 | `/api/events` | SSE：状态一变就推一份完整快照 |

@@ -6,7 +6,8 @@ import threading
 import time
 from datetime import datetime
 
-from ...domain import brief, coach, death, itembuild, jungle, lanelog
+from ...domain import brief, camps, coach, death, itembuild, jungle, lanelog
+from ...core.config import Config
 from ...core.gsi_fields import SELECTION_STATE, STRATEGY_STATE
 from ...vision.recognize import write_image
 from . import consts
@@ -42,6 +43,7 @@ class InGameMixin:
         if not (st and st.alive and (st.in_match or strategy)):
             self.coach_card = None               # 比赛结束 / 回到选人：收起卡片
             self.jungle_cue = None
+            self.camp_marks = []
             self._bb_show = False
             return
         # 天梯的 matchid 选人时就有；本地 / 机器人局一直是 0（2026-10-23 实测），连开两局会被当成同一局
@@ -110,11 +112,28 @@ class InGameMixin:
         """到点前几秒亮一条野区提醒；死了不提醒（做不了，也别挡死亡复盘）"""
         alive = (st.raw.get("hero") or {}).get("alive") is not False
         clock = round(st.clock_minutes * 60)     # 分钟换回秒有浮点误差（4:07 会算成 4:06.999）
+        if self.jungle and (self.jungle.pos, self._jungle_team) != (self.position, st.team):
+            self._make_jungle("改成")                # 开打后在控制面板改了位置 / 阵营刚知道：按新的重算提醒哪些
         cue = self.jungle.cue(clock, self._cue_muted) if self.jungle and alive else None
         if cue and cue != self.jungle_cue:
             log.info("野区提醒「%s」：%s", cue.title, " / ".join(t for _, t in cue.lines))
             self.user_hidden = False             # 和局内提醒一样，新的一条总要让人看见
         self.jungle_cue = cue
+        hero = st.raw.get("hero") or {}
+        xy = (hero["xpos"], hero["ypos"]) if all(isinstance(hero.get(k), (int, float)) for k in ("xpos", "ypos")) else None
+        on = self.jungle and alive and (self.cfg.world_marks or self.cfg.minimap_marks)
+        marks = camps.marks(self.jungle, st.team, clock, xy, self._cue_muted, self._camp_timings) if on else []
+        if marks != self.camp_marks and marks:
+            log.info("野点标记：%s", "、".join(m["label"] for m in marks))
+        self.camp_marks = marks
+
+    def minimap_view(self) -> dict:
+        """给 minimap.html：要圈的野点（小地图上 0~1 的位置）+ 时钟锚点（页面自己倒数）+ 小地图在屏幕上哪（1080 高时的像素）"""
+        if not self.cfg.minimap_marks or not self.camp_marks or self._bb_anchor is None:
+            return {"show": False}
+        cfg = self.cfg
+        return {"show": True, "anchor": round(self._bb_anchor * 1000), "paused": self._bb_paused,
+                "rect": [cfg.minimap_x, cfg.minimap_y, cfg.minimap_size], "marks": self.camp_marks}
 
     def _lane_log(self, st, key: str) -> None:
         """3:00 / 6:00 / 10:00 把自己的 GSI 数据原样记一笔，赛后 lane-review 对照 STRATZ 的对线结果。
@@ -189,6 +208,7 @@ class InGameMixin:
             return                               # GSI 还没给英雄，下一轮再试
         self.coach_match, self.coach = key, None
         self.jungle, self.jungle_cue, self._cue_muted, self._lane_logged = None, None, set(), set()
+        self.camp_marks = []
         self._coach_deaths = self.gsi.state.deaths  # 中途开助手：之前的死亡不算
         my_id, enemy_ids, pos = draft.my_hero.id, [h.id for h in draft.enemies], self.position
         log.info("比赛 %s：准备局内提醒（%s · %d 号位 · 对面 %s）", key, draft.my_hero.name_cn, pos, consts._names(draft.enemies))
@@ -212,16 +232,28 @@ class InGameMixin:
             return
         self.coach, notes = res
         if self.cfg.jungle_cues:
-            self.jungle = jungle.make(self.position, getattr(self.coach, "bench", None),
-                                      self.cfg.stack_second, self.cfg.pull_second)
-            log.info("野区提醒：%d 号位 · %s", self.position,
-                     "、".join(jungle.LABELS[k] for k in sorted(self.jungle.kinds)) or "不提醒")
+            self._make_jungle("")
         st = self.gsi.state
         self._coach_deaths = st.deaths
         self._coach_checkpoint = max((c for c in coach.CHECKPOINTS if c < st.clock_minutes), default=0)
         self.message = "局内提醒已就绪"
         if notes and not self.brief:             # 本局要点里已经有这些了
             self._show_coach("开局提示", [("row", n) for n in notes])
+
+    def _make_jungle(self, verb: str) -> None:
+        """按现在的位置 + 阵营定这局提醒哪些野区动作。拉哪几个野点、几秒到几秒：游戏文件里的（camps.pull_plan）；
+        config 的 pull_second 改过默认值、或者读不到游戏文件时，按 pull_second 只提醒五号位拉自家小野"""
+        if self._camp_timings is None:
+            self._camp_timings = camps.load_timings(self.dota_dir)
+        team = self.gsi.state.team
+        pulls = camps.pull_plan(self._camp_timings, team, self.position) \
+            if self.cfg.pull_second == Config.pull_second else None
+        self.jungle = jungle.make(self.position, getattr(self.coach, "bench", None), self.cfg.stack_second,
+                                  self.cfg.pull_second, pulls)
+        self._jungle_team = team
+        log.info("野区提醒：%s%d 号位 · %s（拉野：%s）", verb, self.position,
+                 "、".join(jungle.LABELS[k] for k in sorted(self.jungle.kinds)) or "不提醒",
+                 "、".join(f"{jungle.PULL_ROLES[x.role]} :{x.start:02d}~:{x.end:02d}" for x in self.jungle.pulls) or "无")
 
     def _show_coach(self, title: str, lines: list[tuple], on_death: bool = False) -> None:
         """lines：(kind, 文字或片段列表)，片段里的装备在界面上显示图标（itembuild.line_view）"""

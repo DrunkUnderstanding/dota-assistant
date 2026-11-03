@@ -28,7 +28,7 @@ CFG_TEMPLATE = """"Dota Assistant"
     "uri"           "http://127.0.0.1:{port}/"
     "timeout"       "5.0"
     "buffer"        "0.1"
-    "throttle"      "0.5"
+    "throttle"      "0.1"
     "heartbeat"     "10.0"
     "data"
     {{
