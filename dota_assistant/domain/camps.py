@@ -1,11 +1,10 @@
 """野点标记：野区提醒到点时，在游戏画面里（web/world.html，镜头位置见 vision/camera.py）或小地图上（web/minimap.html）
-对应的野点 / 莲花池画个圈、写上几秒打。
+对应的野点画个圈、写上几秒打。
 
 和 jungle.py 的野区提醒是同一套「谁提醒什么」（Plan.kinds，点 × 关掉的种类也一起不画），这里只管「在哪」：
 - 屯野：只圈自己英雄附近的野点（GSI 的 hero.xpos / ypos，玩家自己的位置本来就看得到），最近的那个写几秒到几秒
 - 拉野：五号位圈自家优势路的小野、旁边的大野；三 / 四号位圈劣势路边上对面野区的大野（pull_plan），各写各的时间段
 - 封野：四号位圈对面优势路的小野（去封），五号位圈自家那个（看有没有被封）
-- 莲花：圈你这路的莲花池（三 / 四号位在劣势路、五号位在优势路）
 圈比提醒卡片早亮（MAP_LEAD），留出走过去的时间。
 
 几秒屯 / 拉：每个野点按游戏文件 scripts/creep_pull_timings.txt（pak01_dir.vpk 里，Dota 自己按住 Alt 时野点上
@@ -71,8 +70,6 @@ CAMPS = (
 _BY_NAME = {c[0]: c for c in CAMPS}
 # 优势路拉野点：(小野, 旁边的大野)。天辉优势路是下路，夜魇是上路
 PULL = {"radiant": ("good_1", "good_2"), "dire": ("evil_2", "evil_1")}
-# 莲花池：上路的在天辉一塔那边，下路的在夜魇一塔那边（同一文件的 npc_dota_lotus_pool）
-LOTUS = {"top": (-7548, 4209), "bot": (7504, -4405)}
 
 TIMINGS_FILE = "scripts/creep_pull_timings.txt"
 MAP_LEAD = 20                # 屯野 / 拉野：小地图比到点早这么多秒亮（卡片是 jungle.LEAD 秒），留出走过去的时间
@@ -177,8 +174,8 @@ def _dist2(c, hero) -> float:
 
 def marks(plan: jungle.Plan | None, team: str | None, clock: float, hero: tuple[float, float] | None = None,
           muted=(), timings: dict[str, Timing] | None = None) -> list[dict]:
-    """这一刻小地图上画哪些圈。team 是 GSI 的 radiant / dire（不知道就不画拉 / 封 / 莲花）；hero 是自己英雄的世界坐标。
-    每个圈：x / y（世界坐标）、box（刷新框，莲花池没有）、u / v（小地图上的位置）、kind（stack / pull / block / lotus）、label、at（该动手的游戏时钟秒，页面自己倒数）、
+    """这一刻小地图上画哪些圈。team 是 GSI 的 radiant / dire（不知道就不画拉 / 封）；hero 是自己英雄的世界坐标。
+    每个圈：x / y（世界坐标）、box（刷新框）、u / v（小地图上的位置）、kind（stack / pull / block）、label、at（该动手的游戏时钟秒，页面自己倒数）、
     main（False = 次要的，画淡一点）。拉野按 plan.pulls；timings 是 load_timings 读的每个野点的屯野时间，没有就按 plan 里的秒数"""
     if plan is None:
         return []
@@ -206,14 +203,6 @@ def marks(plan: jungle.Plan | None, team: str | None, clock: float, hero: tuple[
             if m := _window(clock, w[0], w[1], jungle.STACK_UNTIL, jungle.LINGER):
                 out.append(_camp_mark("stack", name, f"{TYPE_NAMES[typ]} {_span(*w)}", m * 60 + w[0], main=i == 0,
                                       end=m * 60 + w[1]))
-    if "lotus" in kinds and enemy:
-        lotus = next((m for m in jungle.LOTUS_MINUTES
-                      if m * 60 - jungle.LOTUS_LEAD <= clock <= m * 60 + jungle.LOTUS_LINGER), None)
-        if lotus:
-            # 劣势路（三 / 四号位）：天辉在上路、夜魇在下路；五号位跟着优势路走，反过来
-            offlane = "top" if team == "radiant" else "bot"
-            lane = offlane if plan.pos != 5 else ({"top": "bot", "bot": "top"}[offlane])
-            out.append(_mark("lotus", *LOTUS[lane], f"莲花 {lotus}:00", lotus * 60))
     # 同一个野点同时有几样（拉野点 :49 拉、:55 屯）：先到的排第 0 行，牌子一行一行往上叠，免得叠在一起看不见（2026-11-03 实测）
     seen: dict = {}
     for mk in sorted(out, key=lambda mk: (mk["at"] is None, mk["at"] or 0)):

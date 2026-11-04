@@ -6,8 +6,8 @@
 <title>选人助手 · 游戏画面野点</title>
 <link rel="stylesheet" href="base.css">
 <style>
-  /* 整屏透明窗口盖在 Dota 上，野区提醒到点时在游戏画面里描出野点的刷新框（和按住 Alt 时 Dota 自己画的黄框同一个框）、
-     莲花池画一个地面上的圈，框上边挂一块牌子写几秒打；整个窗口点穿 */
+  /* 整屏透明窗口盖在 Dota 上，野区提醒到点时在游戏画面里描出野点的刷新框（和按住 Alt 时 Dota 自己画的黄框同一个框），
+     框上边挂一块牌子写几秒打；整个窗口点穿 */
   html, body { background: transparent; overflow: hidden; height: 100%; }
   /* ?preview=1&bg=图片：浏览器里预览，垫一张游戏截图、塞几个假标记 */
   body.preview { background: #1d2430 no-repeat; background-size: 100% 100%; }
@@ -30,13 +30,12 @@
   .stack { --c: var(--gold); }
   .pull { --c: #5eaeea; }
   .block { --c: #e5675c; }
-  .lotus { --c: #5cc77f; }
 </style>
 </head>
 <body>
 <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
 <script type="module">
-// Python 那边给每个标记在 Dota 画面里的像素：野点是刷新框四个角 poly，莲花池是中心 cx / cy + 横竖半径 rx / ry，牌子挂在 sx / sy；
+// Python 那边给每个标记在 Dota 画面里的像素：野点是刷新框四个角 poly，牌子挂在 sx / sy；
 // 画面大小 size。窗口盖满 Dota 那块屏，按 窗口宽 / 画面宽 缩放就行。倒数按时钟锚点自己走。
 const params = new URLSearchParams(location.search);
 const preview = params.has('preview');
@@ -61,15 +60,15 @@ async function poll() {
     }
   }
   render();
-  setTimeout(poll, preview ? 1000 : 100);
+  // 有框时 20 毫秒拉一次：Python 那边 0.04 秒认一次镜头，拉镜头时每次拉都按镜头速度推到这一刻，拉得勤框走得顺；没框时慢慢问
+  setTimeout(poll, preview ? 1000 : state.show ? 20 : 200);
 }
 
 function demo() {
-  // 预览：一个野点刷新框 + 一个莲花池，坐标是 1920×1080 截图里的
+  // 预览：一个野点刷新框，坐标是 1920×1080 截图里的
   const now = Date.now();
   return { show: true, size: [1920, 1080], anchor: now - 128 * 1000, paused: null,
-           marks: [{ kind: 'pull', label: '拉 :19~:21', at: 139, end: 141, main: true, poly: [[900, 820], [1500, 820], [1440, 450], [940, 450]], sx: 1190, sy: 450 },
-                   { kind: 'lotus', label: '莲花 3:00', at: 180, main: false, cx: 400, cy: 300, rx: 220, ry: 120, sx: 400, sy: 180 }] };
+           marks: [{ kind: 'pull', label: '拉 :19~:21', at: 139, end: 141, main: true, poly: [[900, 820], [1500, 820], [1440, 450], [940, 450]], sx: 1190, sy: 450 }] };
 }
 
 function render() {
@@ -80,31 +79,21 @@ function render() {
   while (els.length < marks.length) {
     const g = document.createElementNS(NS, 'g');
     const poly = document.createElementNS(NS, 'polygon');
-    const ell = document.createElementNS(NS, 'ellipse');
     poly.classList.add('shape');
-    ell.classList.add('shape');
-    g.append(poly, ell);
+    g.append(poly);
     svg.append(g);
     const tag = document.createElement('div');
     const label = document.createElement('span');
     const count = document.createElement('b');
     tag.append(label, count);
     document.body.append(tag);
-    els.push({ g, poly, ell, tag, label, count, text: '', num: '', cls: '' });
+    els.push({ g, poly, tag, label, count, text: '', num: '', cls: '' });
   }
   els.forEach((e, i) => {
     const d = marks[i];
     e.g.style.display = e.tag.style.display = d ? '' : 'none';
     if (!d) return;
-    if (d.poly) {
-      e.poly.setAttribute('points', d.poly.map(([x, y]) => `${x * k},${y * k}`).join(' '));
-      e.poly.style.display = '';
-      e.ell.style.display = 'none';
-    } else {
-      for (const [a, v] of [['cx', d.cx], ['cy', d.cy], ['rx', d.rx], ['ry', d.ry]]) e.ell.setAttribute(a, String(v * k));
-      e.ell.style.display = '';
-      e.poly.style.display = 'none';
-    }
+    e.poly.setAttribute('points', d.poly.map(([x, y]) => `${x * k},${y * k}`).join(' '));
     e.tag.style.left = `${d.sx * k}px`;
     e.tag.style.top = `${d.sy * k - (d.row || 0) * 34 * k * (state.size[1] / 1080)}px`;   // 同一个野点的第几样：往上叠一行
     // 还没到：倒数几秒；在时间段里（at ~ end）：写「打」、框一直闪；过了：只留名字，几秒后 Python 那边收起

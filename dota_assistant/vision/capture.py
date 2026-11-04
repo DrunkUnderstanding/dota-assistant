@@ -10,6 +10,7 @@ import ctypes
 import logging
 import sys
 
+import cv2
 import mss
 import numpy as np
 
@@ -98,10 +99,11 @@ class WindowGrabber:
             g.DeleteObject(bmp)
             g.DeleteDC(mdc)
             u.ReleaseDC(hwnd, hdc)
-        img = buf[:, :, :3]
-        if not img.any():                               # 全黑：多半是独占全屏，交给整屏截图
+        # 去掉第 4 通道：cvtColor 约 1 毫秒，np.ascontiguousarray(buf[:, :, :3]) 要 10 毫秒（游戏画面野点每秒截 25 次，省得多）
+        img = cv2.cvtColor(buf, cv2.COLOR_BGRA2BGR)
+        if not img[::16, ::16].any() and not img.any():   # 全黑：多半是独占全屏，交给整屏截图（先看稀疏的点，正常画面不用扫全图）
             return None
-        return np.ascontiguousarray(img)
+        return img
 
 
 class Screen:

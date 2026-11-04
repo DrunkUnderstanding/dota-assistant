@@ -224,6 +224,13 @@ class TrackerTest(unittest.TestCase):
         self.assertEqual(st.buyback, (1634, 4))
 
 
+def seen_watcher() -> bs.Watcher:
+    """看过一帧 10 格都彩色的（格子要彩色过才会被记死，见 _Slot.seen）"""
+    w = bs.Watcher()
+    w.update(topbar(), 9)
+    return w
+
+
 class WatcherTest(unittest.TestCase):
     def test_saturation_alive_vs_dead(self):
         img = topbar(dead={("dire", 2)})
@@ -234,7 +241,7 @@ class WatcherTest(unittest.TestCase):
 
     def test_one_colored_frame_is_not_revival(self):
         """2026-10-26 实战：狙击手死着，彩色一帧又灰回去，被记成买活。现在要连续 REVIVE_FRAMES 帧彩色"""
-        w = bs.Watcher()
+        w = seen_watcher()
         dead = {("radiant", 0)}
         for t in (10, 11):
             w.update(topbar(dead, badge=True), t)
@@ -274,7 +281,7 @@ class WatcherTest(unittest.TestCase):
         self.assertTrue(self.run_life(115, size=(2160, 3840)).buyback)   # 4K：位置按图高缩放
 
     def test_unreadable_timer_not_recorded(self):
-        w = bs.Watcher()
+        w = seen_watcher()
         dead = {("radiant", 4)}
         w.update(topbar(dead), 10)
         sent = [len(w.update(topbar(dead), t)[0]) for t in range(11, 18)]
@@ -285,7 +292,7 @@ class WatcherTest(unittest.TestCase):
 
     def test_misread_needs_agreement(self):
         """10 认成 1：和下一帧认到的 9 对不上，不算；再下一帧认到 8 和 9 对上了才算"""
-        w = bs.Watcher()
+        w = seen_watcher()
         dead = {("dire", 0)}
         w.update(topbar(dead), 10)
         for clock, sec in ((11, 1), (12, 9)):
@@ -298,7 +305,7 @@ class WatcherTest(unittest.TestCase):
         """死了马上买活，倒计时只来得及认到一次（2026-10-27 军团指挥官：认到 84、一秒后就复活了）：
         核对不上不算 buyback，但记个「早复活的迹象」；认到的几次有一次说按时就没有"""
         for reads, want in (((84,), True), ((84, 2), False)):
-            w = bs.Watcher()
+            w = seen_watcher()
             dead = {("dire", 0)}
             w.update(topbar(dead), 10)
             for k, sec in enumerate(reads):
@@ -309,7 +316,7 @@ class WatcherTest(unittest.TestCase):
             self.assertIs(rev.early, want, reads)
 
     def test_stale_ocr_result_ignored(self):
-        w = bs.Watcher()
+        w = seen_watcher()
         dead = {("radiant", 0)}
         w.update(topbar(dead), 10)
         d1 = w.update(topbar(dead), 11)[0][0]
@@ -319,11 +326,22 @@ class WatcherTest(unittest.TestCase):
         self.assertEqual(w.slots[("radiant", 0)].expected, None)
 
     def test_skip_self_and_tiny_frames(self):
-        w = bs.Watcher()
+        w = seen_watcher()
         dead = {("radiant", 1)}
         w.update(topbar(dead), 10)
         self.assertEqual(w.update(topbar(dead), 11, skip={("radiant", 1)}), ([], []))
         self.assertEqual(w.update(np.zeros((9, 16, 3), np.uint8), 12), ([], []))
+
+    def test_never_colored_slot_is_empty(self):
+        """试玩模式顶栏没人的格子一直是暗的：从没彩色过就不算死、不送 OCR（2026-11-03 试玩开局 9 格都记了「死了」）"""
+        w = bs.Watcher()
+        empty = {(side, i) for side in bs.SIDES for i in range(5)} - {("radiant", 0)}
+        for t in range(10, 20):
+            self.assertEqual(w.update(topbar(empty), t), ([], []))
+        w.update(topbar(empty - {("dire", 3)}), 20)                 # 有人了（彩色过一帧）
+        w.update(topbar(empty), 21)
+        deaths, _ = w.update(topbar(empty), 22)
+        self.assertEqual([(d.side, d.index) for d in deaths], [("dire", 3)])
 
     def test_parse_seconds(self):
         self.assertEqual(bs.parse_seconds(["37", "37", "3", "37"]), 37)

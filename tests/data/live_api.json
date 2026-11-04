@@ -283,6 +283,10 @@
   "kind": "method",
   "signature": "(self) -> 'list[dict]'"
  },
+ "jungle_bar_view": {
+  "kind": "method",
+  "signature": "(self) -> 'dict'"
+ },
  "learn": {
   "kind": "method",
   "signature": "(self) -> 'None'"

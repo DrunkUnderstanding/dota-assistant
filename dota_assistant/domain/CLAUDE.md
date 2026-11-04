@@ -21,8 +21,8 @@
 | `coach.py` | 局内缺口提醒：`plan()` 开局定缺口（对抗装、不需要的装备、节奏），`Coach.tick()` 去重、`Coach.on_death()`；`prepare()` 给实时版，`simulate()` 录像重放 |
 | `brief.py` | 本局要点：`build()` 出一张按阶段分页的卡片（`STAGES` 对线期 / 中期 / 后期，`STAGE_START` 10 / 30 分钟弹）：对线、起手装、强势期、出装、对面要防、团战；`simulate()` 录像回放；缓存 `data/brief/` |
 | `death.py` | 死亡复盘：死前 `WINDOW = 20` 秒的 GSI 推送 → `analyze()` 出「怎么死的」几句话（`Recap`）；`dump()` 把原始推送存 `shots/deaths/` |
-| `jungle.py` | 野区计时：封野、拉野（双拉）、屯野、抢莲花，按位置 / 英雄到点前几秒弹一行（`make()` → `Plan.cue()`） |
-| `camps.py` | 野点标记：野点 / 刷新框 / 莲花池坐标表（`CAMPS` / `LOTUS`，本机游戏文件读的）、优势路拉野点 `PULL`、每个野点几秒屯 / 拉（`load_timings` 读游戏文件 `creep_pull_timings.txt`，Dota 按住 Alt 显示的就是它），`marks()` 按野区计划 + 阵营 + 时钟 + 英雄坐标给出要圈的野点（世界坐标 + 刷新框 + 小地图上 0~1 的位置 + 字 + 到点时刻）；HANDOFF 第 53、54 节 |
+| `jungle.py` | 野区计时：封野、拉野（双拉）、屯野（抢莲花 2026-11-03 去掉了），按位置 / 英雄到点前几秒弹一行（`make()` → `Plan.cue()`）；顶栏倒数用的整局动作表 `Plan.timeline()` |
+| `camps.py` | 野点标记：野点 / 刷新框坐标表（`CAMPS`，本机游戏文件读的）、优势路拉野点 `PULL`、每个野点几秒屯 / 拉（`load_timings` 读游戏文件 `creep_pull_timings.txt`，Dota 按住 Alt 显示的就是它），`marks()` 按野区计划 + 阵营 + 时钟 + 英雄坐标给出要圈的野点（世界坐标 + 刷新框 + 小地图上 0~1 的位置 + 字 + 到点时刻）；HANDOFF 第 53、54 节 |
 | `buyback.py` | 买活计时：双方 10 人的买活冷却 `Tracker`（`mark` / `start` / `sync_self` / `reset`），`COOLDOWN = 480` |
 | `ultcd.py` | 对面大招冷却：按等级 + 勾的减冷却（天赋 / 神杖 / 魔晶 / 玲珑心）算 `cooldown`，`Tracker`（`mark` / `recool` / `reset`）；挑大招 / 各级冷却在 `kb/cd_ops.py` |
 | `lanelog.py` | 对线实战记录：`log_moment()` 在 3:00 / 6:00 / 10:00 把自己的 GSI 数据追加进 `data/lane_log.jsonl`（`LOG_MINUTES`），赛后 `lane-review` 对照 |

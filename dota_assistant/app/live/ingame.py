@@ -109,12 +109,15 @@ class InGameMixin:
         log.info("本局要点：%s，弹%s那页", coach._mmss(minute), dict(brief.STAGES)[stage])
 
     def _jungle_tick(self, st) -> None:
-        """到点前几秒亮一条野区提醒；死了不提醒（做不了，也别挡死亡复盘）"""
+        """到点前几秒亮一条野区提醒；死了不提醒（做不了，也别挡死亡复盘）。
+        开着游戏画面里的野点框（world_marks）就不弹叠加层上的提醒卡片，只画框（玩家 2026-11-03：有框就不要卡片了）；
+        卡片默认也不弹（jungle_cards，玩家 2026-11-04：打起来不看叠加层），改在 Dota 时钟正下方倒数（jungle_bar_view）"""
         alive = (st.raw.get("hero") or {}).get("alive") is not False
         clock = round(st.clock_minutes * 60)     # 分钟换回秒有浮点误差（4:07 会算成 4:06.999）
         if self.jungle and (self.jungle.pos, self._jungle_team) != (self.position, st.team):
             self._make_jungle("改成")                # 开打后在控制面板改了位置 / 阵营刚知道：按新的重算提醒哪些
-        cue = self.jungle.cue(clock, self._cue_muted) if self.jungle and alive else None
+        card = self.jungle and alive and self.cfg.jungle_cards and not self.cfg.world_marks
+        cue = self.jungle.cue(clock, self._cue_muted) if card else None
         if cue and cue != self.jungle_cue:
             log.info("野区提醒「%s」：%s", cue.title, " / ".join(t for _, t in cue.lines))
             self.user_hidden = False             # 和局内提醒一样，新的一条总要让人看见
@@ -123,9 +126,22 @@ class InGameMixin:
         xy = (hero["xpos"], hero["ypos"]) if all(isinstance(hero.get(k), (int, float)) for k in ("xpos", "ypos")) else None
         on = self.jungle and alive and (self.cfg.world_marks or self.cfg.minimap_marks)
         marks = camps.marks(self.jungle, st.team, clock, xy, self._cue_muted, self._camp_timings) if on else []
-        if marks != self.camp_marks and marks:
+        # 只在亮的那几样变了时记；屯野的附近野点按离英雄远近排，英雄一走顺序就变，以前每秒记一遍（2026-11-03 试玩）
+        if marks and sorted(m["label"] for m in marks) != sorted(m["label"] for m in self.camp_marks):
             log.info("野点标记：%s", "、".join(m["label"] for m in marks))
         self.camp_marks = marks
+
+    def jungle_bar_view(self) -> dict:
+        """给 topbar.html：这局要做的野区动作（jungle.Plan.timeline）+ 时钟锚点，页面自己挑下一件、倒数。死了不显示"""
+        st = self.gsi.state if self.gsi else None
+        alive = st is not None and (st.raw.get("hero") or {}).get("alive") is not False
+        if not (self.jungle and self._bb_show and alive and self._bb_anchor is not None):
+            return {"show": False}
+        events = self.jungle.timeline(self._cue_muted)
+        if not events:
+            return {"show": False}
+        return {"show": True, "anchor": round(self._bb_anchor * 1000), "paused": self._bb_paused,
+                "events": [{"at": a, "end": e, "kind": k, "word": w} for a, e, k, w in events]}
 
     def minimap_view(self) -> dict:
         """给 minimap.html：要圈的野点（小地图上 0~1 的位置）+ 时钟锚点（页面自己倒数）+ 小地图在屏幕上哪（1080 高时的像素）"""

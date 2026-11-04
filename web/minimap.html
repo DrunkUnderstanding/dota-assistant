@@ -6,7 +6,7 @@
 <title>选人助手 · 小地图野点</title>
 <link rel="stylesheet" href="base.css">
 <style>
-  /* 透明窗口盖在 Dota 小地图那一块，野区提醒到点时在野点 / 莲花池上画圈 + 一行字；整个窗口点穿（Electron 那边一直穿透） */
+  /* 透明窗口盖在 Dota 小地图那一块，野区提醒到点时在野点上画圈 + 一行字；整个窗口点穿（Electron 那边一直穿透） */
   html, body { background: transparent; overflow: hidden; height: 100%; }
   /* ?preview=1：浏览器里预览，垫一张图当小地图（&bg=图片地址，没有就是一块深色），塞几个假标记 */
   body.preview { background: #1d2430 no-repeat; }
@@ -35,7 +35,6 @@
   .stack { --c: var(--gold); }
   .pull { --c: #5eaeea; }
   .block { --c: #e5675c; }
-  .lotus { --c: #5cc77f; }
 </style>
 </head>
 <body>
@@ -66,8 +65,7 @@ function demo() {
   const m = (kind, x, y, label, at, main = true) => ({ kind, u: (x + 9472) / 18944, v: (9472 - y) / 18944, label, at, main });
   return { show: true, anchor: now - 68 * 1000, paused: null, rect: [-9, 790, 296],
            marks: [m('pull', 3978, -5027, '拉 :15', 75), m('pull', 4649, -3699, '双拉', null, false),
-                   m('stack', -5015, -96, '远古 :51', 111), m('stack', -4013, 992, '中野 :53', 113, false),
-                   m('lotus', -7548, 4209, '莲花 3:00', 180)] };
+                   m('stack', -5015, -96, '远古 :51', 111), m('stack', -4013, 992, '中野 :53', 113, false)] };
 }
 
 const els = [];

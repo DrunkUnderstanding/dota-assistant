@@ -3,7 +3,7 @@
 到 10 / 30 分钟再弹一次中期 / 后期那页（正弹着死亡复盘之类的就等它关了再弹），关掉以后热键 / 面板按钮随时再看、翻页；
 对局开始后接着做局内缺口提醒（coach.py）：死亡时 / 每 5 分钟检查一次，有缺口就在叠加层弹一张卡片；
 死亡时同一张卡片先说「刚才是怎么死的」（death.py，看 GSI 里自己死前 20 秒的血量 / 状态 / 保命装备），复活后自动收起。
-对线期按位置 / 英雄到点前几秒提醒封野、拉野、屯野、抢莲花（jungle.py），叠在卡片顶上一行，没卡片时单独一张小卡片，过点自己收起。
+对线期按位置 / 英雄到点前几秒提醒封野、拉野、屯野（jungle.py）：开着游戏画面里的野点框（world_marks，2026-11-03 起默认关）就只画框；关了才在叠加层弹，叠在卡片顶上一行，没卡片时单独一张小卡片，过点自己收起。
 双方 10 个英雄的买活冷却（buyback.py）显示在游戏顶栏头像正下方（另一个透明窗口 web/topbar.html）：自己的按 GSI 自动算，别人的玩家点一下开始计时；
 对面 5 个英雄头像下面再加一条大招冷却（ultcd.py）：看到对面放大招点一下开始计时，右键弹菜单改大招等级、勾天赋 / 神杖 / 玲珑心减冷却。
 选人时点某个推荐英雄，就按「如果选它」先做一张同样的要点卡片（数据页 + AI 打法页），看完点 × 回到推荐。
@@ -130,7 +130,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self._death_shots: list[tuple[float, Path]] = []   # 待截的死亡画面：(到点时间, 存到哪)
         self.jungle: jungle.Plan | None = None   # 这局提醒哪些野区动作（局内提醒准备好时按位置 + 同分段数据定）
         self.jungle_cue: jungle.Cue | None = None   # 正显示的那条
-        self.camp_marks: list[dict] = []         # 正圈着的野点 / 莲花池（camps.py；游戏画面里 world.html、小地图上 minimap.html 画）
+        self.camp_marks: list[dict] = []         # 正圈着的野点（camps.py；游戏画面里 world.html、小地图上 minimap.html 画）
         self._jungle_team: str | None = None     # 野区计划按哪个阵营定的（阵营变了重算）
         self._camp_timings: dict | None = None   # 每个野点几秒屯 / 拉（游戏文件，第一次要用时读；读不到是空表）
         self._world: dict | None = None          # 游戏画面里的镜头位置（world 线程写，world_view 读）
@@ -448,6 +448,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             "bans_text": self.bans_text,
             "buyback": self.buyback_view(),
             "minimap": self.minimap_view(),
+            "jungle_bar": self.jungle_bar_view(),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

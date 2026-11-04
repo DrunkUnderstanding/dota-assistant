@@ -168,6 +168,7 @@ class Revival:
 
 @dataclass
 class _Slot:
+    seen: bool = False           # 这一格彩色过（有活着的英雄）；没彩色过的灰格子是空格子，不算死
     gray: int = 0                # 连续几帧灰
     dead_since: float | None = None
     serial: int = 0
@@ -197,6 +198,10 @@ class Watcher:
                     continue
                 st = self.slots.setdefault((side, i), _Slot())
                 if saturation(img, side, i) < (DEAD_SAT if st.dead_since is None else ALIVE_SAT):
+                    if not st.seen:
+                        # 从没彩色过：试玩模式顶栏没人的格子一直是暗的，以前开局就 9 格都记「死了」、每格送 OCR 5 次（2026-11-03 试玩）。
+                        # 代价：助手开着时这人已经死了的那一次不记，等他复活彩色过以后才开始看
+                        continue
                     st.gray += 1
                     st.color = 0
                     if st.gray < DEAD_FRAMES:
@@ -219,7 +224,7 @@ class Watcher:
                     hint = bool(st.reads) and all(st.color_at <= at - BUYBACK_MARGIN for at, _, _ in st.reads)
                     revs.append(Revival(side, i, st.color_at, st.color_at - st.dead_since, st.expected, st.seconds,
                                         st.crop, st.color_crop, hint))
-                self.slots[(side, i)] = _Slot()
+                self.slots[(side, i)] = _Slot(seen=True)
         return deaths, revs
 
     def set_timer(self, d: Death, seconds: int | None) -> None:

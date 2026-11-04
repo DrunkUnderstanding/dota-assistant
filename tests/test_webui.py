@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 
 from dota_assistant.domain import advisor as adv
+from dota_assistant.vision import camera
 from dota_assistant.vision import grid
 from dota_assistant.core import config
 from dota_assistant.domain import brief
@@ -23,6 +24,7 @@ from dota_assistant.domain import death
 from dota_assistant.ai import gameplan
 from dota_assistant.app.live import consts as live_consts
 from dota_assistant.app.live import draft as live_draft
+from dota_assistant.app.live import world as live_world
 from dota_assistant.domain import mates as mates_mod
 from dota_assistant.core.config import Config
 from dota_assistant.domain.engine import Engine, Suggestion
@@ -74,7 +76,8 @@ def no_brief(*args, **kw):
 
 
 def make_live(overlay_file: Path | None = None, coach_prepare=None, brief_build=no_brief, plan_build=no_brief) -> Live:
-    cfg = Config(position_filter=False, top=2, top_other=2, voice=True, ingame_tips=True)   # 局内卡片默认关，这里测开着的
+    cfg = Config(position_filter=False, top=2, top_other=2, voice=True, ingame_tips=True,
+                 jungle_cards=True)   # 局内卡片默认关，这里测开着的
     live = Live(cfg, screen_factory=lambda: None, use_gsi=False, use_hotkeys=False, speaker=FakeSpeaker(),
                 advisor=fake_advisor(cfg), bank=FakeBank(), calibration=Calibration(),   # 空校准，不读本机 calibration.json
                 overlay_file=overlay_file or TMP / f"overlay-{time.monotonic_ns()}.json",
@@ -857,12 +860,13 @@ class CoachLiveTest(unittest.TestCase):
         self.assertIsNone(self.live.coach_card)                 # 比赛结束收起
 
     def test_jungle_cues_for_support(self):
-        """五号位：号角前弹封野，到点前几秒亮屯野 / 拉野；有卡片时叠在顶上；死了不亮；点 × 这局不再提醒这一种"""
+        """关掉游戏画面野点框时，五号位：号角前弹封野，到点前几秒亮屯野 / 拉野；有卡片时叠在顶上；死了不亮；点 × 这局不再提醒这一种"""
+        self.live.cfg.world_marks = False
         self.live.position = 5
         self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
         self.wait_coach()
         wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))      # 关掉「开局提示」
-        self.assertEqual(self.live.jungle.kinds, {"block", "pull", "stack", "lotus"})
+        self.assertEqual(self.live.jungle.kinds, {"block", "pull", "stack"})
         ov = self.push(-0.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
         self.assertTrue(ov["visible"] and ov["view"]["jungle"])
         self.assertEqual(ov["view"]["title"], "封野 · 1:00 前")
@@ -882,13 +886,64 @@ class CoachLiveTest(unittest.TestCase):
         self.assertFalse(self.push(4 + 12 / 60)["visible"])
         self.assertFalse(self.push(4 + 50 / 60, alive=False)["visible"])          # 死了不提醒
         self.assertIsNone(self.live.jungle_cue)
-        self.assertEqual(self.push(5 + 45 / 60)["view"]["title"], "屯野 5:53 / 抢莲花 6:00")  # 5:45 正好提前 15 秒（秒数换算不能差 1 秒）
+        self.assertEqual(self.push(5 + 45 / 60)["view"]["title"], "屯野 · 5:53")   # 5:45 正好提前 8 秒（秒数换算不能差 1 秒）
         self.assertEqual(self.push(7 + 45 / 60)["view"]["title"], "屯野 · 7:53")
+
+    def test_jungle_card_off_with_world_marks(self):
+        """开着游戏画面野点框：野区提醒不弹叠加层卡片，只算要画的野点"""
+        self.live.cfg.world_marks = True                                          # 默认关着（2026-11-03）
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))
+        ov = self.push(-0.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.assertIsNone(self.live.jungle_cue)
+        self.assertFalse(ov["visible"])
+        self.assertEqual([m["label"] for m in self.live.camp_marks], ["被封没"])
+        self.live.coach_card = {"kind": "notice", "title": "局内提醒", "lines": [], "closable": True}
+        ov = self.push(2 + 10 / 60)
+        self.assertNotIn("cue", ov["view"])                                        # 卡片顶上也不叠
+        self.assertEqual([m["label"] for m in self.live.camp_marks], ["拉 :15~:20"])
+
+    def test_jungle_bar(self):
+        """Dota 时钟正下方的野区倒数：默认不弹叠加层卡片，顶栏给这局全部动作 + 时钟锚点；死了不显示"""
+        self.live.cfg.jungle_cards = False                                        # 默认（测试的 Config 打开了）
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        wait(self.live.submit(self.live.action, {"type": "dismiss_coach"}))
+        self.push(2 + 12 / 60)
+        snap = json.loads(self.live.current_snapshot)
+        self.assertIsNone(self.live.jungle_cue)                                   # 不弹卡片
+        bar = snap["jungle_bar"]
+        self.assertTrue(bar["show"])
+        self.assertIsInstance(bar["anchor"], int)
+        self.assertIn({"at": 60, "end": 65, "kind": "block", "word": "看拉野点"}, bar["events"])
+        self.assertIn("屯野", {e["word"] for e in bar["events"]})
+        self.push(2 + 20 / 60, alive=False)
+        self.assertFalse(json.loads(self.live.current_snapshot)["jungle_bar"]["show"])
+
+    def test_clock_anchor_takes_earliest(self):
+        """GSI 的 clock_time 往下取整：同一秒里晚到的推送不能把锚点往后挪，取最早的那个（页面倒数和 Dota 时钟对得上）"""
+        st, t0 = self.live.gsi.state, time.time()
+
+        def at(clock, updated):                                  # 推送内容同 push，收到的时间改成 updated
+            st.update({"map": {"matchid": "123", "game_state": "DOTA_GAMERULES_STATE_GAME_IN_PROGRESS", "clock_time": clock},
+                       "player": {"team_name": "radiant", "deaths": 0}, "hero": {"name": "npc_dota_hero_phantom_lancer"}})
+            st.updated = updated
+            wait(self.live.submit(self.live.coach_tick))
+            return self.live._bb_anchor
+
+        self.assertAlmostEqual(at(120, t0 + 0.9), t0 + 0.9 - 120, places=3)    # 2:00 那一秒快过完才推到
+        self.assertAlmostEqual(at(121, t0 + 1.05), t0 + 0.05 - 120, places=3)  # 刚跳到 2:01 就推到：更早，换
+        self.assertAlmostEqual(at(122, t0 + 2.7), t0 + 0.05 - 120, places=3)   # 晚到的：不换
+        self.assertAlmostEqual(at(123, t0 + 63.5), t0 + 63.5 - 123, places=3)  # 暂停过一分钟：差得多，照样换
 
     def test_minimap_marks(self):
         """小地图野点：天辉五号位拉野时圈下路小野；屯野圈英雄附近的；关掉 minimap_marks / 死了不画"""
         self.live.position = 5
         self.live.cfg.minimap_marks = True
+        self.live.cfg.world_marks = False
         self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
         self.wait_coach()
         mm = lambda: json.loads(self.live.current_snapshot)["minimap"]
@@ -913,6 +968,7 @@ class CoachLiveTest(unittest.TestCase):
 
     def test_world_marks(self):
         """游戏画面野点：镜头位置（world 线程从血条认的）+ 要圈的野点 → 刷新框四个角的像素；镜头位置旧了 / 关掉不画"""
+        self.live.cfg.world_marks = True
         self.live.position = 5
         self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
         self.wait_coach()
@@ -940,9 +996,42 @@ class CoachLiveTest(unittest.TestCase):
         self.live.cfg.world_marks = False
         self.assertFalse(self.live.world_view()["show"])
 
+    def test_world_marks_follow_camera_pan(self):
+        """拉镜头时按镜头速度把位置推到「框画上屏幕那一刻」：镜头往东拉，框在画面里往西挪；最多推 PREDICT 秒"""
+        self.live.cfg.world_marks = True
+        self.live.position = 5
+        self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
+        self.wait_coach()
+        self.push(2 + 2 / 60)
+        x0, y0, x1, y1 = camps._BY_NAME["good_1"][4]
+        center = ((x0 + x1) / 2, (y0 + y1) / 2)
+        now = time.time()
+        self.live._world = {"t": now, "target": center, "v": (0.0, 0.0), "size": (1920, 1080)}
+        still = self.live.world_view()["marks"][0]["cx"]
+        self.live._world["v"] = (2000.0, 0.0)
+        moving = self.live.world_view()["marks"][0]["cx"]
+        self.assertLess(moving, still - 20)                                        # 镜头往东：框往左挪
+        self.live._world["t"] = now - 0.5                                           # 截图旧了也最多推 PREDICT 秒
+        far = self.live.world_view()["marks"][0]["cx"]
+        ahead = (center[0] + 2000 * live_world.PREDICT, center[1])
+        want = float(camera.project([center], ahead, (1920, 1080))[0][0])
+        self.assertAlmostEqual(far, want, delta=0.2)
+
+    def test_camera_velocity(self):
+        v = live_world.camera_velocity
+        pan = [(0.0, (0.0, 0.0)), (0.04, (80.0, 0.0)), (0.08, (160.0, 0.0))]
+        self.assertEqual([round(a) for a in v(pan)], [2000, 0])                   # 匀速往东拉 2000 码 / 秒
+        self.assertEqual(v(pan[:2]), (0.0, 0.0))                                  # 才两帧
+        self.assertEqual(v([pan[0], pan[1], (0.08, (82.0, 0.0))]), (0.0, 0.0))    # 刚停下
+        self.assertEqual(v([pan[0], (0.04, (1.0, 0.0)), (0.08, (80.0, 0.0))]), (0.0, 0.0))   # 刚开始拉
+        self.assertEqual(v([(0.0, (0.0, 0.0)), (0.04, (2.0, 1.0)), (0.08, (4.0, 0.0))]), (0.0, 0.0))   # 认血条抖动
+        self.assertEqual(v([(0.0, (0.0, 0.0)), (0.04, (3000.0, 0.0)), (0.08, (6000.0, 0.0))]), (0.0, 0.0))   # 点小地图跳
+        self.assertEqual(v([(0.0, (0.0, 0.0)), (0.5, (1000.0, 0.0)), (0.54, (1080.0, 0.0))]), (0.0, 0.0))   # 中间丢了帧
+
     def test_ingame_tips_off(self):
         """ingame_tips = false（默认）：开局提示、死亡复盘、时间点缺口都不弹，野区提醒照弹"""
         self.live.cfg.ingame_tips = False
+        self.live.cfg.world_marks = False                                         # 开着野点框时不弹野区卡片（另测）
         self.live.position = 5
         self.push(-1.5, state="DOTA_GAMERULES_STATE_PRE_GAME")
         self.wait_coach()

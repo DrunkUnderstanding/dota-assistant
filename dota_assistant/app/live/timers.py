@@ -42,7 +42,9 @@ class TimersMixin:
         else:
             self._bb_paused = None
             anchor = st.updated - clock
-            if self._bb_anchor is None or abs(anchor - self._bb_anchor) > consts.CLOCK_SLACK:
+            # GSI 的 clock_time 是往下取整的整秒，推送晚到也只会更晚：差得不多时取最早的那个，最接近真正跳秒的时刻。
+            # 以前只在差 CLOCK_SLACK 以上才改，页面倒数常比 Dota 时钟慢将近 1 秒（2026-11-04 野区倒数截图对出来的）
+            if self._bb_anchor is None or abs(anchor - self._bb_anchor) > consts.CLOCK_SLACK or anchor < self._bb_anchor:
                 self._bb_anchor = anchor
         me = self._my_slot(st)
         if me and st.buyback:

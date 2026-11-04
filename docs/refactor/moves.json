@@ -4283,7 +4283,8 @@
    "new_file": "dota_assistant/domain/jungle.py",
    "tags": [
     "public"
-   ]
+   ],
+   "removed": "2026-11-03 抢莲花提醒去掉了（玩家要求，HANDOFF 第 57 节），这个常数删了"
   },
   {
    "old": "dota_assistant.jungle",
@@ -4293,7 +4294,8 @@
    "new_file": "dota_assistant/domain/jungle.py",
    "tags": [
     "public"
-   ]
+   ],
+   "removed": "2026-11-03 抢莲花提醒去掉了（玩家要求，HANDOFF 第 57 节），这个常数删了"
   },
   {
    "old": "dota_assistant.jungle",
@@ -4303,7 +4305,8 @@
    "new_file": "dota_assistant/domain/jungle.py",
    "tags": [
     "public"
-   ]
+   ],
+   "removed": "2026-11-03 抢莲花提醒去掉了（玩家要求，HANDOFF 第 57 节），这个常数删了"
   },
   {
    "old": "dota_assistant.jungle",
@@ -4313,7 +4316,8 @@
    "new_file": "dota_assistant/domain/jungle.py",
    "tags": [
     "public"
-   ]
+   ],
+   "removed": "2026-11-03 抢莲花提醒去掉了（玩家要求，HANDOFF 第 57 节），这个常数删了"
   },
   {
    "old": "dota_assistant.jungle",

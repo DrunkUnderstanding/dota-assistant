@@ -47,11 +47,13 @@ class Config:
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
     ingame_tips: bool = False         # 局内弹打法 / 出装卡片（缺口提醒、死亡复盘、中后期本局要点）；先关着（玩家 2026-11-02），野区提醒不受影响
-    jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野 / 抢莲花，jungle.py）；局内点 × 能按种类关掉这一局的
+    jungle_cards: bool = False        # 野区提醒在叠加层弹卡片；默认关（玩家 2026-11-04：打起来不看叠加层），只在 Dota 时钟正下方倒数
+    jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野，jungle.py；抢莲花 2026-11-03 去掉了）；局内点 × 能按种类关掉这一局的
     stack_second: int = 53            # 屯野提醒的秒数（x:53 拉）
     pull_second: int = 15             # 拉野提醒的秒数（x:15 拉）；不同野点 / 阵营差几秒，按自己那边调
-    world_marks: bool = True          # 野区提醒到点时在游戏画面里的野点 / 莲花池上画圈、写几秒打（camps.py、vision/camera.py、web/world.html）；
-                                      #   要自己英雄在画面里（靠血条认镜头位置）
+    world_marks: bool = False         # 野区提醒到点时在游戏画面里的野点上描框、写几秒打（camps.py、vision/camera.py、web/world.html）；
+                                      #   2026-11-03 起默认关（玩家怀疑和 VAC 提示有关，让先关掉；没查到 VAC 记录，原因未明）；
+                                      #   要自己英雄在画面里（靠血条认镜头位置）；开着就不在叠加层弹野区提醒卡片（玩家 2026-11-03）
     minimap_marks: bool = False       # 同样的圈画在 Dota 小地图上（web/minimap.html）；玩家要的是游戏画面里的，默认关
     minimap_x: float = -9             # 小地图位置：按 1080 高的屏幕量，整张地图（世界坐标 ±9472 的正方形）左上角的 x / y 和边长（像素）；
     minimap_y: float = 790            #   默认是 Dota 默认界面、小地图在左下角（2026-11-02 实战截图量的，看得到的小地图是左上角那块 0~281 × 799~1080）

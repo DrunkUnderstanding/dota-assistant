@@ -83,6 +83,21 @@
   .menu .ask-attr { margin-top: calc(8px * var(--s)); color: var(--text-dim); }
   .menu .foot { display: flex; align-items: center; gap: calc(6px * var(--s)); margin-top: calc(6px * var(--s)); }
   .menu .foot .note { flex: 1; }
+  /* 野区倒数：Dota 时钟正下方（天辉第 5 个和夜魇第 1 个头像中间那段空当），「拉野 7」；拉野蓝、屯野金、封野红。
+     快到点（JG_SOON 秒内）和正该动手时填满颜色、闪；不接鼠标 */
+  .jg {
+    position: absolute; left: calc(50% - 60px * var(--s)); top: calc(69px * var(--s));
+    width: calc(120px * var(--s)); height: calc(24px * var(--s)); display: flex; align-items: center; justify-content: center;
+    gap: calc(6px * var(--s)); pointer-events: none;
+    font: 600 calc(14px * var(--s)) / 1 var(--font); color: var(--c);
+    background: rgba(10, 13, 18, 0.72); border: 1px solid var(--c); border-radius: calc(4px * var(--s));
+  }
+  .jg[hidden] { display: none; }
+  .jg .n { font-family: var(--num); font-variant-numeric: tabular-nums; }
+  .jg.pull { --c: #5eaeea; } .jg.stack { --c: var(--gold); } .jg.block { --c: #e5675c; }
+  .jg.soon, .jg.now { color: #0b0f14; background: var(--c); }
+  .jg.now { animation: jg-blink 0.5s steps(2, jump-none) infinite alternate; }
+  @keyframes jg-blink { to { background: rgba(10, 13, 18, 0.72); color: var(--c); } }
 </style>
 </head>
 <body>
@@ -153,11 +168,52 @@ menuEl.addEventListener('pointerdown', () => { if (menu) menu.until = Date.now()
 menuEl.addEventListener('contextmenu', (e) => e.preventDefault());
 
 let state = preview ? demo() : { show: false };
+let jungle = preview ? demoJungle() : { show: false };
 connect((snap) => {
   state = snap.buyback || { show: false };
+  jungle = snap.jungle_bar || { show: false };
   if (preview && !state.show) state = demo();
+  if (preview && !jungle.show) jungle = demoJungle();
   render();
 }, () => {});
+
+// 野区倒数（玩家 2026-11-04：打起来不看叠加层、不要声音，只会瞄一眼时钟）：Python 给这局全部动作 [{at, end, kind, word}]
+// （游戏时钟秒，jungle.Plan.timeline），这里按时钟挑下一件：提前 JG_AHEAD 秒出来（封野号角前 1 分钟就出来），过了 end 再留 JG_LINGER 秒
+const JG_AHEAD = 15, JG_BLOCK_AHEAD = 120, JG_LINGER = 1, JG_SOON = 3;
+const jg = document.createElement('div');
+jg.className = 'jg';
+jg.hidden = true;
+const jgWord = document.createElement('span');
+const jgNum = document.createElement('span');
+jgNum.className = 'n';
+jg.append(jgWord, jgNum);
+document.body.append(jg);
+
+function demoJungle() {
+  // 预览用：五号位，时钟停在 3:12，下一件是 3:19 拉野（还剩 7 秒）
+  const ev = [];
+  for (let m = 1; m < 10; m++) {
+    ev.push({ at: m * 60 + 19, end: m * 60 + 21, kind: 'pull', word: '拉野' }, { at: m * 60 + 27, end: m * 60 + 29, kind: 'pull', word: '拉大野' },
+      { at: m * 60 + 49, end: m * 60 + 51, kind: 'pull', word: '拉野' }, { at: m * 60 + 53, end: m * 60 + 55, kind: 'stack', word: '屯野' },
+      { at: m * 60 + 57, end: m * 60 + 59, kind: 'pull', word: '拉大野' });
+  }
+  return { show: true, anchor: Date.now(), paused: 192, events: ev };
+}
+
+function renderJungle() {
+  const clock = jungle.show ? jungle.paused ?? (Date.now() - jungle.anchor) / 1000 : null;
+  const ev = clock == null ? null : (jungle.events || []).find((e) => clock <= e.end + JG_LINGER
+    && clock >= e.at - (e.kind === 'block' ? JG_BLOCK_AHEAD : JG_AHEAD));
+  jg.hidden = !ev;
+  if (!ev) return;
+  const left = Math.ceil(ev.at - clock);
+  const now = left <= 0;
+  const cls = `jg ${ev.kind}${now ? ' now' : left <= JG_SOON ? ' soon' : ''}`;
+  if (jg.className !== cls) jg.className = cls;
+  if (jgWord.textContent !== ev.word) jgWord.textContent = ev.word;
+  const num = now ? '现在' : left >= 60 ? mmss(left) : String(left);
+  if (jgNum.textContent !== num) jgNum.textContent = num;
+}
 
 function demo() {
   // 预览用：天辉第 2 个刚买活、夜魇第 3 个冷却快好了、夜魇第 5 个刚好能买活；
@@ -251,9 +307,12 @@ function render() {
     if (d.name && !d.me) p.el.title += `\n右键：${d.name}认错了，换一个`;
   }
   renderMenu();
+  renderJungle();
   reportHitRects();
 }
 setInterval(render, 250);
+// 野区倒数单独 0.1 秒走一次：跟着 0.25 秒的那个走，Dota 时钟跳秒后最多晚 0.25 秒才跳，截图对过常比 Dota 多 1 秒（2026-11-04）
+setInterval(renderJungle, 100);
 
 function renderAsk(p, d, open) {
   p.el.hidden = !d || !!d.name || d.me;

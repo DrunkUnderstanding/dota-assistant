@@ -14,15 +14,35 @@ def at(m, s):
 
 class MakeTest(unittest.TestCase):
     def test_kinds_by_position(self):
-        self.assertEqual(jungle.make(5, None).kinds, {"block", "pull", "stack", "lotus"})
-        self.assertEqual(jungle.make(4, None).kinds, {"block", "stack", "lotus"})   # 没同分段数据，辅助照样提醒
-        self.assertEqual(jungle.make(3, None).kinds, {"lotus"})
+        self.assertEqual(jungle.make(5, None).kinds, {"block", "pull", "stack"})
+        self.assertEqual(jungle.make(4, None).kinds, {"block", "stack"})   # 没同分段数据，辅助照样提醒
+        self.assertEqual(jungle.make(3, None).kinds, set())                # 抢莲花不提醒了（玩家 2026-11-03）
         self.assertEqual(jungle.make(1, None).kinds, set())
 
     def test_core_stackers_from_data(self):
-        self.assertEqual(jungle.make(2, bench(1.5)).kinds, {"stack"})        # 炼金 / 米波这类中单（中单不抢莲花）
+        self.assertEqual(jungle.make(2, bench(1.5)).kinds, {"stack"})        # 炼金 / 米波这类中单
         self.assertEqual(jungle.make(2, bench(0.2)).kinds, set())
         self.assertEqual(jungle.make(1, {"per_min": {}}).kinds, set())
+
+
+class TimelineTest(unittest.TestCase):
+    """Dota 时钟正下方那块倒数用的：这局全部动作 (开始, 结束, 种类, 词)"""
+    def test_five_safe_lane(self):
+        safe = (jungle.Pull("good_1", "small", 19, 21), jungle.Pull("good_2", "big", 27, 29))
+        t = jungle.make(5, None, pulls=safe).timeline()
+        self.assertEqual(t[0], (60, 65, "block", "看拉野点"))
+        self.assertEqual(t[1:4], [(at(1, 19), at(1, 21), "pull", "拉野"), (at(1, 27), at(1, 29), "pull", "拉大野"),
+                                  (at(1, 53), at(1, 55), "stack", "屯野")])
+        self.assertEqual(t[-1], (at(11, 53), at(11, 55), "stack", "屯野"))   # 屯野到 12 分钟前、拉野到 10 分钟前
+        self.assertEqual(max(a for a, _, k, _ in t if k == "pull"), at(9, 27))
+        self.assertEqual(t, sorted(t))
+
+    def test_four_and_muted(self):
+        off = (jungle.Pull("evil_1", "off", 19, 20),)
+        p = jungle.make(4, None, pulls=off)
+        self.assertEqual(p.timeline()[:2], [(60, 60, "block", "封野"), (at(1, 19), at(1, 20), "pull", "拉大野")])
+        self.assertEqual({k for _, _, k, _ in p.timeline({"stack", "block"})}, {"pull"})
+        self.assertEqual(jungle.make(1, None).timeline(), [])
 
 
 class CueTest(unittest.TestCase):
@@ -88,25 +108,14 @@ class CueTest(unittest.TestCase):
         c = off.cue(at(1, 15))
         self.assertEqual(c.title, "劣势路拉野 · 1:19~1:20")
         self.assertIn("对面野区", c.lines[0][1])
-        self.assertEqual(jungle.make(3, None, pulls=(jungle.Pull("evil_1", "off", 19, 20),)).kinds, {"lotus", "pull"})
+        self.assertEqual(jungle.make(3, None, pulls=(jungle.Pull("evil_1", "off", 19, 20),)).kinds, {"pull"})
         self.assertEqual(jungle.make(1, None, pulls=()).kinds, set())
 
-    def test_lotus_at_3_and_6(self):
-        p = jungle.make(4, None)
-        self.assertIsNone(p.cue(at(2, 44)))                                  # 莲花提前 15 秒，屯野提前 8 秒
-        c = p.cue(at(2, 45))                                                 # 和 2:53 的屯野同时亮：两个都写，按对线选
-        self.assertEqual((c.kind, c.title), ("lotus", "屯野 2:53 / 抢莲花 3:00"))
-        self.assertTrue(c.lines[0][1].startswith("屯野：2:53"))
-        self.assertIn("你们一塔旁边", c.lines[1][1])
-        self.assertIn("优势劣势", c.lines[2][1])
-        self.assertEqual(p.cue(at(2, 57)).key, "lotus:3")                   # 屯野时间过了：只剩莲花
-        self.assertEqual(p.cue(at(3, 5)).key, "lotus:3")
-        self.assertIsNone(p.cue(at(3, 6)))
-        self.assertEqual(p.cue(at(6, 0)).key, "lotus:6")
-        self.assertIsNone(p.cue(at(9, 0)))                                   # 只提醒 3、6 分钟
-        self.assertIn("对面一塔旁边", jungle.make(5, None).cue(at(3, 0)).lines[0][1])
-        self.assertEqual(jungle.make(3, None).cue(at(5, 50)).title, "抢莲花 · 6:00")   # 三号位不屯野：只有莲花
-        self.assertEqual(p.cue(at(2, 50), muted={"lotus"}).key, "stack:2")  # 关掉莲花，屯野照常
+    def test_no_lotus(self):
+        """抢莲花不提醒了：3:00 前只有屯野"""
+        self.assertEqual(jungle.make(4, None).cue(at(2, 50)).key, "stack:2")
+        self.assertIsNone(jungle.make(4, None).cue(at(2, 57)))
+        self.assertIsNone(jungle.make(3, None).cue(at(5, 50)))
 
     def test_muted_and_custom_seconds(self):
         p = jungle.make(5, None, stack_second=54, pull_second=17)

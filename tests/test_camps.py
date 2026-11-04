@@ -1,4 +1,4 @@
-"""小地图野点标记：哪一刻圈哪个野点 / 莲花池、写几秒。"""
+"""小地图野点标记：哪一刻圈哪个野点、写几秒。"""
 import unittest
 
 from dota_assistant.domain import camps, jungle
@@ -76,13 +76,10 @@ class MarksTest(unittest.TestCase):
         ms = camps.marks(p, "radiant", at(3, 50), xy("good_2"))
         self.assertEqual((ms[0]["label"], ms[0]["at"]), ("大野 :54~:56", at(3, 54)))
 
-    def test_lotus_pool_by_lane(self):
-        top, bot = camps.uv(*camps.LOTUS["top"]), camps.uv(*camps.LOTUS["bot"])
-        cases = [(4, "radiant", top), (3, "radiant", top), (5, "radiant", bot), (4, "dire", bot), (5, "dire", top)]
-        for pos, team, pool in cases:
-            ms = [m for m in camps.marks(jungle.make(pos, None), team, at(2, 50)) if m["kind"] == "lotus"]
-            self.assertEqual([(where(m), m["label"], m["at"]) for m in ms], [(pool, "莲花 3:00", 180)], (pos, team))
-        self.assertEqual(camps.marks(jungle.make(3, None), "radiant", at(2, 40)), [])   # 提前 15 秒才亮
+    def test_no_lotus_pool(self):
+        """抢莲花不提醒了（玩家 2026-11-03），莲花池也不圈"""
+        for pos in (3, 4, 5):
+            self.assertNotIn("lotus", [m["kind"] for m in camps.marks(jungle.make(pos, None), "radiant", at(2, 55))])
 
 
 if __name__ == "__main__":
