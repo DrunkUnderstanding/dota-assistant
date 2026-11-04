@@ -107,6 +107,9 @@ label.chip.filechip:focus-visible { outline: 2px solid var(--accent); outline-of
 .shothelp p { margin: 6px 0; }
 .shothelp label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
 .shothelp input[type=number] { width: 5em; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; font-family: var(--f-mono); }
+.sidesum { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--ink-2); padding: 8px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+.sidesum b { color: var(--ink); font-family: var(--f-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sidesum .who { color: var(--ink); font-weight: 700; }
 .note { color: var(--ink-3); font-size: 12px; max-width: 90ch; margin: 0; }
 @media (prefers-reduced-motion: no-preference) { .heat rect, .dots circle { transition: opacity .25s; } }
 </style>
@@ -114,11 +117,12 @@ label.chip.filechip:focus-visible { outline: 2px solid var(--accent); outline-of
 <div class="wrap">
   <header>
     <div class="heads"><img class="por io" id="porIo" alt="艾欧"><img class="por le" id="porLe" alt="拉席克"><h1><span class="io">艾欧</span> + <span class="le">拉席克</span> 小地图</h1></div>
-    <p class="sub">拉席克 1 号位、艾欧 5 号位、两人一起走优势路的 <b id="nGames">177</b> 局（冠绝 / 超凡，7.41f，近 14 天）。地图统一按<b>我方 = 天辉（左下）</b>画：优势路在下方和右侧，劣势路在左侧和上方。点阶段看这段时间两人在哪、在哪拿人头、对面的塔倒了多少。</p>
+    <p class="sub">拉席克 1 号位、艾欧 5 号位、两人一起走优势路的 <b id="nGames">177</b> 局（冠绝 / 超凡，7.41f，近 14 天）。「阵营」选全部时，夜魇的局翻到天辉视角一起看（<b>我方 = 左下</b>，优势路在下方和右侧）；选天辉或夜魇时按真实地图朝向画，夜魇的我方在右上、优势路在上方和左侧。点阶段看这段时间两人在哪、在哪拿人头、对面的塔倒了多少。</p>
   </header>
 
   <div class="controls">
     <div class="group" id="phaseBtns"><span class="lab">阶段</span></div>
+    <div class="group" id="sideBtns"><span class="lab">阵营</span></div>
     <div class="group" id="subsetBtns"><span class="lab">对局</span></div>
     <div class="group" id="layerBtns"><span class="lab">图层</span></div>
     <div class="group" id="bgBtns"><span class="lab">底图</span>
@@ -142,6 +146,7 @@ label.chip.filechip:focus-visible { outline: 2px solid var(--accent); outline-of
       <div class="tip" id="tip" hidden></div>
     </div>
     <div class="side">
+      <div class="sidesum" id="sideSum"></div>
       <div class="phase-h"><span class="t" id="phTime"></span><h2 id="phName"></h2></div>
       <ul class="story" id="story"></ul>
       <div class="stats" id="stats"></div>
@@ -162,7 +167,7 @@ label.chip.filechip:focus-visible { outline: 2px solid var(--accent); outline-of
 
   <div class="timeline"><h3>时间轴（0~45 分钟，竖线 = 当前阶段）</h3><svg id="tl" viewBox="0 0 1000 256" aria-label="时间轴：装备、等级、降临、倒塔的中位时间"></svg></div>
 
-  <p class="note">数据来自 STRATZ 已解析对局。位置每 15 秒采样一次；建筑位置是按倒塔那一刻推塔英雄的站位估出来的，会比真实塔位偏向进攻方；示意底图里的河道和基地是示意，野点和莲花池用的是游戏文件里的坐标；换成自己的游戏截图后，塔位以截图为准。塔旁的百分比 = 这一阶段结束时，所选对局里这座建筑已经倒了的比例。热区按每局平均停留时间着色，越亮待得越久。装备时间取全部 177 局的中位数。</p>
+  <p class="note">数据来自 STRATZ 已解析对局。位置每 15 秒采样一次；建筑位置是按倒塔那一刻推塔英雄的站位估出来的，会比真实塔位偏向进攻方；示意底图里的河道和基地是示意，野点和莲花池用的是游戏文件里的坐标；换成自己的游戏截图后，塔位以截图为准。塔旁的百分比 = 这一阶段结束时，所选对局里这座建筑已经倒了的比例。热区按每局平均停留时间着色，越亮待得越久。阵营选「全部」时夜魇的局按地图中心翻转到天辉视角，地图不是严格对称的，翻过去的点会有几百码的偏差。装备时间取全部 177 局的中位数。</p>
 </div>
 
 <script>
@@ -225,7 +230,7 @@ const BNAME = (k) => {
   return (own ? "我方" : "对面") + (lane ? (own ? lane : "（在我们" + lane + "上的）") : "") + kind;
 };
 
-const state = { phase: 2, subset: "all", bg: "drawn", layers: { le: true, io: false, kills: true, deaths: false } };
+const state = { phase: 2, side: "all", subset: "all", bg: "drawn", layers: { le: true, io: false, kills: true, deaths: false } };
 try { const s = JSON.parse(localStorage.getItem("ioLeshMap") || "null"); if (s) Object.assign(state, s, { layers: Object.assign(state.layers, s.layers || {}) }); } catch (e) {}
 const save = () => { try { localStorage.setItem("ioLeshMap", JSON.stringify(state)); } catch (e) {} };
 
@@ -234,7 +239,27 @@ const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVG
 const X = (u) => u * 1000, Y = (v) => (1 - v) * 1000;
 const B = D.bld;
 const P = (k) => B[k] ? [X(B[k][0]), Y(B[k][1])] : null;
-const subsetMatches = () => D.matches.filter((m) => state.subset === "all" || (state.subset === "win" ? m.w : !m.w));
+// 阵营：all = 两边都要、夜魇的局翻到天辉视角；rad / dire = 只看一边、按真实朝向画
+const weRad = () => state.side !== "dire";                       // 画面上「我方」在左下
+const keepM = (rad, w) => (state.side === "all" || (state.side === "rad") === !!rad) && (state.subset === "all" || (state.subset === "win" ? w : !w));
+const pt = (u, v, rad) => (state.side === "all" && !rad) ? [1 - u, 1 - v] : [u, v];
+const subsetMatches = () => D.matches.filter((m) => keepM(m.rad, m.w));
+// 页面里的建筑名是「我方 / 对面 + 我们视角的路」，换成真实建筑（good_ / bad_ + 真实的路）找位置
+function trueKey(k) {
+  const own = k.startsWith("own_"); let r = k.replace(/^(own|enemy)_/, "");
+  if (!weRad()) r = r.replace("_top", "_T").replace("_bot", "_top").replace("_T", "_bot");
+  return ((weRad() ? own : !own) ? "good_" : "bad_") + r;
+}
+const PERSP_KEYS = Object.keys(D.bld).filter((k) => k.startsWith("good_")).flatMap((k) => ["own_" + k.slice(5), "enemy_" + k.slice(5)]);
+function heatGrid(who) {
+  const G = D.grid, out = new Array(G * G).fill(0);
+  for (const sd of state.side === "all" ? ["rad", "dire"] : [state.side]) {
+    const g = D.heat[state.subset][sd][who][state.phase];
+    const flip = state.side === "all" && sd === "dire";             // 两个轴都翻 = 数组倒过来
+    for (let i = 0; i < g.length; i++) out[flip ? g.length - 1 - i : i] += g[i];
+  }
+  return out;
+}
 const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
 
 // ---------- 静态底图 ----------
@@ -244,7 +269,7 @@ const shotImg = el("image", { x: 0, y: 0, width: 1000, height: 1000, preserveAsp
 el("rect", { x: 0, y: 0, width: 1000, height: 1000, fill: "var(--bg)", opacity: .28 }, gShot);   // 压暗一点，标记看得清
 const gTerrain = el("g", {}, svg);
 function drawBase() {
-  const gT = gTerrain;
+  const gT = gTerrain; gT.replaceChildren();
   el("rect", { x: 0, y: 0, width: 1000, height: 1000, fill: "var(--map)" }, gT);
   // 我方 / 对面半场的微弱底色
   el("path", { d: "M0,1000 L0,0 L1000,1000 Z", fill: "var(--map-2)", opacity: .35 }, gT);
@@ -253,35 +278,41 @@ function drawBase() {
   el("path", { d: "M" + river.map(([u, v]) => X(u) + "," + Y(v)).join(" L"), fill: "none", stroke: "var(--river)", "stroke-width": 46, "stroke-linejoin": "round", "stroke-linecap": "round" }, gT);
   // 三路：按估出来的塔位连线
   const lanes = [
-    ["own_tower4", "own_tower3_bot", "own_tower2_bot", "own_tower1_bot", "@0.84,0.2", "enemy_tower1_bot", "enemy_tower2_bot", "enemy_tower3_bot", "enemy_tower4"],
-    ["own_tower4", "own_tower3_mid", "own_tower2_mid", "own_tower1_mid", "enemy_tower1_mid", "enemy_tower2_mid", "enemy_tower3_mid", "enemy_tower4"],
-    ["own_tower4", "own_tower3_top", "own_tower2_top", "own_tower1_top", "@0.17,0.8", "enemy_tower1_top", "enemy_tower2_top", "enemy_tower3_top", "enemy_tower4"],
+    ["good_tower4", "good_tower3_bot", "good_tower2_bot", "good_tower1_bot", "@0.84,0.2", "bad_tower1_bot", "bad_tower2_bot", "bad_tower3_bot", "bad_tower4"],
+    ["good_tower4", "good_tower3_mid", "good_tower2_mid", "good_tower1_mid", "bad_tower1_mid", "bad_tower2_mid", "bad_tower3_mid", "bad_tower4"],
+    ["good_tower4", "good_tower3_top", "good_tower2_top", "good_tower1_top", "@0.17,0.8", "bad_tower1_top", "bad_tower2_top", "bad_tower3_top", "bad_tower4"],
   ];
   for (const l of lanes) {
     const pts = l.map((k) => k.startsWith("@") ? k.slice(1).split(",").map(Number).map((x, i) => i ? Y(x) : X(x)) : P(k)).filter(Boolean);
     el("path", { d: "M" + pts.map((p) => p.join(",")).join(" L"), fill: "none", stroke: "var(--lane)", "stroke-width": 16, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: .8 }, gT);
   }
   // 基地
-  el("rect", { x: X(0.05), y: Y(0.33), width: X(0.28), height: X(0.28), rx: 30, fill: "var(--own)", opacity: .12 }, gT);
-  el("rect", { x: X(0.67), y: Y(0.95), width: X(0.28), height: X(0.28), rx: 30, fill: "var(--enemy)", opacity: .12 }, gT);
+  el("rect", { x: X(0.05), y: Y(0.33), width: X(0.28), height: X(0.28), rx: 30, fill: weRad() ? "var(--own)" : "var(--enemy)", opacity: .12 }, gT);
+  el("rect", { x: X(0.67), y: Y(0.95), width: X(0.28), height: X(0.28), rx: 30, fill: weRad() ? "var(--enemy)" : "var(--own)", opacity: .12 }, gT);
   // 野点（游戏文件里的坐标）
   for (const [good, kind, u, v] of D.camps) {
-    el("circle", { cx: X(u), cy: Y(v), r: 4 + kind * 1.5, fill: "none", stroke: good ? "var(--own)" : "var(--enemy)", "stroke-width": 1.5, opacity: .45 }, gT);
+    el("circle", { cx: X(u), cy: Y(v), r: 4 + kind * 1.5, fill: "none", stroke: (!!good === weRad()) ? "var(--own)" : "var(--enemy)", "stroke-width": 1.5, opacity: .45 }, gT);
   }
   // 莲花池（游戏文件里的坐标）
   for (const [x, y] of [[-7548, 4209], [7504, -4405]]) {
     el("circle", { cx: X((x + 9472) / 18944), cy: Y((y + 9472) / 18944), r: 7, fill: "var(--lotus)", opacity: .7 }, gT);
   }
-  const lab = (t, u, v, anchor = "middle") => { const e = el("text", { x: X(u), y: Y(v), fill: "var(--ink-3)", "font-size": 22, "text-anchor": anchor, "font-family": "var(--f-body)" }, gT); e.textContent = t; };
+  const lab = (t, u, v, anchor = "middle") => { if (!weRad()) { u = 1 - u; v = 1 - v + .03; } const e = el("text", { x: X(u), y: Y(v), fill: "var(--ink-3)", "font-size": 22, "text-anchor": anchor, "font-family": "var(--f-body)" }, gT); e.textContent = t; };
   lab("我方基地", 0.19, 0.03); lab("对面基地", 0.81, 0.965);
   lab("优势路", 0.62, 0.12); lab("优势路", 0.93, 0.47);
   lab("劣势路", 0.06, 0.56); lab("劣势路", 0.4, 0.9);
 }
-drawBase();
 const gHeat = el("g", { class: "heat" }, svg);
 const gDots = el("g", { class: "dots" }, svg);
 const gBld = el("g", {}, svg);
 const gMark = el("g", {}, svg);
+const gCorner = el("g", { "pointer-events": "none" }, svg);
+function drawCorners() {
+  gCorner.replaceChildren();
+  const tag = (t, x, y, anchor, color) => { const e = el("text", { x, y, fill: color, "font-size": 24, "font-weight": 700, "text-anchor": anchor, "font-family": "var(--f-body)", "paint-order": "stroke", stroke: "var(--bg)", "stroke-width": 5 }, gCorner); e.textContent = t; };
+  if (weRad()) { tag("我方", 14, 984, "start", "var(--own)"); tag("对面", 986, 34, "end", "var(--enemy)"); }
+  else { tag("对面", 14, 984, "start", "var(--enemy)"); tag("我方", 986, 34, "end", "var(--own)"); }
+}
 const defs = el("defs", {}, svg);
 const clip = el("clipPath", { id: "round", clipPathUnits: "objectBoundingBox" }, defs);
 el("circle", { cx: .5, cy: .5, r: .5 }, clip);
@@ -308,7 +339,7 @@ function peaks(grid, G, k = 3, minGap = 6, minRatio = .4) {
   return out.map(([v, i]) => ({ share: v / total, u: (i % G + .5) / G, w: (Math.floor(i / G) + .5) / G }));
 }
 function heroMark(who, color) {
-  peaks(D.heat[state.subset][who][state.phase], D.grid).forEach((pk, n) => {
+  peaks(heatGrid(who), D.grid).forEach((pk, n) => {
     const r = n ? 17 : 26, x = X(pk.u), y = Y(pk.w);
     const g = el("g", { opacity: n ? .85 : 1 }, gMark);
     el("circle", { cx: x, cy: y, r: r + 3, fill: "var(--bg)", stroke: color, "stroke-width": n ? 2.5 : 4 }, g);
@@ -321,8 +352,9 @@ function heroMark(who, color) {
 function relocateMark(lo, hi, keep) {
   const G = D.grid, grid = new Array(G * G).fill(0);
   let n = 0;
-  for (const [t, u, v, inv, , w, ar] of D.kills) {
-    if (t < lo * 60 || t >= hi * 60 || !keep(w) || !ar) continue;
+  for (const [t, u0, v0, inv, , w, ar, rad] of D.kills) {
+    if (t < lo * 60 || t >= hi * 60 || !keepM(rad, w) || !ar) continue;
+    const [u, v] = pt(u0, v0, rad);
     grid[Math.min(G - 1, Math.floor(v * G)) * G + Math.min(G - 1, Math.floor(u * G))]++; n++;
   }
   if (n < 15) return;
@@ -338,7 +370,7 @@ function relocateMark(lo, hi, keep) {
 
 // ---------- 动态图层 ----------
 function heatLayer(who, color) {
-  const grid = D.heat[state.subset][who][state.phase];
+  const grid = heatGrid(who);
   const G = D.grid, cell = 1000 / G;
   const nGames = subsetMatches().length || 1;
   const per = grid.map((c) => c / nGames);
@@ -358,14 +390,16 @@ function draw() {
   if (state.layers.le) heatLayer("le", "var(--lesh)");
   const keep = (w) => state.subset === "all" || (state.subset === "win" ? w : !w);
   if (state.layers.kills) {
-    for (const [t, u, v, inv, smoke, w, ar] of D.kills) {
-      if (t < lo * 60 || t >= hi * 60 || !keep(w) || !inv) continue;
+    for (const [t, u0, v0, inv, smoke, w, ar, rad] of D.kills) {
+      if (t < lo * 60 || t >= hi * 60 || !keepM(rad, w) || !inv) continue;
+      const [u, v] = pt(u0, v0, rad);
       el("circle", { cx: X(u), cy: Y(v), r: ar ? 5 : 3, fill: ar ? "none" : "var(--kill)", stroke: ar ? "var(--lesh)" : "none", "stroke-width": ar ? 2 : 0, opacity: ar ? .8 : .45 }, gDots);
     }
   }
   if (state.layers.deaths) {
-    for (const [t, u, v, h, w] of D.deaths) {
-      if (t < lo * 60 || t >= hi * 60 || !keep(w)) continue;
+    for (const [t, u0, v0, h, w, rad] of D.deaths) {
+      if (t < lo * 60 || t >= hi * 60 || !keepM(rad, w)) continue;
+      const [u, v] = pt(u0, v0, rad);
       const x = X(u), y = Y(v);
       el("rect", { x: x - 4, y: y - 4, width: 8, height: 8, transform: `rotate(45 ${x} ${y})`, fill: "var(--enemy)", opacity: .7 }, gDots);
     }
@@ -395,9 +429,10 @@ function showTip(ev, html) {
   tip.style.left = Math.max(0, x) + "px"; tip.style.top = Math.max(0, y) + "px";
 }
 function drawBuildings(tEnd) {
-  const keys = Object.keys(B).filter((k) => !k.includes("range_rax"));     // 远程兵营和近战兵营几乎同一个位置，只画一个
+  const keys = PERSP_KEYS.filter((k) => !k.includes("range_rax"));     // 远程兵营和近战兵营几乎同一个位置，只画一个
   for (const k of keys) {
-    const [x, y] = P(k); const own = k.startsWith("own_");
+    const pos = P(trueKey(k)); if (!pos) continue;
+    const [x, y] = pos; const own = k.startsWith("own_");
     const st = bldStats(k, tEnd);
     const big = k.includes("fort") ? 15 : k.includes("tower4") ? 10 : k.includes("rax") ? 8 : 11;
     const color = own ? "var(--own)" : "var(--enemy)";
@@ -432,7 +467,21 @@ function drawBuildings(tEnd) {
 }
 
 // ---------- 右侧 ----------
+function renderSideSum() {
+  const ms = D.matches.filter((m) => state.side === "all" || (state.side === "rad") === !!m.rad);
+  const n = ms.length || 1, w = ms.filter((m) => m.w).length;
+  const lanes = ms.filter((m) => m.lane != null), ln = lanes.length || 1;
+  const pct = (x) => Math.round(x * 100) + "%";
+  const t1 = median(ms.filter((m) => m.w && m.f.enemy_tower1_bot != null).map((m) => m.f.enemy_tower1_bot / 60));
+  const name = state.side === "all" ? "两边合计" : state.side === "rad" ? "天辉" : "夜魇";
+  document.getElementById("sideSum").innerHTML =
+    `<span class="who">${name}</span><span><b>${ms.length}</b> 局</span><span>胜率 <b>${pct(w / n)}</b></span>` +
+    `<span>时长中位 <b>${median(ms.map((m) => m.d)).toFixed(1)}</b> 分</span>` +
+    `<span>对线 优 <b>${pct(lanes.filter((m) => m.lane === 1).length / ln)}</b> · 均 <b>${pct(lanes.filter((m) => m.lane === 0).length / ln)}</b> · 劣 <b>${pct(lanes.filter((m) => m.lane === -1).length / ln)}</b></span>` +
+    (t1 != null ? `<span>优势路对面一塔（赢局）<b>${t1.toFixed(1)}</b> 分倒</span>` : "");
+}
 function renderSide() {
+  renderSideSum();
   const [lo, hi] = PH[state.phase]; const info = PHASE_INFO[state.phase];
   document.getElementById("phTime").textContent = hi === 45 ? `${lo} 分钟以后` : `${lo}–${hi} 分钟`;
   document.getElementById("phName").textContent = info.name;
@@ -441,10 +490,11 @@ function renderSide() {
     im.src = IC[STORY_ICONS[state.phase][i]]; im.alt = ""; const sp = document.createElement("span"); sp.textContent = s;
     li.append(im, sp); return li; }));
   const ms = subsetMatches(); const n = ms.length || 1;
-  const keep = (w) => state.subset === "all" || (state.subset === "win" ? w : !w);
-  const ks = D.kills.filter((k) => k[0] >= lo * 60 && k[0] < hi * 60 && keep(k[5]));
+  const ks = D.kills.filter((k) => k[0] >= lo * 60 && k[0] < hi * 60 && keepM(k[7], k[5]));
   const inv = ks.filter((k) => k[3]).length;
-  const leDeaths = D.deaths.filter((d) => d[0] >= lo * 60 && d[0] < hi * 60 && keep(d[4]) && d[3] === 0).length;
+  const leDeaths = D.deaths.filter((d) => d[0] >= lo * 60 && d[0] < hi * 60 && keepM(d[5], d[4]) && d[3] === 0).length;
+  const sides = state.side === "all" ? ["rad", "dire"] : [state.side];
+  const tog = sides.reduce((a, sd) => [a[0] + D.together[sd][state.phase][0], a[1] + D.together[sd][state.phase][1]], [0, 0]);
   const rel = ms.reduce((a, m) => a + m.r.filter((t) => t >= lo && t < hi).length, 0);
   const alive = ms.filter((m) => m.d > lo).length || 1;
   const stats = [
@@ -452,11 +502,14 @@ function renderSide() {
     [ks.length ? Math.round(inv / ks.length * 100) + "%" : "–", "拉席克或艾欧参与"],
     [(rel / alive).toFixed(2), "降临次数 / 局"],
     [(leDeaths / alive).toFixed(2), "拉席克阵亡 / 局"],
-    [Math.round(D.together[state.phase] * 100) + "%", "两人贴在一起的时间"],
+    [Math.round(tog[0] / (tog[1] || 1) * 100) + "%", "两人贴在一起的时间"],
     [Math.round(alive / n * 100) + "%", "打到这段的对局"],
   ];
   document.getElementById("stats").replaceChildren(...stats.map(([v, k]) => { const d = document.createElement("div"); d.className = "stat"; d.innerHTML = `<span class="v">${v}</span><span class="k">${k}</span>`; return d; }));
-  const reg = D.regions[state.subset][state.phase];
+  const cnt = {};
+  for (const sd of sides) for (const [r, c] of Object.entries(D.regions[state.subset][sd][state.phase])) cnt[r] = (cnt[r] || 0) + c;
+  const tot = Object.values(cnt).reduce((a, b) => a + b, 0) || 1;
+  const reg = Object.fromEntries(Object.entries(cnt).map(([r, c]) => [r, c / tot]));
   const rows = REGION_ORDER.map((r) => [r, reg[r] || 0]).filter(([, p]) => p >= 0.03).sort((a, b) => b[1] - a[1]);
   const max = rows.length ? rows[0][1] : 1;
   document.getElementById("bars").replaceChildren(...rows.map(([r, p]) => {
@@ -508,18 +561,22 @@ function drawTimeline() {
     const t = el("text", { x, y: y + h + 13, fill: "var(--ink-2)", "font-size": 11, "text-anchor": "middle", "font-family": "var(--f-mono)" }, g); t.textContent = e.t.toFixed(1);
     el("title", {}, g).textContent = (e.who === "le" ? "拉席克 " : "艾欧 ") + e.n + "，中位 " + e.t.toFixed(1) + " 分钟";
   });
-  // 对面建筑：赢的局中位倒塌时间
-  const wins = D.matches.filter((m) => m.w);
+  tlTowers = el("g", {}, tl);
   const lab = el("text", { x: 0, y: 214, fill: "var(--enemy)", "font-size": 12.5, "font-family": "var(--f-body)" }, tl); lab.textContent = "对面倒塔";
+  const t = el("text", { x: 990, y: 214, fill: "var(--ink-3)", "font-size": 11, "text-anchor": "end", "font-family": "var(--f-body)" }, tl); t.textContent = "（赢的局中位）";
+}
+let tlTowers;
+function drawTimelineTowers() {
+  tlTowers.replaceChildren();
+  const wins = D.matches.filter((m) => m.w && (state.side === "all" || (state.side === "rad") === !!m.rad));
   [["enemy_tower1", "一塔"], ["enemy_tower2", "二塔"], ["enemy_tower3", "高地塔"], ["enemy_fort", "基地"]].forEach(([pre, name], k) => {
     const ts = wins.flatMap((m) => Object.entries(m.f).filter(([k]) => k.startsWith(pre)).map(([, t]) => t / 60));
     const md = median(ts); if (md == null) return;
     const x = TX(md);
     const dy = k === 3 ? 14 : 0;     // 基地和高地塔挨得近，错开一行
-    el("rect", { x: x - 6, y: 197 + dy, width: 12, height: 12, rx: 2, fill: "var(--enemy)", "pointer-events": "none" }, tl);
-    const t = el("text", { x: x + 10, y: 208 + dy, fill: "var(--ink-2)", "font-size": 11.5, "pointer-events": "none", "font-family": "var(--f-body)" }, tl); t.textContent = name + " " + md.toFixed(1);
+    el("rect", { x: x - 6, y: 197 + dy, width: 12, height: 12, rx: 2, fill: "var(--enemy)", "pointer-events": "none" }, tlTowers);
+    const t = el("text", { x: x + 10, y: 208 + dy, fill: "var(--ink-2)", "font-size": 11.5, "pointer-events": "none", "font-family": "var(--f-body)" }, tlTowers); t.textContent = name + " " + md.toFixed(1);
   });
-  const t = el("text", { x: 990, y: 214, fill: "var(--ink-3)", "font-size": 11, "text-anchor": "end", "font-family": "var(--f-body)" }, tl); t.textContent = "（赢的局中位）";
 }
 function drawTimelineCursor() { const [lo, hi] = PH[state.phase]; cursor.setAttribute("x", TX(lo)); cursor.setAttribute("width", TX(hi) - TX(lo)); }
 
@@ -529,7 +586,8 @@ function chip(parent, label, pressed, onClick, sw) {
   b.innerHTML = (sw && sw.startsWith("img:") ? `<img src="${IC[sw.slice(4)]}" alt="">` : sw ? `<span class="sw" style="background:${sw}"></span>` : "") + label;
   b.setAttribute("aria-pressed", pressed ? "true" : "false"); b.addEventListener("click", onClick); parent.appendChild(b); return b;
 }
-const phaseBtns = [], subsetBtns = [], layerBtns = {};
+const phaseBtns = [], subsetBtns = [], layerBtns = {}, sideBtns = [];
+[["all", "全部（翻到天辉视角）"], ["rad", "天辉"], ["dire", "夜魇"]].forEach(([k, l]) => sideBtns.push([k, chip(document.getElementById("sideBtns"), l, state.side === k, () => { state.side = k; sync(); })]));
 PH.forEach(([lo, hi], i) => phaseBtns.push(chip(document.getElementById("phaseBtns"), hi === 45 ? `${lo}+` : `${lo}–${hi}`, i === state.phase, () => setPhase(i))));
 [["all", "全部"], ["win", "赢的局"], ["loss", "输的局"]].forEach(([k, l]) => subsetBtns.push([k, chip(document.getElementById("subsetBtns"), l, state.subset === k, () => { state.subset = k; sync(); })]));
 [["le", "拉席克", "img:hero_le"], ["io", "艾欧", "img:hero_io"], ["kills", "两人参与的击杀", "var(--kill)"], ["deaths", "两人阵亡", "var(--enemy)"]].forEach(([k, l, c]) => layerBtns[k] = chip(document.getElementById("layerBtns"), l, state.layers[k], () => { state.layers[k] = !state.layers[k]; sync(); }, c));
@@ -574,6 +632,8 @@ function setPhase(i) { state.phase = i; sync(); }
 function sync() {
   phaseBtns.forEach((b, i) => b.setAttribute("aria-pressed", i === state.phase ? "true" : "false"));
   subsetBtns.forEach(([k, b]) => b.setAttribute("aria-pressed", state.subset === k ? "true" : "false"));
+  sideBtns.forEach(([k, b]) => b.setAttribute("aria-pressed", state.side === k ? "true" : "false"));
+  drawBase(); drawCorners(); drawTimelineTowers();
   for (const k in layerBtns) layerBtns[k].setAttribute("aria-pressed", state.layers[k] ? "true" : "false");
   bgBtns.forEach(([k, b]) => b.setAttribute("aria-pressed", state.bg === k ? "true" : "false"));
   const shot = state.bg === "shot" && shotURL;
