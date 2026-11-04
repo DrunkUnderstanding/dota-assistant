@@ -50,7 +50,9 @@
 - `log_level` 可设 DEBUG（多记每秒识别分数和每次 GSI 推送）。
 - 运行目录相关路径都从 `ROOT` / `DATA_DIR` 派生；单测不能写真实 `data/` `shots/` `logs/`（`tools/check_isolation.py` 查）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 4 节（模块地图，core 部分）
 - HANDOFF 第 17 节（日志）
@@ -61,3 +63,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 4 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

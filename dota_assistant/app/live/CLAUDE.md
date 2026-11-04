@@ -51,7 +51,9 @@
 - `world.py` 的线程不走工作线程：只读整个换掉的引用（`camp_marks`、GSI 历史），只写自己的 `_world`；截图句柄在这个线程里建。
 - 2026-10-28 拆分的核对脚本：`tools/refactor/check_live_split.py`。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 3 节（架构）、第 11.1 节（缺口提醒实时版）、第 14 节（叠加层拖动 / 固定）、第 16 节（「如果选 X」卡片）
 - HANDOFF 第 22.2 节（拖到副屏 + 自由改宽高）、第 23 节（底色 / 不透明度）、第 28 节（本局要点按阶段弹）
@@ -60,3 +62,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 3、4 节 + 源码（`core.py` 的 `action` 分发表、各 mixin 方法）。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

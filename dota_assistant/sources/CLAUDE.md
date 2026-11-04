@@ -45,7 +45,9 @@
 - 没 token 也要能用：分位置改用 OpenDota 分路凑（HANDOFF 第 35 节）。
 - token 不能出现在日志 / 报错里。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 3 节（架构，数据流图）、第 4 节（模块地图，原 `data.py` 拆分对照）
 - HANDOFF 第 5 节（关键设计决策 2、3）、第 8 节（已知问题与风险）
@@ -54,3 +56,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 3~5、8 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

@@ -42,7 +42,9 @@
 - `browser_check.py` 从仓库只读复制 `data/` `knowledge/` `web/` 等到临时目录，不带 `config.toml`（token / AI Key 清空），可以在玩家开着助手打游戏时跑。
 - `docs/refactor/uitest/` 下还有真鼠标 / CDP 的 UI 测试脚本（不在 `tools/` 里）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块没有单独的 NOTES；下面的节号（2026-11-04 起已从 HANDOFF 拆到各模块的 NOTES）按 [HANDOFF 节号索引](../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 2 节当前状态「工程化重构」一行、第 4 节（`tools/` 几行）、第 9 节（常用命令）
 - `tools/golden/README.md`、`docs/refactor/PLAN.md`
@@ -50,3 +52,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 `tools/golden/README.md`、各脚本模块说明、HANDOFF 第 4 节。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

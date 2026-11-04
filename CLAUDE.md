@@ -1,6 +1,6 @@
 # 项目指令
 
-Dota 2 选人助手（自用）。**接手先读 [docs/HANDOFF.md](docs/HANDOFF.md)**：需求、当前状态、架构、下一步都在里面。
+Dota 2 选人助手（自用）。**接手先读 [docs/HANDOFF.md](docs/HANDOFF.md)**：需求、当前状态、下一步（一两屏）；各功能的设计 / 验证细节在各模块目录的 `NOTES.md`。
 
 **项目愿景**：实时帮玩家打天梯——截图认出选人阵容，按克制 / 配合 / 位置强度推荐英雄；进游戏后靠 Valve GSI 给出装、本局要点、计时和死亡复盘等提醒。只做建议，不碰游戏进程。
 
@@ -26,10 +26,10 @@ Dota 2 选人助手（自用）。**接手先读 [docs/HANDOFF.md](docs/HANDOFF.
 - Windows 基础规范（`tests/test_hygiene.py` 会查）：文本文件一律 UTF-8 无 BOM；`.bat` / `.cmd` 必须 CRLF（`.gitattributes` 已配）；Python 里 `open` / `read_text` / `write_text` / `subprocess(text=True)` 都要显式写 `encoding="utf-8"`；子进程输出按 UTF-8 解码前先确认对方真输出 UTF-8。
 
 ### 代码分层
-- 代码按层分在 `dota_assistant/` 的子包里：`core` → `sources` → `kb` → `ai` → `domain` → `vision` / `game` → `research` → `app`（实时主控在 `app/live/`）→ `cli`，只能 import 同层或更低层（`tests/test_layers.py` 查），每个文件管什么见 HANDOFF 第 4 节。不留转发旧路径的空壳模块；跨模块共享的函数用 `模块.函数` 形式调用（例如 `http._get(...)`），测试 patch 定义它的那个模块（`tests/test_patch_targets.py` 查）。
+- 代码按层分在 `dota_assistant/` 的子包里：`core` → `sources` → `kb` → `ai` → `domain` → `vision` / `game` → `research` → `app`（实时主控在 `app/live/`）→ `cli`，只能 import 同层或更低层（`tests/test_layers.py` 查），每个文件管什么见各模块的 `CLAUDE.md`（下面的模块索引）。不留转发旧路径的空壳模块；跨模块共享的函数用 `模块.函数` 形式调用（例如 `http._get(...)`），测试 patch 定义它的那个模块（`tests/test_patch_targets.py` 查）。
 
 ### 文档同步
-- 新确定的需求、做完的模块、验证结论，同步更新 `docs/HANDOFF.md` 的「当前状态」和「下一步」。
+- 做完的功能 / 修完的问题 / 验证结论：在主要涉及的模块目录的 `NOTES.md` 末尾追加一节（节号全局接着编，加进 HANDOFF 末尾的「节号索引」）；`docs/HANDOFF.md` 只改「当前状态」那一行和「下一步」，**不往 HANDOFF 里堆过程记录**（2026-11-04 玩家嫌 HANDOFF 太长，拆过一次）。
 - 各模块目录下有 `CLAUDE.md`（职责、文件表、接口、坑、对应测试），改了文件职责顺手更新对应那份。
 
 ## 架构总览
@@ -102,9 +102,10 @@ graph TD
 
 ## 运行
 
-- 玩家日常：双击 `启动助手.bat`（= `python -m dota_assistant start`）。开发常用：`update [--player]`、`suggest`、`run [--browser]`、`demo`、`kb ...`，完整命令表见 [cli](dota_assistant/cli/CLAUDE.md) 和 HANDOFF 第 9 节（常用命令）。
+- 玩家日常：双击 `启动助手.bat`（= `python -m dota_assistant start`）。开发常用：`update [--player]`、`suggest`、`run [--browser]`、`demo`、`kb ...`，完整命令表见 [cli](dota_assistant/cli/CLAUDE.md) 和 [cli/NOTES.md](dota_assistant/cli/NOTES.md)（常用命令）。
 - 运行时生成、和机器相关：`calibration.json`（校准）、`templates/`（学到的识别模板，值得保留）、`shots/`、`data/`、`logs/`；其中 `config.toml`、`data/`、`shots/`、`logs/`、`templates/` 在 `.gitignore` 里。
 
 ## 变更记录 (Changelog)
 
+- 2026-11-04：HANDOFF 从 2647 行拆到约 200 行，过程记录按模块搬进各目录的 `NOTES.md`（`domain` 分选人 / 局内两份，重构相关进 `docs/refactor/NOTES.md`）；改「文档同步」规则。
 - 2026-11-02 11:18:41：按「根级简明 + 模块级详尽」重排本文件：原 15 行规则原文保留、分小节；加项目愿景、架构总览、Mermaid 结构图、模块索引；新建 17 份模块级 CLAUDE.md。

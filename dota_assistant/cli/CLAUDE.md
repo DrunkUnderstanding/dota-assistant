@@ -50,7 +50,9 @@
 - 模块说明（`__doc__`）就是 `--help` 的描述；里面没列 `brief-sim`，但命令存在。
 - 动了推荐逻辑：用 `suggest` 看几组结果是否符合常识（根 CLAUDE.md 规则）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 9 节（常用命令）
 - HANDOFF 第 9 节（知识库）里的 `kb` 用法
@@ -59,3 +61,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自源码（argparse 子命令和分发）+ HANDOFF 第 9 节。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

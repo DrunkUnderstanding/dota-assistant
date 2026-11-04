@@ -50,7 +50,9 @@
 - 规则 vs 误判：规则是「应该怎么判断」（经验），误判是「这个说法事实上不对」（机制）。
 - 网络不稳时 dota2.com 会断连接，`kb._get` 已加重试（HANDOFF 第 8 节）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 9 节（知识库，2026-10-21）
 - HANDOFF 第 30 节（后期团战，`immunity` 读反的更正）
@@ -60,3 +62,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 4、9 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

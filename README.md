@@ -6,7 +6,7 @@
 - 推荐依据：最近两周超凡入圣～冠绝一世的天梯对局（克制、配合、分位置强度）＋ 你自己最近 300 局天梯的英雄与战绩
 - 只读屏幕截图和 Valve 官方的 Game State Integration（GSI），**不读游戏内存、不注入、不代替操作**
 
-开发进度、架构和下一步见 [docs/HANDOFF.md](docs/HANDOFF.md)。
+开发进度和下一步见 [docs/HANDOFF.md](docs/HANDOFF.md)，各功能的设计记录在各模块目录的 `NOTES.md`。
 
 ---
 
@@ -261,7 +261,7 @@ python tools/check_isolation.py                   # 跑一遍单测，确认没�
 ```
 
 代码按层分在 `dota_assistant/` 的子包里（`core` `sources` `kb` `ai` `domain` `vision` `game` `research` `app` `cli`），
-每个文件管什么见 [HANDOFF 第 4 节](docs/HANDOFF.md#4-模块地图)；开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+每个文件管什么见各模块目录的 `CLAUDE.md`（索引在 [CLAUDE.md](CLAUDE.md#模块索引)）；开发约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 也可以 `pip install -e .` 装成命令 `dota-assistant`（等同 `python -m dota_assistant`）。
 
 ## 交流 / 参与开发

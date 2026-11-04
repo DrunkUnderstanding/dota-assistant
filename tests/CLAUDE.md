@@ -53,7 +53,9 @@
 - 有些测试依赖本地数据，没有就跳过（例如 `test_vision` 要 `data/portraits/`，`test_kb` 的真实数据抽查要本地知识库）：干净检出时跳过不等于通过。
 - 新加的测试文件同样受 `test_hygiene`（编码）和 `test_patch_targets`（扫 `tests/` 下所有 `.py`）约束。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块没有单独的 NOTES；下面的节号（2026-11-04 起已从 HANDOFF 拆到各模块的 NOTES）按 [HANDOFF 节号索引](../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 3 节（分层）、第 4 节（「仓库里其它目录 / 文件」表的 `tests/` 一行）
 - HANDOFF 第 2 节当前状态里「工程化重构」一行（门禁清单）
@@ -62,3 +64,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自各测试文件的模块说明 + HANDOFF 第 4 节。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

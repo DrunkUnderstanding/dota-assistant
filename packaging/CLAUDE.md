@@ -32,7 +32,9 @@
 - 打包版的运行目录是 exe 所在目录（`core/config.py` 的 `FROZEN`）；更新助手时由新包的 exe 替换文件，按 `VERSION.txt` 判新旧（`app/upgrade.py`，HANDOFF 第 41 节）。GitHub Release 的 tag 形如 `v2026.10.29`，同一天再发一版是 `v2026.10.29.2`（HANDOFF 第 41 节末的真实发布记录）。
 - 状态：开发机打包 + 启动通过，**没在一台没装 Python / Node 的干净电脑上试过**（HANDOFF 第 2 节当前状态）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 21 节（免安装打包 + 设置窗口）
 - HANDOFF 第 41 节（更新助手本身、真实发布实测）
@@ -40,3 +42,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 `build.py` / `launcher.py` 模块说明 + HANDOFF 第 2、4、21、41 节。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

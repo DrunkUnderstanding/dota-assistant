@@ -38,7 +38,9 @@
 - TOML 文件 UTF-8 无 BOM（`tests/test_hygiene.py` 查）；`add_mistake` 用 JSON 字符串转义写 TOML 基本字符串。
 - 打包时整个目录复制进产物、更新助手时整个替换（`packaging/build.py`、`app/upgrade.py`）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块没有单独的 NOTES；下面的节号（2026-11-04 起已从 HANDOFF 拆到各模块的 NOTES）按 [HANDOFF 节号索引](../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 9 节（知识库，2026-10-21）
 - HANDOFF 第 15.1 节（AI 打法）
@@ -46,3 +48,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 4、9 节 + 两个 toml 的文件头注释 + `kb/__init__.py`。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

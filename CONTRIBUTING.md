@@ -1,6 +1,6 @@
 # 参与开发
 
-欢迎来加功能、修 bug、补英雄机制规则。动手前先看 [docs/HANDOFF.md](docs/HANDOFF.md)：需求、当前状态、架构、下一步都在里面。
+欢迎来加功能、修 bug、补英雄机制规则。动手前先看 [docs/HANDOFF.md](docs/HANDOFF.md)：需求、当前状态、下一步；改哪个模块就看那个目录的 `CLAUDE.md`（职责、文件、坑）和 `NOTES.md`（设计记录）。
 想法拿不准的，先到 QQ 群（群号见 [README](README.md#交流--参与开发)）或 Issues 里聊一下，免得白做。
 
 ## 安全底线（不接受越线的改动）
@@ -23,7 +23,7 @@ python -m dota_assistant run --browser     # 不开游戏也能看界面
 
 代码按层分在 `dota_assistant/` 的子包里，从低到高：`core`（配置、日志、英雄表）→ `sources`（联网拉数据）→ `kb`（知识库）→ `ai`（大模型）→
 `domain`（推荐、局内提醒、计时等领域逻辑）→ `vision`（看屏幕）/ `game`（GSI、热键、语音）→ `research`（回测）→ `app`（实时主控 `app/live/`、网页服务、更新数据）→ `cli`（命令入口）。
-**只能 import 同层或更低层**（`tests/test_layers.py` 会查）；每个文件管什么见 [HANDOFF 第 4 节](docs/HANDOFF.md#4-模块地图)。
+**只能 import 同层或更低层**（`tests/test_layers.py` 会查）；每个文件管什么见各模块目录的 `CLAUDE.md`（索引在 [CLAUDE.md](CLAUDE.md#模块索引)）。
 
 `config.toml` 从 `config.example.toml` 复制，里面的 STRATZ token / AI Key 是你自己的，**不要提交**（已在 `.gitignore` 里）。
 
@@ -35,7 +35,7 @@ python -m dota_assistant run --browser     # 不开游戏也能看界面
 
 开发者本机另有两道门禁：`python tools/golden/run.py check`（行为快照，依赖本机的个人数据，外部贡献者跑不了，合并前开发者跑）、`python tools/check_isolation.py`（单测不碰真实的 `data/` `shots/` 等目录，谁都能跑）。
 
-PR 里写清楚改了什么、怎么验证的。新功能顺手更新 `docs/HANDOFF.md` 的「当前状态」。
+PR 里写清楚改了什么、怎么验证的。新功能在对应模块的 `NOTES.md` 末尾记一节，再改 `docs/HANDOFF.md`「当前状态」那一行。
 
 ## 约定
 

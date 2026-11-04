@@ -44,7 +44,9 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 - 语音不用 Python TTS 库（PySide6 的 QtTextToSpeech 装不上），改常驻 PowerShell，零依赖（HANDOFF 第 5 节第 6 条）。语音默认关（`voice = false`），面板开关也藏了（HANDOFF 第 2 节当前状态）。
 - 子进程输出按 UTF-8 解码前确认对方真输出 UTF-8：`speech.py` 的脚本开头把 PowerShell 控制台输入 / 输出都设成 UTF-8。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 5 节（关键设计决策 5~7）
 - HANDOFF 第 13 节（一键启动，GSI 配置自动写）
@@ -54,3 +56,4 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 4、5 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

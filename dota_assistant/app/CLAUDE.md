@@ -55,7 +55,9 @@
 - 更新频率：全量 `FULL_UPDATE_DAYS = 3` 天、个人数据 `PLAYER_UPDATE_HOURS = 12` 小时，没网用旧数据；GSI 启动项提醒只显示一次（`data/.gsi_hint_shown`，HANDOFF 第 13 节）。
 - 改了 `启动助手.bat` 要用 cmd 真跑一遍（根 CLAUDE.md 规则），`.bat` 必须 CRLF。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 3 节（架构）、第 12 节（界面改版：网页 + Electron）、第 13 节（一键启动）
 - HANDOFF 第 35 节（不填 key 也能用）、第 38.1 节（队友战绩独立页）、第 41 节（更新助手本身）
@@ -63,3 +65,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 3、4、12、13、41 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。

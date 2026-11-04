@@ -43,7 +43,9 @@
 - 大模型凭自身理解排选人不如统计引擎（HANDOFF 第 10 节）：这是「选人不用大模型」的依据。
 - `lane-review` 依赖 GSI 的 kills / assists / level，这些字段还没在真实推送里见过（HANDOFF 第 2 节当前状态）。
 
-## 相关 HANDOFF 节
+## 设计记录（原「相关 HANDOFF 节」）
+
+本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
 - HANDOFF 第 2.1 节（回测结果）
 - HANDOFF 第 10 节（大模型选人盲测）
@@ -54,3 +56,4 @@
 ## 变更记录 (Changelog)
 
 - 2026-11-02 11:18:41：初建，内容来自 HANDOFF 第 2.1、4、9 节 + 源码模块说明。
+- 2026-11-04：HANDOFF 按模块拆分，过程记录搬进各模块 `NOTES.md`；「相关 HANDOFF 节」改成「设计记录」，指向 NOTES 和 HANDOFF 节号索引。
