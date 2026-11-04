@@ -1,0 +1,588 @@
+<title>精灵老鹿小地图</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 布局：左边一张游戏小地图（按阶段切换），右边写这一段大概率在干什么；底下一条 0~45 分钟的时间轴。
+   单一深色主题：照游戏里小地图的观感。 */
+:root {
+  color-scheme: dark;
+  --bg: #0d1210;
+  --panel: #141b18;
+  --line: #26322c;
+  --ink: #e6ebe4;
+  --ink-2: #a7b3aa;
+  --ink-3: #6f7c73;
+  --map: #18241c;
+  --map-2: #1f2e23;
+  --river: #1d3a4a;
+  --lane: #4a4a3c;
+  --own: #6cc36b;         /* 我方（天辉视角） */
+  --enemy: #e0583f;       /* 对面 */
+  --lesh: #f3c74f;        /* 拉席克：闪电黄 */
+  --io: #8fe1ff;          /* 艾欧：灵光蓝 */
+  --kill: #ffffff;
+  --lotus: #e58fd0;
+  --fallen: #3a3f3c;     /* 已倒的建筑 */
+  --accent: #f3c74f;
+  --f-display: "Noto Serif SC", "Songti SC", "SimSun", serif;
+  --f-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header { display: flex; flex-direction: column; gap: 6px; }
+h1 { font-family: var(--f-display); font-weight: 900; font-size: clamp(24px, 4vw, 34px); margin: 0; letter-spacing: .02em; text-wrap: balance; }
+h1 .le { color: var(--lesh); } h1 .io { color: var(--io); }
+.sub { color: var(--ink-2); margin: 0; max-width: 72ch; }
+.sub b { color: var(--ink); font-weight: 500; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+.group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.group > .lab { color: var(--ink-3); font-size: 12px; letter-spacing: .08em; margin-right: 4px; }
+button.chip {
+  font: inherit; font-size: 13px; color: var(--ink-2); background: transparent; border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px 11px; cursor: pointer; font-variant-numeric: tabular-nums;
+}
+button.chip:hover { color: var(--ink); border-color: var(--ink-3); }
+button.chip[aria-pressed="true"] { color: var(--bg); background: var(--ink); border-color: var(--ink); }
+button.chip:focus-visible, .tl-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.chip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.main { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+@media (max-width: 860px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.mapbox { position: relative; width: 100%; max-width: 640px; aspect-ratio: 1; justify-self: center; }
+.mapbox svg { width: 100%; height: 100%; display: block; border-radius: 6px; border: 1px solid var(--line); }
+.tip {
+  position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 8px 10px; font-size: 12.5px; line-height: 1.5; min-width: 160px; max-width: 240px; z-index: 5;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .45);
+}
+.tip b { font-weight: 700; } .tip .m { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.phase-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.phase-h .t { font-family: var(--f-mono); color: var(--accent); font-size: 15px; }
+.phase-h h2 { font-family: var(--f-display); font-weight: 900; font-size: 22px; margin: 0; }
+.story { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 6px; color: var(--ink); }
+.story li::marker { color: var(--ink-3); }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.stat { background: var(--panel); padding: 9px 11px; display: flex; flex-direction: column; gap: 2px; }
+.stat .v { font-family: var(--f-mono); font-size: 19px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.stat .k { color: var(--ink-3); font-size: 12px; }
+h3 { font-size: 12px; letter-spacing: .1em; color: var(--ink-3); font-weight: 500; margin: 0 0 6px; }
+.bars { display: flex; flex-direction: column; gap: 5px; }
+.bar { display: grid; grid-template-columns: 9.5em minmax(0, 1fr) 3em; gap: 8px; align-items: center; font-size: 13px; }
+.bar .track { height: 8px; background: var(--map-2); border-radius: 4px; overflow: hidden; }
+.bar .fill { height: 100%; background: var(--lesh); border-radius: 4px; }
+.bar .p { font-family: var(--f-mono); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.items { display: flex; flex-wrap: wrap; gap: 6px; }
+.item { font-size: 12.5px; border: 1px solid var(--line); border-radius: 4px; padding: 2px 8px; color: var(--ink-2); }
+.item .m { font-family: var(--f-mono); color: var(--ink); margin-right: 4px; }
+.item.le { border-color: color-mix(in srgb, var(--lesh) 45%, var(--line)); }
+.item.io { border-color: color-mix(in srgb, var(--io) 45%, var(--line)); }
+.timeline { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px 8px; overflow-x: auto; }
+.timeline svg { display: block; min-width: 720px; width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--ink-3); font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; }
+.heads { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.por { width: 88px; height: 50px; border-radius: 4px; object-fit: cover; border: 2px solid var(--line); display: block; }
+.por.le { border-color: var(--lesh); } .por.io { border-color: var(--io); }
+button.chip img { width: 18px; height: 18px; border-radius: 50%; margin-right: 6px; vertical-align: -4px; }
+.item { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 3px; }
+.item img { width: 33px; height: 24px; border-radius: 3px; object-fit: cover; display: block; }
+.story { list-style: none; padding-left: 0; }
+.story li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: start; }
+.story img { width: 30px; height: 30px; border-radius: 4px; display: block; object-fit: cover; }
+.legend img { width: 16px; height: 16px; border-radius: 50%; display: block; }
+.legend img.sq { border-radius: 3px; }
+label.chip.filechip { font-size: 13px; color: var(--ink-2); border: 1px dashed var(--ink-3); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+label.chip.filechip:hover { color: var(--ink); border-color: var(--ink); }
+label.chip.filechip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.shothelp { color: var(--ink-2); font-size: 13px; max-width: 90ch; }
+.shothelp summary { cursor: pointer; color: var(--ink-3); }
+.shothelp p { margin: 6px 0; }
+.shothelp label { display: inline-flex; align-items: center; gap: 4px; margin-right: 10px; }
+.shothelp input[type=number] { width: 5em; background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; font-family: var(--f-mono); }
+.note { color: var(--ink-3); font-size: 12px; max-width: 90ch; margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .heat rect, .dots circle { transition: opacity .25s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="heads"><img class="por io" id="porIo" alt="艾欧"><img class="por le" id="porLe" alt="拉席克"><h1><span class="io">艾欧</span> + <span class="le">拉席克</span> 小地图</h1></div>
+    <p class="sub">拉席克 1 号位、艾欧 5 号位、两人一起走优势路的 <b id="nGames">177</b> 局（冠绝 / 超凡，7.41f，近 14 天）。地图统一按<b>我方 = 天辉（左下）</b>画：优势路在下方和右侧，劣势路在左侧和上方。点阶段看这段时间两人在哪、在哪拿人头、对面的塔倒了多少。</p>
+  </header>
+
+  <div class="controls">
+    <div class="group" id="phaseBtns"><span class="lab">阶段</span></div>
+    <div class="group" id="subsetBtns"><span class="lab">对局</span></div>
+    <div class="group" id="layerBtns"><span class="lab">图层</span></div>
+    <div class="group" id="bgBtns"><span class="lab">底图</span>
+      <label class="chip filechip" for="shotFile" tabindex="0" id="shotLabel">导入游戏截图…</label>
+      <input type="file" id="shotFile" accept="image/*" hidden>
+    </div>
+  </div>
+  <details class="shothelp" id="shotHelp">
+    <summary>怎么换成游戏里的真实小地图</summary>
+    <p>在游戏里截一张整屏画面（默认界面，小地图在左下角），点「导入游戏截图…」选这张图，或者截图后直接在页面上按 Ctrl+V。页面按助手设置里的小地图位置自动把小地图裁出来当底图：1080 高的屏幕上，整张地图的左上角在 (-9, 790)，边长 296 像素，其他分辨率按高度等比换算。已经裁好的方形小地图也可以直接导入。截图只在你自己的浏览器里处理，不会上传。</p>
+    <p>裁得不准时改这三个数（按 1080 高量）：
+      <label>左 <input type="number" id="cropX" step="1" value="-9"></label>
+      <label>上 <input type="number" id="cropY" step="1" value="790"></label>
+      <label>边长 <input type="number" id="cropS" step="1" value="296"></label>
+    </p>
+  </details>
+
+  <div class="main">
+    <div class="mapbox" id="mapbox">
+      <svg id="map" viewBox="0 0 1000 1000" role="img" aria-label="小地图：所选阶段拉席克和艾欧的位置热区、击杀地点、建筑倒塌比例"></svg>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <div class="side">
+      <div class="phase-h"><span class="t" id="phTime"></span><h2 id="phName"></h2></div>
+      <ul class="story" id="story"></ul>
+      <div class="stats" id="stats"></div>
+      <div><h3>拉席克这段时间在哪</h3><div class="bars" id="bars"></div></div>
+      <div><h3>这段买的装备 / 关键节点（中位时间，分钟）</h3><div class="items" id="items"></div></div>
+      <div class="legend" id="legend">
+        <span><img data-icon="hero_le" alt="">拉席克最常待的位置（大头像 = 第一，小头像 = 第二三）</span>
+        <span><img data-icon="hero_io" alt="">艾欧最常待的位置</span>
+        <span><i style="background:var(--lesh);opacity:.8;border-radius:2px"></i>拉席克热区</span>
+        <span><img class="sq" data-icon="wisp_relocate" alt="">降临后击杀最集中的地方</span>
+        <span><i style="background:var(--kill);border-radius:50%"></i>两人参与的击杀</span>
+        <span><i style="border:2px solid var(--lesh);border-radius:50%"></i>降临后 25 秒内的击杀</span>
+        <span><img class="sq" data-icon="leshrac_diabolic_edict" alt="">拉席克主推（占推塔伤害 ≥ 60%）</span>
+        <span><i style="background:var(--enemy);transform:rotate(45deg);width:8px;height:8px"></i>两人阵亡</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="timeline"><h3>时间轴（0~45 分钟，竖线 = 当前阶段）</h3><svg id="tl" viewBox="0 0 1000 256" aria-label="时间轴：装备、等级、降临、倒塔的中位时间"></svg></div>
+
+  <p class="note">数据来自 STRATZ 已解析对局。位置每 15 秒采样一次；建筑位置是按倒塔那一刻推塔英雄的站位估出来的，会比真实塔位偏向进攻方；示意底图里的河道和基地是示意，野点和莲花池用的是游戏文件里的坐标；换成自己的游戏截图后，塔位以截图为准。塔旁的百分比 = 这一阶段结束时，所选对局里这座建筑已经倒了的比例。热区按每局平均停留时间着色，越亮待得越久。装备时间取全部 177 局的中位数。</p>
+</div>
+
+<script>
+const D = /*DATA*/null;
+const IC = /*ICONS*/null;
+const DEFAULT_SHOT = /*MINIMAP*/null;     // build_page.py --minimap 嵌进来的默认底图（自己截的小地图）
+const N = D.n;
+const PH = D.phases;
+const PHASE_INFO = [
+  { name: "对线", story: [
+    "两人一起在优势路对线，约 80% 的时间贴在一起。",
+    "线上一直在打架，前 10 分钟两人各死约 1.5 次，大多死在优势路线上。",
+    "拉席克补刀比一般 1 号位多（5 分钟 23 刀，一般是 17 刀）；奥术鞋之前基本不推塔。"] },
+  { name: "6 级前后，开始离线", story: [
+    "大部分时间还在线上，开始去河道和对面靠我们优势路的那片野区。",
+    "拉席克 8.7 分钟、艾欧 9.3 分钟到 6 级，10.8 分钟第一次降临。",
+    "奥术鞋到手后就边打边推；对面全图第一座塔约 11 分钟倒。"] },
+  { name: "慧光到手，推掉优势路一塔", story: [
+    "11.3 分钟慧光到手，推塔伤害一下翻倍。",
+    "优势路上对面那座一塔中位 14.4 分钟倒，86% 的局里拉席克是打它最狠的人。",
+    "开始刷自家主野区，看到机会就降临去中路或劣势路。"] },
+  { name: "组合最强的一段", story: [
+    "降临最频繁，这段降临后 25 秒内我方有击杀的比例最高（72%）。",
+    "击杀最常发生在中路；对面三座一塔基本都倒了。",
+    "我方的中路和优势路一塔也常在这时丢：两人离线了，这段本质是换塔。"] },
+  { name: "全图打架，推二塔", story: [
+    "在哪都有：中路、劣势路、对面野区，开始摸到对面高地。",
+    "纷争面纱 21 分钟、黑皇杖 25 分钟；赢的局黑皇杖 23.8 分钟就到手。",
+    "赢的局对面二塔 25~26 分钟倒；输的局反过来是我方二塔先倒。"] },
+  { name: "拔完二塔，准备上高地", story: [
+    "三条路的二塔主要是拉席克推的（占我方英雄推塔伤害约 65%）。",
+    "血精石 26.5 分钟、希瓦的守护 28.3 分钟。",
+    "降临的收益开始下降，一次降临换来的击杀和阵亡差不多。"] },
+  { name: "上高地结束比赛", story: [
+    "最先、也最常推的是中路高地塔，82% 的局里拉席克是伤害最高的。",
+    "赢的局高地和兵营约 30~31 分钟倒，基地中位 33.9 分钟倒。",
+    "输的局这时轮到我方高地失守。"] },
+  { name: "拖下去越来越难打", story: [
+    "降临后有击杀的比例掉到 4 成左右，阵亡反而比击杀多。",
+    "拉席克死在自家基地的比例变高，多半是在守家。",
+    "45 分钟以上的局胜率只剩 46%。"] },
+];
+const STORY_ICONS = [["arcane_boots", "wisp_tether", "ring_of_basilius"], ["wisp_tether", "leshrac_pulse_nova", "leshrac_diabolic_edict"], ["kaya", "leshrac_diabolic_edict", "wisp_relocate"], ["wisp_relocate", "hero_le", "hero_io"], ["smoke_of_deceit", "black_king_bar", "leshrac_diabolic_edict"], ["leshrac_diabolic_edict", "bloodstone", "wisp_relocate"], ["leshrac_pulse_nova", "shivas_guard", "hero_io"], ["wisp_relocate", "hero_le", "ultimate_scepter"]];
+const EVENTS = [
+  { who: "le", t: 3.3, n: "王者之戒", i: "ring_of_basilius" }, { who: "le", t: 6.0, n: "奥术鞋", i: "arcane_boots" }, { who: "le", t: 8.7, n: "6 级（脉冲新星）", i: "leshrac_pulse_nova" },
+  { who: "le", t: 11.3, n: "慧光", i: "kaya" }, { who: "le", t: 14.2, n: "慧夜对剑", i: "yasha_and_kaya" }, { who: "le", t: 14.4, n: "梅肯斯姆", i: "mekansm" },
+  { who: "le", t: 17.2, n: "卫士胫甲", i: "guardian_greaves" }, { who: "le", t: 17.4, n: "散慧对剑", i: "kaya_and_sange" }, { who: "le", t: 21.3, n: "纷争面纱", i: "veil_of_discord" },
+  { who: "le", t: 25.0, n: "黑皇杖", i: "black_king_bar" }, { who: "le", t: 26.5, n: "血精石", i: "bloodstone" }, { who: "le", t: 28.3, n: "希瓦的守护", i: "shivas_guard" },
+  { who: "le", t: 32.6, n: "阿哈利姆神杖", i: "ultimate_scepter" },
+  { who: "io", t: 6.2, n: "魔杖", i: "magic_wand" }, { who: "io", t: 7.6, n: "灵魂之戒", i: "soul_ring" }, { who: "io", t: 9.3, n: "6 级（降临）", i: "wisp_relocate" },
+  { who: "io", t: 10.8, n: "第一次降临", i: "wisp_relocate" }, { who: "io", t: 18.0, n: "圣洁吊坠", i: "holy_locket" }, { who: "io", t: 19.2, n: "诡计之雾", i: "smoke_of_deceit" },
+  { who: "io", t: 27.0, n: "微光披风", i: "glimmer_cape" },
+];
+const REGION_ORDER = ["优势路", "己方主野区", "中路", "河道", "劣势路", "己方劣势野区", "敌方主野区", "敌方劣势野区", "敌方高地", "己方基地"];
+const REGION_LABEL = { "己方主野区": "自家优势路野区", "己方劣势野区": "自家劣势路野区", "敌方主野区": "对面优势路野区", "敌方劣势野区": "对面靠我们优势路的野区", "敌方高地": "对面高地", "己方基地": "自家基地" };
+const BNAME = (k) => {
+  const own = k.startsWith("own_"); const r = k.replace(/^(own|enemy)_/, "");
+  const lane = r.includes("_bot") ? "优势路" : r.includes("_top") ? "劣势路" : r.includes("_mid") ? "中路" : "";
+  const kind = r.startsWith("tower1") ? "一塔" : r.startsWith("tower2") ? "二塔" : r.startsWith("tower3") ? "高地塔" : r.startsWith("tower4") ? "基地塔" : r.startsWith("melee") ? "近战兵营" : r.startsWith("range") ? "远程兵营" : "基地";
+  return (own ? "我方" : "对面") + (lane ? (own ? lane : "（在我们" + lane + "上的）") : "") + kind;
+};
+
+const state = { phase: 2, subset: "all", bg: "drawn", layers: { le: true, io: false, kills: true, deaths: false } };
+try { const s = JSON.parse(localStorage.getItem("ioLeshMap") || "null"); if (s) Object.assign(state, s, { layers: Object.assign(state.layers, s.layers || {}) }); } catch (e) {}
+const save = () => { try { localStorage.setItem("ioLeshMap", JSON.stringify(state)); } catch (e) {} };
+
+const SVGNS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const X = (u) => u * 1000, Y = (v) => (1 - v) * 1000;
+const B = D.bld;
+const P = (k) => B[k] ? [X(B[k][0]), Y(B[k][1])] : null;
+const subsetMatches = () => D.matches.filter((m) => state.subset === "all" || (state.subset === "win" ? m.w : !m.w));
+const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); const h = s.length >> 1; return s.length % 2 ? s[h] : (s[h - 1] + s[h]) / 2; };
+
+// ---------- 静态底图 ----------
+const svg = document.getElementById("map");
+const gShot = el("g", {}, svg);
+const shotImg = el("image", { x: 0, y: 0, width: 1000, height: 1000, preserveAspectRatio: "none" }, gShot);
+el("rect", { x: 0, y: 0, width: 1000, height: 1000, fill: "var(--bg)", opacity: .28 }, gShot);   // 压暗一点，标记看得清
+const gTerrain = el("g", {}, svg);
+function drawBase() {
+  const gT = gTerrain;
+  el("rect", { x: 0, y: 0, width: 1000, height: 1000, fill: "var(--map)" }, gT);
+  // 我方 / 对面半场的微弱底色
+  el("path", { d: "M0,1000 L0,0 L1000,1000 Z", fill: "var(--map-2)", opacity: .35 }, gT);
+  // 河道（示意：穿过三路两座一塔中间）
+  const river = [[0, 0.76], [0.2, 0.72], [0.36, 0.6], [0.51, 0.495], [0.66, 0.4], [0.8, 0.285], [1, 0.22]];
+  el("path", { d: "M" + river.map(([u, v]) => X(u) + "," + Y(v)).join(" L"), fill: "none", stroke: "var(--river)", "stroke-width": 46, "stroke-linejoin": "round", "stroke-linecap": "round" }, gT);
+  // 三路：按估出来的塔位连线
+  const lanes = [
+    ["own_tower4", "own_tower3_bot", "own_tower2_bot", "own_tower1_bot", "@0.84,0.2", "enemy_tower1_bot", "enemy_tower2_bot", "enemy_tower3_bot", "enemy_tower4"],
+    ["own_tower4", "own_tower3_mid", "own_tower2_mid", "own_tower1_mid", "enemy_tower1_mid", "enemy_tower2_mid", "enemy_tower3_mid", "enemy_tower4"],
+    ["own_tower4", "own_tower3_top", "own_tower2_top", "own_tower1_top", "@0.17,0.8", "enemy_tower1_top", "enemy_tower2_top", "enemy_tower3_top", "enemy_tower4"],
+  ];
+  for (const l of lanes) {
+    const pts = l.map((k) => k.startsWith("@") ? k.slice(1).split(",").map(Number).map((x, i) => i ? Y(x) : X(x)) : P(k)).filter(Boolean);
+    el("path", { d: "M" + pts.map((p) => p.join(",")).join(" L"), fill: "none", stroke: "var(--lane)", "stroke-width": 16, "stroke-linejoin": "round", "stroke-linecap": "round", opacity: .8 }, gT);
+  }
+  // 基地
+  el("rect", { x: X(0.05), y: Y(0.33), width: X(0.28), height: X(0.28), rx: 30, fill: "var(--own)", opacity: .12 }, gT);
+  el("rect", { x: X(0.67), y: Y(0.95), width: X(0.28), height: X(0.28), rx: 30, fill: "var(--enemy)", opacity: .12 }, gT);
+  // 野点（游戏文件里的坐标）
+  for (const [good, kind, u, v] of D.camps) {
+    el("circle", { cx: X(u), cy: Y(v), r: 4 + kind * 1.5, fill: "none", stroke: good ? "var(--own)" : "var(--enemy)", "stroke-width": 1.5, opacity: .45 }, gT);
+  }
+  // 莲花池（游戏文件里的坐标）
+  for (const [x, y] of [[-7548, 4209], [7504, -4405]]) {
+    el("circle", { cx: X((x + 9472) / 18944), cy: Y((y + 9472) / 18944), r: 7, fill: "var(--lotus)", opacity: .7 }, gT);
+  }
+  const lab = (t, u, v, anchor = "middle") => { const e = el("text", { x: X(u), y: Y(v), fill: "var(--ink-3)", "font-size": 22, "text-anchor": anchor, "font-family": "var(--f-body)" }, gT); e.textContent = t; };
+  lab("我方基地", 0.19, 0.03); lab("对面基地", 0.81, 0.965);
+  lab("优势路", 0.62, 0.12); lab("优势路", 0.93, 0.47);
+  lab("劣势路", 0.06, 0.56); lab("劣势路", 0.4, 0.9);
+}
+drawBase();
+const gHeat = el("g", { class: "heat" }, svg);
+const gDots = el("g", { class: "dots" }, svg);
+const gBld = el("g", {}, svg);
+const gMark = el("g", {}, svg);
+const defs = el("defs", {}, svg);
+const clip = el("clipPath", { id: "round", clipPathUnits: "objectBoundingBox" }, defs);
+el("circle", { cx: .5, cy: .5, r: .5 }, clip);
+const clipSq = el("clipPath", { id: "sq", clipPathUnits: "objectBoundingBox" }, defs);
+el("rect", { x: 0, y: 0, width: 1, height: 1, rx: .16 }, clipSq);
+function img(parent, key, x, y, w, h, round) {
+  const a = { href: IC[key], x, y, width: w, height: h, preserveAspectRatio: "xMidYMid slice" };
+  if (round) a["clip-path"] = round === "sq" ? "url(#sq)" : "url(#round)";
+  return el("image", a, parent);
+}
+// 在 40×40 的格子里找「最常待的几个地方」：3×3 邻域求和后取峰值，峰之间至少隔 minGap 格
+function peaks(grid, G, k = 3, minGap = 6, minRatio = .4) {
+  const sm = grid.map((_, i) => { const x = i % G, y = Math.floor(i / G); let s = 0;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < G && yy < G) s += grid[yy * G + xx]; } return s; });
+  const total = grid.reduce((a, b) => a + b, 0) || 1;
+  const order = sm.map((v, i) => [v, i]).sort((a, b) => b[0] - a[0]);
+  const out = [];
+  for (const [v, i] of order) {
+    if (!v || out.length >= k || (out.length && v < out[0][0] * minRatio)) break;
+    const x = i % G, y = Math.floor(i / G);
+    if (out.some(([, j]) => Math.max(Math.abs(j % G - x), Math.abs(Math.floor(j / G) - y)) < minGap)) continue;
+    out.push([v, i]);
+  }
+  return out.map(([v, i]) => ({ share: v / total, u: (i % G + .5) / G, w: (Math.floor(i / G) + .5) / G }));
+}
+function heroMark(who, color) {
+  peaks(D.heat[state.subset][who][state.phase], D.grid).forEach((pk, n) => {
+    const r = n ? 17 : 26, x = X(pk.u), y = Y(pk.w);
+    const g = el("g", { opacity: n ? .85 : 1 }, gMark);
+    el("circle", { cx: x, cy: y, r: r + 3, fill: "var(--bg)", stroke: color, "stroke-width": n ? 2.5 : 4 }, g);
+    img(g, who === "le" ? "hero_le" : "hero_io", x - r, y - r, r * 2, r * 2, true);
+    const name = who === "le" ? "拉席克" : "艾欧";
+    g.addEventListener("pointermove", (e) => showTip(e, `<b>${name}</b>这段时间第 ${n + 1} 常待的位置<br>附近（约 1100 码见方）停留时间占这段的 <span class="m">${Math.round(pk.share * 100)}%</span>`));
+    g.addEventListener("pointerleave", () => { tip.hidden = true; });
+  });
+}
+function relocateMark(lo, hi, keep) {
+  const G = D.grid, grid = new Array(G * G).fill(0);
+  let n = 0;
+  for (const [t, u, v, inv, , w, ar] of D.kills) {
+    if (t < lo * 60 || t >= hi * 60 || !keep(w) || !ar) continue;
+    grid[Math.min(G - 1, Math.floor(v * G)) * G + Math.min(G - 1, Math.floor(u * G))]++; n++;
+  }
+  if (n < 15) return;
+  peaks(grid, G, 2, 7, .5).forEach((pk) => {
+    const s = 34, x = X(pk.u), y = Y(pk.w);
+    const g = el("g", {}, gMark);
+    el("rect", { x: x - s / 2 - 3, y: y - s / 2 - 3, width: s + 6, height: s + 6, rx: 7, fill: "var(--bg)", stroke: "var(--lesh)", "stroke-width": 2.5 }, g);
+    img(g, "wisp_relocate", x - s / 2, y - s / 2, s, s, "sq");
+    g.addEventListener("pointermove", (e) => showTip(e, `<b>降临后的击杀最集中的地方</b><br>这段降临后 25 秒内的击杀，约 <span class="m">${Math.round(pk.share * 100)}%</span> 发生在这附近`));
+    g.addEventListener("pointerleave", () => { tip.hidden = true; });
+  });
+}
+
+// ---------- 动态图层 ----------
+function heatLayer(who, color) {
+  const grid = D.heat[state.subset][who][state.phase];
+  const G = D.grid, cell = 1000 / G;
+  const nGames = subsetMatches().length || 1;
+  const per = grid.map((c) => c / nGames);
+  const max = Math.max(...per) || 1;
+  per.forEach((c, i) => {
+    if (c <= 0) return;
+    const a = Math.pow(c / max, 0.55);
+    if (a < 0.06) return;
+    const gx = i % G, gy = Math.floor(i / G);
+    el("rect", { x: gx * cell + 1, y: 1000 - (gy + 1) * cell + 1, width: cell - 2, height: cell - 2, rx: 3, fill: color, opacity: (a * 0.78).toFixed(3) }, gHeat);
+  });
+}
+function draw() {
+  gHeat.replaceChildren(); gDots.replaceChildren(); gBld.replaceChildren(); gMark.replaceChildren();
+  const [lo, hi] = PH[state.phase];
+  if (state.layers.io) heatLayer("io", "var(--io)");
+  if (state.layers.le) heatLayer("le", "var(--lesh)");
+  const keep = (w) => state.subset === "all" || (state.subset === "win" ? w : !w);
+  if (state.layers.kills) {
+    for (const [t, u, v, inv, smoke, w, ar] of D.kills) {
+      if (t < lo * 60 || t >= hi * 60 || !keep(w) || !inv) continue;
+      el("circle", { cx: X(u), cy: Y(v), r: ar ? 5 : 3, fill: ar ? "none" : "var(--kill)", stroke: ar ? "var(--lesh)" : "none", "stroke-width": ar ? 2 : 0, opacity: ar ? .8 : .45 }, gDots);
+    }
+  }
+  if (state.layers.deaths) {
+    for (const [t, u, v, h, w] of D.deaths) {
+      if (t < lo * 60 || t >= hi * 60 || !keep(w)) continue;
+      const x = X(u), y = Y(v);
+      el("rect", { x: x - 4, y: y - 4, width: 8, height: 8, transform: `rotate(45 ${x} ${y})`, fill: "var(--enemy)", opacity: .7 }, gDots);
+    }
+  }
+  drawBuildings(hi);
+  if (state.layers.kills) relocateMark(lo, hi, keep);
+  if (state.layers.io) heroMark("io", "var(--io)");
+  if (state.layers.le) heroMark("le", "var(--lesh)");
+  renderSide();
+  drawTimelineCursor();
+}
+function bldStats(k, tEnd) {
+  const ms = subsetMatches();
+  const fell = ms.filter((m) => m.f[k] != null && m.f[k] < tEnd * 60).length;
+  const times = ms.map((m) => m.f[k]).filter((x) => x != null).map((x) => x / 60);
+  let le = 0, io = 0, tot = 0, top = 0, ns = 0;
+  for (const m of ms) { const s = m.s[k]; if (!s) continue; le += s[0]; io += s[1]; tot += s[2]; top += s[3]; ns++; }
+  return { p: fell / (ms.length || 1), med: median(times), ever: times.length / (ms.length || 1), le: tot ? le / tot : null, io: tot ? io / tot : null, top: ns ? top / ns : null };
+}
+const tip = document.getElementById("tip");
+function showTip(ev, html) {
+  tip.innerHTML = html; tip.hidden = false;
+  const box = document.getElementById("mapbox").getBoundingClientRect();
+  let x = ev.clientX - box.left + 14, y = ev.clientY - box.top + 14;
+  if (x + 250 > box.width) x = ev.clientX - box.left - 250;
+  if (y + 150 > box.height) y = ev.clientY - box.top - 150;
+  tip.style.left = Math.max(0, x) + "px"; tip.style.top = Math.max(0, y) + "px";
+}
+function drawBuildings(tEnd) {
+  const keys = Object.keys(B).filter((k) => !k.includes("range_rax"));     // 远程兵营和近战兵营几乎同一个位置，只画一个
+  for (const k of keys) {
+    const [x, y] = P(k); const own = k.startsWith("own_");
+    const st = bldStats(k, tEnd);
+    const big = k.includes("fort") ? 15 : k.includes("tower4") ? 10 : k.includes("rax") ? 8 : 11;
+    const color = own ? "var(--own)" : "var(--enemy)";
+    const g = el("g", { tabindex: 0, role: "img", "aria-label": BNAME(k) }, gBld);
+    // 底：塔还在时实心；倒塌比例用灰色扇形盖上
+    el("rect", { x: x - big, y: y - big, width: big * 2, height: big * 2, rx: 3, fill: color, stroke: "var(--bg)", "stroke-width": 2 }, g);
+    if (st.p > 0) {
+      const h = big * 2 * st.p;
+      el("rect", { x: x - big, y: y + big - h, width: big * 2, height: h, rx: 2, fill: "var(--fallen)", opacity: .92 }, g);
+    }
+    if (st.p >= 0.05 && !k.includes("rax")) {
+      const t = el("text", { x: x + big + 5, y: y + 7, fill: "var(--ink)", "font-size": 19, "font-family": "var(--f-mono)", "font-weight": 600, "paint-order": "stroke", stroke: "var(--bg)", "stroke-width": 4 }, g);
+      t.textContent = Math.round(st.p * 100) + "%";
+    }
+    if (!own && st.le != null && st.le >= 0.6 && st.p >= 0.05) {
+      el("rect", { x: x - big - 15, y: y - big - 15, width: 20, height: 20, rx: 4, fill: "var(--bg)" }, g);
+      img(g, "leshrac_diabolic_edict", x - big - 14, y - big - 14, 18, 18, "sq");
+    }
+    el("rect", { x: x - big - 10, y: y - big - 10, width: big * 2 + 20, height: big * 2 + 20, fill: "transparent" }, g);
+    const html = () => {
+      let s = `<b>${BNAME(k)}</b><br>这段结束时已倒：<span class="m">${Math.round(st.p * 100)}%</span><br>`;
+      s += `整局倒掉的比例：<span class="m">${Math.round(st.ever * 100)}%</span>`;
+      if (st.med != null) s += `，中位 <span class="m">${st.med.toFixed(1)}</span> 分钟`;
+      if (!own && st.le != null) s += `<br>我方英雄推它的伤害：拉席克 <span class="m">${Math.round(st.le * 100)}%</span>，艾欧 <span class="m">${Math.round(st.io * 100)}%</span><br>拉席克伤害最高的局：<span class="m">${Math.round(st.top * 100)}%</span>`;
+      return s;
+    };
+    g.addEventListener("pointermove", (e) => showTip(e, html()));
+    g.addEventListener("pointerleave", () => { tip.hidden = true; });
+    g.addEventListener("focus", () => { const r = g.getBoundingClientRect(); showTip({ clientX: r.right, clientY: r.top }, html()); });
+    g.addEventListener("blur", () => { tip.hidden = true; });
+  }
+}
+
+// ---------- 右侧 ----------
+function renderSide() {
+  const [lo, hi] = PH[state.phase]; const info = PHASE_INFO[state.phase];
+  document.getElementById("phTime").textContent = hi === 45 ? `${lo} 分钟以后` : `${lo}–${hi} 分钟`;
+  document.getElementById("phName").textContent = info.name;
+  document.getElementById("story").replaceChildren(...info.story.map((s, i) => {
+    const li = document.createElement("li"); const im = document.createElement("img");
+    im.src = IC[STORY_ICONS[state.phase][i]]; im.alt = ""; const sp = document.createElement("span"); sp.textContent = s;
+    li.append(im, sp); return li; }));
+  const ms = subsetMatches(); const n = ms.length || 1;
+  const keep = (w) => state.subset === "all" || (state.subset === "win" ? w : !w);
+  const ks = D.kills.filter((k) => k[0] >= lo * 60 && k[0] < hi * 60 && keep(k[5]));
+  const inv = ks.filter((k) => k[3]).length;
+  const leDeaths = D.deaths.filter((d) => d[0] >= lo * 60 && d[0] < hi * 60 && keep(d[4]) && d[3] === 0).length;
+  const rel = ms.reduce((a, m) => a + m.r.filter((t) => t >= lo && t < hi).length, 0);
+  const alive = ms.filter((m) => m.d > lo).length || 1;
+  const stats = [
+    [(ks.length / alive).toFixed(1), "我方击杀 / 局"],
+    [ks.length ? Math.round(inv / ks.length * 100) + "%" : "–", "拉席克或艾欧参与"],
+    [(rel / alive).toFixed(2), "降临次数 / 局"],
+    [(leDeaths / alive).toFixed(2), "拉席克阵亡 / 局"],
+    [Math.round(D.together[state.phase] * 100) + "%", "两人贴在一起的时间"],
+    [Math.round(alive / n * 100) + "%", "打到这段的对局"],
+  ];
+  document.getElementById("stats").replaceChildren(...stats.map(([v, k]) => { const d = document.createElement("div"); d.className = "stat"; d.innerHTML = `<span class="v">${v}</span><span class="k">${k}</span>`; return d; }));
+  const reg = D.regions[state.subset][state.phase];
+  const rows = REGION_ORDER.map((r) => [r, reg[r] || 0]).filter(([, p]) => p >= 0.03).sort((a, b) => b[1] - a[1]);
+  const max = rows.length ? rows[0][1] : 1;
+  document.getElementById("bars").replaceChildren(...rows.map(([r, p]) => {
+    const d = document.createElement("div"); d.className = "bar";
+    d.innerHTML = `<span>${REGION_LABEL[r] || r}</span><span class="track"><span class="fill" style="display:block;width:${(p / max * 100).toFixed(1)}%"></span></span><span class="p">${Math.round(p * 100)}%</span>`;
+    return d;
+  }));
+  const evs = EVENTS.filter((e) => e.t >= lo && e.t < hi).sort((a, b) => a.t - b.t);
+  const items = document.getElementById("items");
+  items.replaceChildren(...(evs.length ? evs : [{ who: "", t: null, n: "这段没有新的大件" }]).map((e) => {
+    const s = document.createElement("span"); s.className = "item " + e.who;
+    s.innerHTML = (e.i ? `<img src="${IC[e.i]}" alt="">` : "") + (e.t != null ? `<span class="m">${e.t.toFixed(1)}</span>` : "") + (e.who === "le" ? "拉席克 " : e.who === "io" ? "艾欧 " : "") + e.n;
+    return s;
+  }));
+}
+
+// ---------- 时间轴 ----------
+const tl = document.getElementById("tl");
+const TX = (t) => 78 + t / 45 * 900;
+let cursor;
+function drawTimeline() {
+  for (let t = 0; t <= 45; t += 5) {
+    el("line", { x1: TX(t), x2: TX(t), y1: 6, y2: 228, stroke: "var(--line)", "stroke-width": 1 }, tl);
+    const tx = el("text", { x: TX(t), y: 248, fill: "var(--ink-3)", "font-size": 12, "text-anchor": "middle", "font-family": "var(--f-mono)" }, tl); tx.textContent = t;
+  }
+  PH.forEach(([lo, hi], i) => {
+    const r = el("rect", { x: TX(lo), y: 6, width: TX(hi) - TX(lo), height: 222, fill: "transparent", class: "tl-hit", tabindex: 0, style: "cursor:pointer" }, tl);
+    r.addEventListener("click", () => setPhase(i));
+    r.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setPhase(i); } });
+  });
+  cursor = el("rect", { x: 0, y: 6, width: 0, height: 222, fill: "var(--accent)", opacity: .08, "pointer-events": "none" }, tl);
+  const base = { le: 12, io: 106 }, STEP = 44;
+  const head = (who, y, c) => {
+    el("circle", { cx: 18, cy: y + 30, r: 16, fill: "var(--bg)", stroke: c, "stroke-width": 2.5 }, tl);
+    img(tl, who === "le" ? "hero_le" : "hero_io", 4, y + 16, 28, 28, true);
+  };
+  head("le", base.le, "var(--lesh)"); head("io", base.io, "var(--io)");
+  const used = { le: [], io: [] };
+  [...EVENTS].sort((a, b) => a.t - b.t).forEach((e) => {
+    const x = TX(e.t); const arr = used[e.who];
+    let lvl = 0; while (arr.some(([px, l]) => l === lvl && Math.abs(px - x) < 38)) lvl++;
+    arr.push([x, lvl]);
+    const y = base[e.who] + lvl * STEP;
+    const isAbility = /^(wisp|leshrac)_/.test(e.i);
+    const w = isAbility ? 24 : 33, h = 24;
+    const g = el("g", {}, tl);
+    el("rect", { x: x - w / 2 - 1.5, y: y - 1.5, width: w + 3, height: h + 3, rx: 4, fill: e.who === "le" ? "var(--lesh)" : "var(--io)", opacity: .9 }, g);
+    img(g, e.i, x - w / 2, y, w, h, "sq");
+    const t = el("text", { x, y: y + h + 13, fill: "var(--ink-2)", "font-size": 11, "text-anchor": "middle", "font-family": "var(--f-mono)" }, g); t.textContent = e.t.toFixed(1);
+    el("title", {}, g).textContent = (e.who === "le" ? "拉席克 " : "艾欧 ") + e.n + "，中位 " + e.t.toFixed(1) + " 分钟";
+  });
+  // 对面建筑：赢的局中位倒塌时间
+  const wins = D.matches.filter((m) => m.w);
+  const lab = el("text", { x: 0, y: 214, fill: "var(--enemy)", "font-size": 12.5, "font-family": "var(--f-body)" }, tl); lab.textContent = "对面倒塔";
+  [["enemy_tower1", "一塔"], ["enemy_tower2", "二塔"], ["enemy_tower3", "高地塔"], ["enemy_fort", "基地"]].forEach(([pre, name], k) => {
+    const ts = wins.flatMap((m) => Object.entries(m.f).filter(([k]) => k.startsWith(pre)).map(([, t]) => t / 60));
+    const md = median(ts); if (md == null) return;
+    const x = TX(md);
+    const dy = k === 3 ? 14 : 0;     // 基地和高地塔挨得近，错开一行
+    el("rect", { x: x - 6, y: 197 + dy, width: 12, height: 12, rx: 2, fill: "var(--enemy)", "pointer-events": "none" }, tl);
+    const t = el("text", { x: x + 10, y: 208 + dy, fill: "var(--ink-2)", "font-size": 11.5, "pointer-events": "none", "font-family": "var(--f-body)" }, tl); t.textContent = name + " " + md.toFixed(1);
+  });
+  const t = el("text", { x: 990, y: 214, fill: "var(--ink-3)", "font-size": 11, "text-anchor": "end", "font-family": "var(--f-body)" }, tl); t.textContent = "（赢的局中位）";
+}
+function drawTimelineCursor() { const [lo, hi] = PH[state.phase]; cursor.setAttribute("x", TX(lo)); cursor.setAttribute("width", TX(hi) - TX(lo)); }
+
+// ---------- 控件 ----------
+function chip(parent, label, pressed, onClick, sw) {
+  const b = document.createElement("button"); b.className = "chip"; b.type = "button";
+  b.innerHTML = (sw && sw.startsWith("img:") ? `<img src="${IC[sw.slice(4)]}" alt="">` : sw ? `<span class="sw" style="background:${sw}"></span>` : "") + label;
+  b.setAttribute("aria-pressed", pressed ? "true" : "false"); b.addEventListener("click", onClick); parent.appendChild(b); return b;
+}
+const phaseBtns = [], subsetBtns = [], layerBtns = {};
+PH.forEach(([lo, hi], i) => phaseBtns.push(chip(document.getElementById("phaseBtns"), hi === 45 ? `${lo}+` : `${lo}–${hi}`, i === state.phase, () => setPhase(i))));
+[["all", "全部"], ["win", "赢的局"], ["loss", "输的局"]].forEach(([k, l]) => subsetBtns.push([k, chip(document.getElementById("subsetBtns"), l, state.subset === k, () => { state.subset = k; sync(); })]));
+[["le", "拉席克", "img:hero_le"], ["io", "艾欧", "img:hero_io"], ["kills", "两人参与的击杀", "var(--kill)"], ["deaths", "两人阵亡", "var(--enemy)"]].forEach(([k, l, c]) => layerBtns[k] = chip(document.getElementById("layerBtns"), l, state.layers[k], () => { state.layers[k] = !state.layers[k]; sync(); }, c));
+// 底图：示意底图 / 玩家自己导入的游戏截图（只在本机浏览器里裁切、保存）
+let shotSrc = null, shotURL = null;
+const bgBtns = [];
+[["drawn", "示意底图"], ["shot", "我的截图"]].forEach(([k, l]) => bgBtns.push([k, chip(document.getElementById("bgBtns"), l, state.bg === k, () => {
+  if (k === "shot" && !shotURL) { document.getElementById("shotHelp").open = true; document.getElementById("shotFile").click(); return; }
+  state.bg = k; sync(); })]));
+document.getElementById("bgBtns").appendChild(document.querySelector("#bgBtns label.filechip"));
+function cropShot() {
+  if (!shotSrc) return;
+  const w = shotSrc.naturalWidth, h = shotSrc.naturalHeight;
+  let sx = 0, sy = 0, ss = Math.min(w, h);
+  if (Math.abs(w / h - 1) > 0.1) {          // 整屏截图：按 1080 高的设置等比换算
+    const k = h / 1080;
+    sx = Number(document.getElementById("cropX").value) * k; sy = Number(document.getElementById("cropY").value) * k; ss = Number(document.getElementById("cropS").value) * k;
+  }
+  const c = document.createElement("canvas"); c.width = c.height = 800;
+  const ctx = c.getContext("2d"); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 800, 800);
+  const f = 800 / ss;
+  ctx.drawImage(shotSrc, -sx * f, -sy * f, w * f, h * f);
+  shotURL = c.toDataURL("image/jpeg", 0.9);
+  shotImg.setAttribute("href", shotURL);
+  try { localStorage.setItem("ioLeshMapShot", shotURL); } catch (e) {}
+  state.bg = "shot"; sync();
+}
+function loadShot(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const r = new FileReader();
+  r.onload = () => { const im = new Image(); im.onload = () => { shotSrc = im; cropShot(); }; im.src = r.result; };
+  r.readAsDataURL(file);
+}
+document.getElementById("shotLabel").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); document.getElementById("shotFile").click(); } });
+document.getElementById("shotFile").addEventListener("change", (e) => loadShot(e.target.files[0]));
+document.addEventListener("paste", (e) => { const it = [...(e.clipboardData?.items || [])].find((x) => x.type.startsWith("image/")); if (it) loadShot(it.getAsFile()); });
+["cropX", "cropY", "cropS"].forEach((id) => document.getElementById(id).addEventListener("change", cropShot));
+try { const u = localStorage.getItem("ioLeshMapShot"); if (u) { shotURL = u; shotImg.setAttribute("href", u); } } catch (e) {}
+if (!shotURL && DEFAULT_SHOT) { shotURL = DEFAULT_SHOT; shotImg.setAttribute("href", DEFAULT_SHOT); state.bg = "shot"; }
+if (!shotURL) state.bg = "drawn";
+function setPhase(i) { state.phase = i; sync(); }
+function sync() {
+  phaseBtns.forEach((b, i) => b.setAttribute("aria-pressed", i === state.phase ? "true" : "false"));
+  subsetBtns.forEach(([k, b]) => b.setAttribute("aria-pressed", state.subset === k ? "true" : "false"));
+  for (const k in layerBtns) layerBtns[k].setAttribute("aria-pressed", state.layers[k] ? "true" : "false");
+  bgBtns.forEach(([k, b]) => b.setAttribute("aria-pressed", state.bg === k ? "true" : "false"));
+  const shot = state.bg === "shot" && shotURL;
+  gShot.style.display = shot ? "" : "none"; gTerrain.style.display = shot ? "none" : "";
+  save(); draw();
+}
+document.getElementById("nGames").textContent = N;
+document.getElementById("porIo").src = IC.por_io; document.getElementById("porLe").src = IC.por_le;
+document.querySelectorAll("#legend img[data-icon]").forEach((im) => { im.src = IC[im.dataset.icon]; });
+drawTimeline();
+sync();
+</script>
