@@ -73,9 +73,8 @@
 2. **下一局天梯，局内**：野区倒数位置和秒数、买活 / 大招小条、局内卡片确实不弹只记日志（[domain 局内](../dota_assistant/domain/NOTES-ingame.md)、[app/live](../dota_assistant/app/live/NOTES.md)）。
 3. **弄清「触发 VAC」那回事**，再决定游戏画面野点框开不开回来（[vision](../dota_assistant/vision/NOTES.md)）。
 4. **发版后**：开着旧版看会不会自己弹更新窗口（[app](../dota_assistant/app/NOTES.md)）；新打包版发给朋友，看 Dota 目录 / 阵营对不对（[core](../dota_assistant/core/NOTES.md)）；干净电脑上试免安装版（[packaging](../packaging/NOTES.md)）。
-5. **装了 Dota 的电脑上**：从游戏资源包找屯野 / 拉野的图标（按住 Alt 的野点标记 / 小地图野点图标），玩家要的（[domain 局内](../dota_assistant/domain/NOTES-ingame.md) 第 62 节）。
-6. **有 `D:\dota-golden` 的机器**上跑 `python tools/golden/run.py check`，确认第 41 / 43 / 45 / 50 节带来的快照差异都是该有的再更新。
-7. **远期**：队友预选识别（避免推荐撞车）；局内打法（需求③，做成事件提醒：肉山时间、对面核心没 BKB 等，不做持续解说）；可选：大模型生成一句话推荐理由（现在模板拼的已够用）。
+5. **有 `D:\dota-golden` 的机器**上跑 `python tools/golden/run.py check`，确认第 41 / 43 / 45 / 50 节带来的快照差异都是该有的再更新。
+6. **远期**：队友预选识别（避免推荐撞车）；局内打法（需求③，做成事件提醒：肉山时间、对面核心没 BKB 等，不做持续解说）；可选：大模型生成一句话推荐理由（现在模板拼的已够用）。
 
 ## 4. 关键设计决策（为什么这么做）
 
@@ -211,3 +210,4 @@
 | 60 | 组合研究：精灵老鹿（艾欧 + 拉席克） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 61 | 抢莲花回来：Dota 时钟下方倒数的第二行 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 62 | 野区倒数加游戏物品图标：封野放眼、莲花放治疗莲花 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
+| 63 | 屯野 / 拉野也有图标了：黄色野点、自家小兵 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |

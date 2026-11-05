@@ -781,3 +781,19 @@ Valve 没公开完整字段表，枚举可能落后于游戏，但没见到任�
 
 **验证**（2026-11-05）：单测 `test_jungle.TimelineTest.test_bar_icons`、`test_webui.CoachLiveTest.test_jungle_bar`（快照里的 `icon`）；全部单测、ruff、`check_isolation`、`browser_check` 六页 0 报错；
 无头 Edge 截了 `topbar.html?preview=1`（2:50「拉野 现在」+ 第二行治疗莲花图标「莲花 10」）和 `&clock=30` / `&clock=-55`（真眼图标「看拉野点 30」「看拉野点 1:55」），字和图都在框里。没进真游戏看。
+
+## 63. 屯野 / 拉野也有图标了：黄色野点、自家小兵（2026-11-05，`jungle.PULL_ICONS` + `web/img/jungle/`）
+
+玩家：另一台装了 Dota 的电脑开不了了，「你看下有没有什么网站可以找到素材吧」；看了候选后「你觉得什么好就怎么样吧」。
+
+**素材**：[Liquipedia Commons](https://liquipedia.net/commons/Category:Dota_2_other_minimap_icons) 上标「dota2 gameasset」的游戏原图（从游戏文件导出），用说明了用途的 User-Agent 走它的 MediaWiki API 查地址、下载。
+Dota 2 Wiki（Fandom）也有一套小地图图标，但它的图床挡命令行下载，没用。
+- 屯野：`Neutral Camp (small) mapicon`（小地图上小野的三角，32×32 白色），按亮度染成游戏小地图上的黄色 → `web/img/jungle/camp.png`
+- 拉野 / 拉大野：`Lane Creep (Radiant)` / `(Dire) icon`（近战小兵头像，128×72）→ `creep_radiant.png` / `creep_dire.png`，按这局阵营挑自家的（拉野就是把自家兵引过去）
+- 也看过：小地图小兵圆点（20 像素看不清）、大野 / 远古野点图标、莲花池小地图图标 / 头像（莲花还是治疗莲花最好认）
+
+图放进仓库（`web/img/`，三张共约 37 KB），打包版跟着 `web/` 一起带上，玩的时候不用联网。
+**做法**：`jungle.bar_icon` 改成给页面地址（`/items/famango.png`、`/img/jungle/camp.png` 这种），`Plan` 多了 `team`（`make(..., team=)`，`_make_jungle` 传 GSI 阵营；不知道阵营时拉野不放图标）；`topbar.html` 直接用这个地址。
+
+**验证**（2026-11-05）：单测 `test_jungle.TimelineTest.test_bar_icons`（含 `web/img` 里的文件确实在）、`test_webui.CoachLiveTest.test_jungle_bar`（天辉拉野是天辉小兵）；全部单测、ruff、`check_isolation`、`browser_check` 六页 0 报错；
+无头 Edge 截 `topbar.html?preview=1&clock=…`：2:50「[小兵] 拉野 现在」、2:52.5「[黄三角] 屯野 1」、2:25「[小兵] 拉大野 2」、-0:55「[真眼] 看拉野点 1:55」，图字都在框里。没进真游戏看。

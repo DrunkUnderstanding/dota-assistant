@@ -918,10 +918,11 @@ class CoachLiveTest(unittest.TestCase):
         bar = snap["jungle_bar"]
         self.assertTrue(bar["show"])
         self.assertIsInstance(bar["anchor"], int)
-        self.assertIn({"at": 60, "end": 65, "kind": "block", "word": "看拉野点", "icon": "ward_sentry"}, bar["events"])   # 五号位带真眼扫
+        self.assertIn({"at": 60, "end": 65, "kind": "block", "word": "看拉野点", "icon": "/items/ward_sentry.png"}, bar["events"])   # 五号位带真眼扫
         self.assertIn("屯野", {e["word"] for e in bar["events"]})
-        self.assertEqual(bar["lotus"][0], {"at": 180, "end": 185, "kind": "lotus", "word": "莲花", "icon": "famango"})   # 第二行
-        self.assertEqual({e["icon"] for e in bar["events"] if e["kind"] in ("pull", "stack")}, {""})   # 屯野 / 拉野还没图标
+        self.assertEqual(bar["lotus"][0], {"at": 180, "end": 185, "kind": "lotus", "word": "莲花", "icon": "/items/famango.png"})   # 第二行
+        self.assertEqual({e["icon"] for e in bar["events"] if e["kind"] == "stack"}, {"/img/jungle/camp.png"})
+        self.assertEqual({e["icon"] for e in bar["events"] if e["kind"] == "pull"}, {"/img/jungle/creep_radiant.png"})   # 天辉小兵
         self.assertNotIn("lotus", {e["kind"] for e in bar["events"]})
         self.push(2 + 20 / 60, alive=False)
         self.assertFalse(json.loads(self.live.current_snapshot)["jungle_bar"]["show"])

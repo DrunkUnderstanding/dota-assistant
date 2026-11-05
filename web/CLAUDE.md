@@ -15,7 +15,8 @@
 | `overlay.html` | 叠加层窗口（透明、置顶、穿透）：选人推荐卡片 / 本局要点 / 局内提醒 / 死亡复盘；脚本内联（`<script type="module">`）；`?preview=1` 在浏览器里垫一张像游戏的背景预览 |
 | `world.html` | 游戏画面里的野点框：盖满 Dota 那块屏，有框时每 20 毫秒拉 `/api/world`，SVG 描出刷新框（和按住 Alt 时 Dota 的黄框同一个）+ 框上边一块牌子写几秒；整个窗口点穿；`?preview=1&bg=图片` 塞假数据（HANDOFF 第 54 节） |
 | `minimap.html` | 小地图野点（config `minimap_marks`，默认关）：盖在 Dota 小地图上，野区提醒到点时在野点上画圈 + 一行字（倒数页面自己走）；整个窗口点穿；`?scale=&left=&top=` 是窗口在 1080 下的左上角，`?preview=1&bg=图片` 塞假数据（HANDOFF 第 53 节） |
-| `topbar.html` | 买活 / 大招计时条：盖在游戏顶栏，每个英雄头像下面一个买活小条、对面的再加一个大招小条（右键菜单改等级 / 勾减冷却）；Dota 时钟正下方一块野区倒数「拉野 7」（快照 `jungle_bar`，页面自己挑下一件，不接鼠标，HANDOFF 第 59 节），再下面一行抢莲花（`jungle_bar.lotus`，第 61 节）；封野 / 莲花字前面放 `/items/<icon>.png` 物品图标（第 62 节，`?preview=1&clock=-55` 看封野）；脚本内联；`?scale=` 按屏幕高度换算、`?preview=1` 塞假数据 |
+| `topbar.html` | 买活 / 大招计时条：盖在游戏顶栏，每个英雄头像下面一个买活小条、对面的再加一个大招小条（右键菜单改等级 / 勾减冷却）；Dota 时钟正下方一块野区倒数「拉野 7」（快照 `jungle_bar`，页面自己挑下一件，不接鼠标，HANDOFF 第 59 节），再下面一行抢莲花（`jungle_bar.lotus`，第 61 节）；字前面放 `jungle_bar` 给的图标地址（封野眼、莲花治疗莲花在 `/items/`，屯野 / 拉野在 `img/jungle/`，第 62、63 节；`?preview=1&clock=-55` 看封野）；脚本内联；`?scale=` 按屏幕高度换算、`?preview=1` 塞假数据 |
+| `img/jungle/` | 野区倒数的图标：`camp.png`（小地图小野野点，染成游戏里的黄色）、`creep_radiant.png` / `creep_dire.png`（近战小兵头像）；Liquipedia Commons 的游戏原图（dota2 gameasset），第 63 节 |
 | `panel.html` + `panel.js` + `panel.css` | 控制面板（普通窗口，关掉 = 退出助手）：10 个格子、位置 / 阵营 / 识别模式、叠加层设置、顶栏计时开关、设置窗口、右侧叠加层预览 |
 | `mates.html` + `mates.js` + `mates.css` | 队友战绩独立页（控制面板顶栏「队友战绩」`window.open` 开）：左边查过的人，右边简况 + 最近 20 局，点一局看整局；地址栏 `#p=好友代码[&m=比赛编号]` |
 | `view.js` | 叠加层内容的渲染（`renderOverlay` / `applyOverlayStyle` / `bindOverlayClicks` / `portrait` / `esc`），叠加层窗口和控制面板预览共用；装备图标片段（`★` 针对这局、`·` 之后常见、`✚` 按死法补，和 `domain/itembuild.py` 同一套记号） |

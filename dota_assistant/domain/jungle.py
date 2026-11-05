@@ -43,10 +43,13 @@ PULL_GROUP_GAP = 15          # 两次拉野隔不到这么多秒就合成一张�
 # 顶栏倒数（玩家 2026-11-04：打起来不看叠加层、不要声音、高频截图怕 VAC）：只靠游戏时钟，在 Dota 时钟正下方挂一小块「下一件事 + 几秒」
 BAR_WORDS = {"small": "拉野", "big": "拉大野", "off": "拉大野"}
 LABELS = {"block": "封野", "stack": "屯野", "pull": "拉野"}
-# 顶栏倒数前面的游戏物品图标（data/items，页面走 /items/<key>.png；玩家 2026-11-05：莲花、封野必须换上图标，屯野 / 拉野换台装了 Dota 的电脑再找）。
-# 封野：四号位插假眼封（侦查守卫），五号位看自家野点被封没、带真眼去扫（岗哨守卫）；莲花：治疗莲花（item_famango，回 125 血 125 蓝）
-BAR_ICONS = {"lotus": "famango"}
-BLOCK_ICONS = {4: "ward_observer", 5: "ward_sentry"}
+# 顶栏倒数字前面的游戏图标（页面上的地址；玩家 2026-11-05 要的，第 62、63 节）：
+# 封野：四号位插假眼封（侦查守卫），五号位看自家野点被封没、带真眼去扫（岗哨守卫）；莲花：治疗莲花（item_famango，回 125 血 125 蓝）——
+# 这三个是装备图标（data/items）。屯野：小地图上的小野野点图标，染成游戏里的黄色；拉野 / 拉大野：自家的近战小兵头像（天辉绿 / 夜魇红）——
+# 这三张是 Liquipedia Commons 上的游戏原图（「dota2 gameasset」），放在 web/img/jungle/
+BAR_ICONS = {"lotus": "/items/famango.png", "stack": "/img/jungle/camp.png"}
+BLOCK_ICONS = {4: "/items/ward_observer.png", 5: "/items/ward_sentry.png"}
+PULL_ICONS = {"radiant": "/img/jungle/creep_radiant.png", "dire": "/img/jungle/creep_dire.png"}
 PULL_ROLES = {"small": "拉野点（小野）", "big": "大野", "off": "对面大野"}
 
 
@@ -77,6 +80,7 @@ class Plan:
     pull_second: int = 15
     pulls: tuple[Pull, ...] = ()
     lotus: bool = False              # 提不提醒抢莲花（只在倒数第二行，不在 kinds 里）
+    team: str | None = None          # GSI 的 radiant / dire（拉野图标用自家小兵；不知道就不放图标）
 
     def cue(self, clock: float, muted=()) -> Cue | None:
         """游戏时钟 clock（秒，号角前是负数）这一刻该显示哪条；muted 是本局关掉的种类"""
@@ -116,8 +120,12 @@ class Plan:
         return sorted(out)
 
     def bar_icon(self, kind: str) -> str:
-        """顶栏倒数这种动作前面放哪个物品图标（data/items 的 key）；没有就是空，页面只写字"""
-        return BLOCK_ICONS.get(self.pos, "") if kind == "block" else BAR_ICONS.get(kind, "")
+        """顶栏倒数这种动作字前面放哪张图（页面上的地址）；没有就是空，页面只写字"""
+        if kind == "block":
+            return BLOCK_ICONS.get(self.pos, "")
+        if kind == "pull":
+            return PULL_ICONS.get(self.team or "", "")
+        return BAR_ICONS.get(kind, "")
 
     def lotus_timeline(self) -> list[tuple[int, int, str, str]]:
         """抢莲花 [(开始, 结束, "lotus", 词)]：顶栏倒数的第二行，和 timeline() 的封野 / 拉野 / 屯野分开挑，互不挤"""
@@ -174,7 +182,7 @@ class Plan:
 
 
 def make(pos: int, bench: dict | None, stack_second: int = 53, pull_second: int = 15,
-         pulls: tuple[Pull, ...] | None = None) -> Plan:
+         pulls: tuple[Pull, ...] | None = None, team: str | None = None) -> Plan:
     """bench 是 coach.fetch_bench 的同分段数据（没拉到是 None：辅助照样提醒，核心位不提醒屯野）。
     pulls 是 camps.pull_plan 按游戏文件给的这个位置该拉哪几次；None（读不到游戏文件 / 不知道阵营）时
     五号位按 pull_second ~ +5 秒拉自家拉野点，别的位置不提醒拉野"""
@@ -189,4 +197,4 @@ def make(pos: int, bench: dict | None, stack_second: int = 53, pull_second: int 
         kinds.add("stack")
     if pulls:
         kinds.add("pull")
-    return Plan(pos, frozenset(kinds), stacks10, stack_second, pull_second, tuple(pulls), pos in LOTUS_POSITIONS)
+    return Plan(pos, frozenset(kinds), stacks10, stack_second, pull_second, tuple(pulls), pos in LOTUS_POSITIONS, team)

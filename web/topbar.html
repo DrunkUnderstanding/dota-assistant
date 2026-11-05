@@ -183,7 +183,7 @@ connect((snap) => {
 // 野区倒数（玩家 2026-11-04：打起来不看叠加层、不要声音，只会瞄一眼时钟）：Python 给这局全部动作 [{at, end, kind, word}]
 // （游戏时钟秒，jungle.Plan.timeline），这里按时钟挑下一件：提前 JG_AHEAD 秒出来（封野号角前 1 分钟就出来），过了 end 再留 JG_LINGER 秒
 // 第二行只放抢莲花（jungle.lotus，Plan.lotus_timeline），不挤第一行的封野 / 拉野 / 屯野（玩家 2026-11-05）
-// event.icon 有值就在字前面放游戏物品图标（/items/<key>.png：封野放眼、莲花放治疗莲花）；图没加载出来就只显示字
+// event.icon 有值就在字前面放游戏图标（地址，jungle.bar_icon 给：封野放眼、莲花放治疗莲花、屯野放黄色野点、拉野放自家小兵）；图没加载出来就只显示字
 const JG_AHEAD = 15, JG_BLOCK_AHEAD = 120, JG_LINGER = 1, JG_SOON = 3;
 function jgRow(extra) {
   const el = document.createElement('div');
@@ -204,15 +204,19 @@ function jgRow(extra) {
 const jgRows = [[jgRow(''), 'events'], [jgRow(' row2'), 'lotus']];
 
 function demoJungle() {
-  // 预览用：五号位，时钟停在 2:50，第一行 2:49 拉野「现在」，第二行 3:00 莲花（还剩 10 秒）；?clock=-30 这种换时钟（号角前看封野）
-  const ev = [{ at: 60, end: 65, kind: 'block', word: '看拉野点', icon: 'ward_sentry' }];
+  // 预览用：五号位，时钟停在 2:50，第一行 2:49 拉野「现在」，第二行 3:00 莲花（还剩 10 秒）；?clock=-30 这种换时钟（号角前看封野），再加 &run=1 时钟从那儿接着走
+  const ev = [{ at: 60, end: 65, kind: 'block', word: '看拉野点', icon: '/items/ward_sentry.png' }];
+  const creep = '/img/jungle/creep_radiant.png', camp = '/img/jungle/camp.png';
   for (let m = 1; m < 10; m++) {
-    ev.push({ at: m * 60 + 19, end: m * 60 + 21, kind: 'pull', word: '拉野' }, { at: m * 60 + 27, end: m * 60 + 29, kind: 'pull', word: '拉大野' },
-      { at: m * 60 + 49, end: m * 60 + 51, kind: 'pull', word: '拉野' }, { at: m * 60 + 53, end: m * 60 + 55, kind: 'stack', word: '屯野' },
-      { at: m * 60 + 57, end: m * 60 + 59, kind: 'pull', word: '拉大野' });
+    ev.push({ at: m * 60 + 19, end: m * 60 + 21, kind: 'pull', word: '拉野', icon: creep },
+      { at: m * 60 + 27, end: m * 60 + 29, kind: 'pull', word: '拉大野', icon: creep },
+      { at: m * 60 + 49, end: m * 60 + 51, kind: 'pull', word: '拉野', icon: creep },
+      { at: m * 60 + 53, end: m * 60 + 55, kind: 'stack', word: '屯野', icon: camp },
+      { at: m * 60 + 57, end: m * 60 + 59, kind: 'pull', word: '拉大野', icon: creep });
   }
-  const lotus = [3, 6].map((m) => ({ at: m * 60, end: m * 60 + 5, kind: 'lotus', word: '莲花', icon: 'famango' }));
+  const lotus = [3, 6].map((m) => ({ at: m * 60, end: m * 60 + 5, kind: 'lotus', word: '莲花', icon: '/items/famango.png' }));
   const clock = params.has('clock') ? Number(params.get('clock')) : 170;
+  if (params.has('run')) return { show: true, anchor: Date.now() - clock * 1000, paused: null, events: ev, lotus };
   return { show: true, anchor: Date.now(), paused: clock, events: ev, lotus };
 }
 
@@ -232,7 +236,7 @@ function renderJungle() {
     if (icon !== row.icon) {
       row.icon = icon;
       row.ic.hidden = true;
-      if (icon) row.ic.src = `/items/${icon}.png`; else row.ic.removeAttribute('src');
+      if (icon) row.ic.src = icon; else row.ic.removeAttribute('src');
     }
     const num = now ? '现在' : left >= 60 ? mmss(left) : String(left);
     if (row.num.textContent !== num) row.num.textContent = num;

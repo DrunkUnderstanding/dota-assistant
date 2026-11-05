@@ -1,5 +1,6 @@
 """野区计时提醒：谁提醒什么、哪几秒亮。"""
 import unittest
+from pathlib import Path
 
 from dota_assistant.domain import jungle
 
@@ -55,12 +56,18 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual(jungle.make(1, None).lotus_timeline(), [])
 
     def test_bar_icons(self):
-        """顶栏倒数的物品图标：莲花 = 治疗莲花；封野四号位假眼、五号位真眼；屯野 / 拉野没有（换台装了 Dota 的电脑再找）"""
-        self.assertEqual(jungle.make(4, None).bar_icon("lotus"), "famango")
-        self.assertEqual(jungle.make(4, None).bar_icon("block"), "ward_observer")
-        self.assertEqual(jungle.make(5, None).bar_icon("block"), "ward_sentry")
+        """顶栏倒数的图标：莲花 = 治疗莲花；封野四号位假眼、五号位真眼；屯野 = 黄色野点；拉野 = 自家小兵（不知道阵营不放）"""
+        self.assertEqual(jungle.make(4, None).bar_icon("lotus"), "/items/famango.png")
+        self.assertEqual(jungle.make(4, None).bar_icon("block"), "/items/ward_observer.png")
+        self.assertEqual(jungle.make(5, None).bar_icon("block"), "/items/ward_sentry.png")
+        self.assertEqual(jungle.make(5, None).bar_icon("stack"), "/img/jungle/camp.png")
+        self.assertEqual(jungle.make(5, None, team="radiant").bar_icon("pull"), "/img/jungle/creep_radiant.png")
+        self.assertEqual(jungle.make(4, None, team="dire").bar_icon("pull"), "/img/jungle/creep_dire.png")
         self.assertEqual(jungle.make(5, None).bar_icon("pull"), "")
-        self.assertEqual(jungle.make(5, None).bar_icon("stack"), "")
+        web = Path(__file__).resolve().parents[1] / "web"
+        for url in {*jungle.BAR_ICONS.values(), *jungle.PULL_ICONS.values()}:
+            if url.startswith("/img/"):
+                self.assertTrue((web / url.lstrip("/")).is_file(), url)
         self.assertEqual(jungle.make(2, bench(3.4)).lotus_timeline(), [])
 
 

@@ -268,7 +268,7 @@ class InGameMixin:
         pulls = camps.pull_plan(self._camp_timings, team, self.position) \
             if self.cfg.pull_second == Config.pull_second else None
         self.jungle = jungle.make(self.position, getattr(self.coach, "bench", None), self.cfg.stack_second,
-                                  self.cfg.pull_second, pulls)
+                                  self.cfg.pull_second, pulls, team)
         self._jungle_team = team
         log.info("野区提醒：%s%d 号位 · %s（拉野：%s）", verb, self.position,
                  "、".join(jungle.LABELS[k] for k in sorted(self.jungle.kinds)) or "不提醒",
