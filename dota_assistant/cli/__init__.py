@@ -11,6 +11,7 @@
   label <截图> [更多截图…]      逐格确认 / 纠正识别结果，存成学习模板
   gsi-install <Dota 安装目录>  写入 Game State Integration 配置
   gsi-dump                     只收 GSI 推送并存档（确认选人时 GSI 给了什么）
+  uncensor [on|off|status]     反和谐开关（把 Dota 的低暴力资源 game\\dota_lv 改名挪开 / 放回去），默认看状态
   say <文字>                   测试语音
   backtest [--matches N]       用统计之后的新对局检验推荐和胜负的关系
   lanes-test [--matches N]     用同一批对局检验「对面分路」猜得准不准
@@ -205,6 +206,22 @@ def _kb_mistake(base, mistakes, args) -> int:
     return 0
 
 
+def cmd_uncensor(cfg: config.Config, action: str) -> int:
+    """反和谐：on / off 记进 config.toml 并马上改文件夹名（Dota 开着时 on 不动，助手开着会等游戏关了再改）"""
+    from ..core.dota_install import find_dota
+    from ..game import uncensor
+    dota = find_dota(cfg.dota_dir)
+    names = {"on": "已反和谐（dota_lv 挪开了）", "off": "没反和谐（dota_lv 在，低暴力模式会用它）",
+             "none": "没有 dota_lv 文件夹，不用反和谐", "unknown": "没找到 Dota 目录"}
+    if action != "status":
+        config.save({"uncensor": action == "on"})
+        r = uncensor.apply(dota, action == "on")
+        print(r.message or ("反和谐已关闭" if action == "off" else ""))
+    print(f"Dota 目录：{dota or '没找到'}\n开关：{'开' if action == 'on' or (action == 'status' and cfg.uncensor) else '关'}"
+          f"\n现在：{names[uncensor.state(dota)]}")
+    return 0
+
+
 def cmd_logs(args) -> int:
     if args.open:
         print(f"已打开 {logs.open_dir()}")
@@ -292,6 +309,8 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("images", type=Path, nargs="+")
     gp = sub.add_parser("gsi-install", help="写入 GSI 配置文件")
     gp.add_argument("dota_dir", type=Path, help=r"例如 C:\Program Files (x86)\Steam\steamapps\common\dota 2 beta")
+    up = sub.add_parser("uncensor", help="反和谐开关：on 打开 / off 关闭（记进 config.toml 并马上改）/ status 看现在的状态")
+    up.add_argument("action", choices=["on", "off", "status"], nargs="?", default="status")
     bp = sub.add_parser("backtest", help="样本外回测")
     bp.add_argument("--matches", type=int, default=3000)
     bp.add_argument("--tune", action="store_true", help="网格搜对线权重 / 反制风险权重（一半调参一半验证）")
@@ -376,6 +395,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"已写入 {path}（Dota 目录也记进了 config.toml）\n"
               "还需要在 Steam → Dota 2 → 属性 → 启动选项 里加上：-gamestateintegration，然后重开 Dota")
         return 0
+    if args.cmd == "uncensor":
+        return cmd_uncensor(cfg, args.action)
     if args.cmd == "backtest":
         from ..research.backtest import run as backtest
         print(backtest(cfg, args.matches, do_tune=args.tune))

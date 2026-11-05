@@ -1,12 +1,14 @@
-"""设置：账号设置保存、Dota 目录、热键注册。"""
+"""设置：账号设置保存、Dota 目录、反和谐开关、热键注册。"""
 from __future__ import annotations
 
 import logging
+import time
 from typing import Callable
 
 from ...ai import llm
 from ...core import config
 from ...core.dota_install import find_dota
+from ...game import uncensor
 from ...game.gsi import ensure_cfg
 from ...game.hotkeys import Hotkeys
 from . import consts
@@ -68,12 +70,15 @@ class SettingsMixin:
             updates.update(consts._check_hotkeys(self.cfg, a["hotkeys"]))
         if "dota_dir" in a:
             updates["dota_dir"] = consts._check_dota_dir(a["dota_dir"])
+        if "uncensor" in a:
+            updates["uncensor"] = bool(a["uncensor"])
         if not updates:
             return
         hotkeys_changed = any(updates.get(f, getattr(self.cfg, f)) != getattr(self.cfg, f) for f in consts.HOTKEY_ACTIONS)
         account_changed = any(updates.get(k, getattr(self.cfg, k)) != getattr(self.cfg, k)
                               for k in ("account_id", "duo_account_id", "stratz_token"))
         dota_changed = updates.get("dota_dir", self.cfg.dota_dir) != self.cfg.dota_dir
+        uncensor_changed = updates.get("uncensor", self.cfg.uncensor) != self.cfg.uncensor
         path = config.save(updates, self.config_file)
         for k, v in updates.items():
             setattr(self.cfg, k, v)
@@ -82,9 +87,13 @@ class SettingsMixin:
         if hotkeys_changed and self.hotkeys:
             self._start_hotkeys()
         dota_msg = self._apply_dota_dir() if dota_changed else ""
+        if uncensor_changed or (dota_changed and self.cfg.uncensor):
+            self._uncensor_due, self.uncensor_note = 0.0, ""
+            dota_msg = "；".join(m for m in (dota_msg, self._uncensor_tick()) if m)
         self.message = (dota_msg if dota_msg
                         else "设置已保存。账号改了要重启助手才会重新拉个人数据" if account_changed
                         else "设置已保存，热键已换好" if hotkeys_changed
+                        else f"设置已保存，反和谐已{'打开' if self.cfg.uncensor else '关闭'}" if uncensor_changed
                         else "设置已保存，AI 打法下一局按新设置")
 
     def _apply_dota_dir(self) -> str:
@@ -100,6 +109,23 @@ class SettingsMixin:
             return f"设置已保存，GSI 配置写进了 {self.dota_dir}：重开 Dota 才生效"
         return f"设置已保存，Dota 目录 {self.dota_dir}（GSI 配置已经在了）"
 
+    def _uncensor_tick(self) -> str:
+        """按反和谐开关检查一遍 dota_lv（game/uncensor.py），到点才查（_uncensor_due）。
+        Dota 开着 / 改名失败就过一会儿再查（关掉游戏后自动弄好）；返回给状态栏的话，没做事返回空"""
+        if self._uncensor_due is None or time.monotonic() < self._uncensor_due:
+            return ""
+        dota = self.dota_dir or find_dota(self.cfg.dota_dir)
+        r = uncensor.apply(dota, self.cfg.uncensor)
+        retry = r.status in ("busy", "error")
+        self._uncensor_due = time.monotonic() + consts.UNCENSOR_RETRY if retry else None
+        prev, self.uncensor_note = self.uncensor_note, r.message or self.uncensor_note
+        if r.status == "noop" or (r.status == "missing" and not self.cfg.uncensor):
+            return ""
+        if retry and r.message == prev:          # 隔一会儿重试还是同一句：不再刷状态栏
+            return ""
+        self.message = r.message
+        return r.message
+
     def settings_view(self) -> dict:
         """给面板「设置」窗口看的；密钥本身不发给页面，只给末 4 位让玩家认得出是哪个"""
         c = self.cfg
@@ -107,4 +133,5 @@ class SettingsMixin:
                 "ai_provider": c.ai_provider, "ai_model": c.ai_model, "ai_api_key": consts._mask(c.ai_api_key),
                 "ai_base_url": c.ai_base_url, "providers": llm.PROVIDERS,
                 "dota_dir": c.dota_dir, "dota_found": str(self.dota_dir or ""),
+                "uncensor": c.uncensor, "uncensor_note": self.uncensor_note,
                 "hotkeys": [{"field": f, "key": getattr(c, f), "text": text} for f, (text, _) in consts.HOTKEY_ACTIONS.items()]}

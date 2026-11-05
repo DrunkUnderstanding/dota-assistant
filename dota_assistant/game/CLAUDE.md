@@ -4,7 +4,7 @@
 
 ## 职责
 
-Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键、语音播报。全部走官方 / 系统接口：GSI 是游戏自己 POST 过来，热键是 `RegisterHotKey` 系统注册（不装键盘钩子、不读按键流），语音是 Windows 自带 SAPI。
+Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键、语音播报、反和谐开关。全部走官方 / 系统接口：GSI 是游戏自己 POST 过来，热键是 `RegisterHotKey` 系统注册（不装键盘钩子、不读按键流），语音是 Windows 自带 SAPI。
 
 和 `vision` 平级（层号 5），只能 import `core` / `sources` / `kb` / `ai` / `domain` 和同层。
 
@@ -14,6 +14,7 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 |---|---|
 | `gsi.py` | `GameState`（最新推送 + 最近 `HISTORY_SECONDS = 60` 秒历史；`in_draft` / `in_match` / `team` / `team_slot` / `player_name` / `my_hero_key` / `clock_minutes` / `deaths` / `level` / `last_hits` / `net_worth` / `gold` / `items` / `inventory` / `buyback` / `alive` / `match_id`）、`GSIServer`（127.0.0.1 HTTP 服务）、cfg 安装 `cfg_path` / `install_cfg` / `ensure_cfg`、`dump`（`gsi-dump` 命令） |
 | `hotkeys.py` | `Hotkeys({"F8": 回调, ...})`，`start` / `stop`；`vk_code` 支持 F1~F24 和单个字母 / 数字 |
+| `uncensor.py` | 反和谐（`config.uncensor`，默认关）：`apply(dota, on)` 把低暴力资源 `game\dota_lv` 改名成 `dota_lv_assistant_off` / 改回；`state`、`dota_running`（`CreateToolhelp32Snapshot` 只列进程名）、`Result(status, message)`。第 64 节 |
 | `speech.py` | `Speaker(rate, enabled)`：常驻一个 PowerShell 进程调 System.Speech，`say()` 新句子打断旧句子，`close()` |
 
 ## 对外接口
@@ -21,7 +22,8 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 - `install_cfg(dota_dir, port)`：写 `game/dota/cfg/gamestate_integration/gamestate_integration_dota_assistant.cfg`；目录不像 Dota（没有 `pak01_dir.vpk`）就抛 `FileNotFoundError`。`ensure_cfg` 只在文件不在或内容变了才重写。**Dota 启动时才读 cfg，开着的要重开**；启动项 `-gamestateintegration` 只能提醒玩家手动加。
 - 选人阶段的推送自动存 `shots/gsi/`（`GameState.log_draft`，内容变了才存，最多 300 份，HANDOFF 第 13 节）。
 - 热键回调在热键线程里执行，界面 / 状态相关的事要转回 `Live` 的工作线程。默认键位在 `Config`：F8 显隐、F7 解锁 / 固定、F9 立即重认、F10 截图、F6 再看本局要点。
-- CLI：`gsi-install <Dota 安装目录>`、`gsi-dump`、`say <文字>`。
+- `uncensor.apply(dota, on, running=None)`：返回 `Result`，`status` 是 done / noop / busy（Dota 开着，没动）/ missing / error。开反和谐只在 Dota 没开时改名；关（改回原名）随时可以。
+- CLI：`gsi-install <Dota 安装目录>`、`gsi-dump`、`say <文字>`、`uncensor [on|off|status]`。
 
 ## 依赖与分层
 
@@ -34,6 +36,7 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 - `tests/test_live.py`：GSI 服务（模拟 POST）与播报文案、找 Dota 目录。
 - `tests/test_death.py`、`tests/test_itembuild.py`、`tests/test_buyback.py`：用 `GameState` 喂手写推送。
 - `tests/test_webui.py`：Live 里不开 GSI 端口，换成 `GameState` 直接改推送。
+- `tests/test_uncensor.py`：反和谐（临时目录里的假 Dota 目录 + 设置窗口开关 + Dota 关掉后重试）。
 
 ## 注意事项 / 坑
 
@@ -44,6 +47,8 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 - 语音不用 Python TTS 库（PySide6 的 QtTextToSpeech 装不上），改常驻 PowerShell，零依赖（HANDOFF 第 5 节第 6 条）。语音默认关（`voice = false`），面板开关也藏了（HANDOFF 第 2 节当前状态）。
 - 子进程输出按 UTF-8 解码前确认对方真输出 UTF-8：`speech.py` 的脚本开头把 PowerShell 控制台输入 / 输出都设成 UTF-8。
 
+- **反和谐是助手唯一改游戏资源文件夹的地方**：只改名不删、不改文件内容；Dota 开着时不挪 `dota_lv`（可能已挂上）。Steam 更新会补回 `dota_lv`，所以每次启动都要查（`Live._uncensor_tick`）。测试 / 回放（`use_gsi=False`）不查，别让单测碰真实 Dota 目录。
+
 ## 设计记录（原「相关 HANDOFF 节」）
 
 本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
@@ -52,6 +57,7 @@ Valve 官方 Game State Integration（GSI）本地服务、Windows 全局热键�
 - HANDOFF 第 13 节（一键启动，GSI 配置自动写）
 - HANDOFF 第 17 节（日志，游戏电脑上第一次接上 GSI / 热键）
 - HANDOFF 第 36 节（找 Dota 目录认了空壳，GSI 连不上）
+- 第 64 节（反和谐开关）
 
 ## 变更记录 (Changelog)
 

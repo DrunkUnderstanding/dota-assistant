@@ -21,7 +21,7 @@
 | `cards.py` | 本局要点 / 「如果选它」卡片：`show_brief`、`explain_pick`、`set_brief_page`、`pick_view`；后台出数据页 / AI 打法页（`_start_brief` / `_start_plan` …） |
 | `overlay.py` | 叠加层：显隐（`toggle_overlay` / `close_overlay` / `overlay_visible`）、固定 / 解锁（`toggle_lock` / `set_locked`）、拖动后的位置（`overlay_moved`）、底色样式（`set_overlay_style` / `overlay_style`）、`overlay_view` |
 | `world.py` | 游戏画面里的野点框（`world_marks`，2026-11-03 起默认关，HANDOFF 第 58 节）：`start_world`（`webui.run` 起，测试不起）单独一个线程，有标记时每 0.04 秒截 Dota 窗口认镜头（`vision/camera.py`），拉镜头时按速度往前推（`camera_velocity`）；`world_view` 给 `/api/world`（网页请求线程里调，只读 `_world` / `camp_marks`）；`_hero_now` 按 GSI 推送速度推英雄坐标（HANDOFF 第 54 节） |
-| `settings.py` | 设置：`save_settings`（写回 `config.toml`）、`settings_view`、Dota 目录、热键注册 |
+| `settings.py` | 设置：`save_settings`（写回 `config.toml`）、`settings_view`、Dota 目录、热键注册、反和谐 `_uncensor_tick`（`tick` 里到点才查：真跑时启动后一次、改开关时一次，Dota 开着就隔 `consts.UNCENSOR_RETRY` 秒再查；第 64 节） |
 
 ## 网页动作（`Live.action`）
 

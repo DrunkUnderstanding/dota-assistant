@@ -26,6 +26,7 @@ DEATH_SHOT_DELAYS = (0, 2)
 SIDE_MODES = ("auto", "radiant", "dire")       # 阵营：自动（GSI）/ 我在天辉 / 我在夜魇
 SIDE_FALLBACK = "radiant"                      # 不知道阵营（自动但 GSI 没连上）时先当左边是我方，卡片和面板上要标出来
 ROLE_RETRY = 3.0                               # 认位置：没认出来隔几秒再试
+UNCENSOR_RETRY = 15.0                          # 反和谐：Dota 开着 / 改名失败时隔几秒再看一次（关掉游戏后自动改好）
 GRID_CONFIRM_MIN = 0.5                         # 顶栏分数至少这么多，再加上网格核对才算认出
 SAME_CROP = 0.92                               # 两张顶栏裁图特征相似度高于这个算同一个样子（没换头像 / 重复，不用再记）
 # 帮认记模板时，裁图和别的格子 / 开局空位的相似度（recognize.similarity）到这个就当是空位样子、不记。10-22~23 真实截图 140 格：

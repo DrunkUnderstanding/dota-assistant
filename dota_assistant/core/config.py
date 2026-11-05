@@ -43,6 +43,7 @@ class Config:
     match_threshold: float = 0.50     # 头像相似度下限（最高按 0.5 算），还要比第二像的高出 vision.SURE_GAP 才算认出（用 recognize 看分数再调）
     gsi_port: int = 3000              # Game State Integration 本地端口
     dota_dir: str = ""                # Dota 安装目录（...\steamapps\common\dota 2 beta）；空 = 自动到 Steam 库里找
+    uncensor: bool = False            # 反和谐：助手开着时把 Dota 的低暴力资源 game\dota_lv 改名挪开（game/uncensor.py）；关掉就改回原名
     voice: bool = False               # 语音播报先关掉、面板开关也隐藏了（玩家 2026-10-22 决定），这里改 true 能打开
     voice_rate: int = 1               # 语速 -10 ~ 10
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）

@@ -23,6 +23,7 @@ scan_interval = 1.0   # 识别间隔（秒）
 match_threshold = 0.50  # 头像相似度下限（最高按 0.5 算），还要比第二像的英雄高出 0.15 才算认出；先用 recognize 看实际分数再调
 gsi_port = 3000       # 改了要重新 gsi-install
 dota_dir = ""         # Dota 安装目录（Steam 里右键 Dota 2 → 管理 → 浏览本地文件），留空自动找；找错了再填，手写用单引号：'E:\SteamLibrary\steamapps\common\dota 2 beta'（控制面板「设置」里也能填）
+uncensor = false      # 反和谐：true = 助手开着时把 Dota 的低暴力资源文件夹 game\dota_lv 改名挪开（下次开游戏生效），改回 false 就放回去（控制面板「设置」里也能开关）
 voice = false        # 语音播报先关着（面板开关也暂时隐藏），想听改成 true
 voice_rate = 1        # 语速 -10 ~ 10
 coach_voice = false   # 局内缺口提醒要不要念出来（先只弹卡片，F8 或点 × 关掉）

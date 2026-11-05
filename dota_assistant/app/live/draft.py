@@ -225,6 +225,7 @@ class DraftMixin:
         return dota_open() if dota_open else True
 
     def tick(self) -> None:
+        self._uncensor_tick()                    # 反和谐：启动后 / 等 Dota 关掉时改一次文件夹名
         self.coach_tick()                        # 先更新阶段（进新一局选人要先清掉上一局的禁用）
         if "side" in self.view and self.view["side"] != self.side():
             self.refresh()                       # GSI 连上 / 断开、阵营变了：友 / 敌要重新分

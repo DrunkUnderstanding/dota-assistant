@@ -219,6 +219,10 @@
   "kind": "method",
   "signature": "(self, side: 'str', index: 'int', clock: 'float') -> 'dict | None'"
  },
+ "_uncensor_tick": {
+  "kind": "method",
+  "signature": "(self) -> 'str'"
+ },
  "_upgrade_view": {
   "kind": "method",
   "signature": "(self) -> 'dict'"

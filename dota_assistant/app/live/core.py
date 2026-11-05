@@ -84,6 +84,10 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
                 log.warning("GSI 端口 %d 用不了（%s），这次没有 GSI", cfg.gsi_port, e)
         # GSI 配置写在哪个 Dota 目录；None = 没找到（GSI 一直连不上，状态栏要说清楚为什么）
         self.dota_dir: Path | None = find_dota(cfg.dota_dir) if use_gsi else None
+        # 反和谐（game/uncensor.py）：下次什么时候按开关检查一遍 dota_lv（monotonic 秒）；None = 不用查了
+        # 只在真跑时（use_gsi）启动后查一次，测试 / 回放不碰真实的 Dota 目录；设置里改了开关马上查
+        self._uncensor_due: float | None = 0.0 if use_gsi else None
+        self.uncensor_note = ""                  # 最近一次反和谐的结果，设置窗口里显示
 
         # ---- 当前局面（控制面板的格子是唯一的「当前局面」，识别和手动输入都只是往里写）----
         self.slots: dict[str, list[str]] = {s: [""] * 5 for s in consts.SIDES}

@@ -25,6 +25,7 @@
 | `demo [--step 秒] [--speed 倍] [--browser]` | 不开 Dota 演示 | `app.demo.run` |
 | `calibrate <截图>` / `recognize <截图>` / `label <截图…>` | 校准 / 识别一张（输出标注图）/ 逐格纠正存模板（自己展开通配符） | `vision.calibrate` / `vision.recognize` |
 | `gsi-install <Dota 目录>` | 写 GSI 配置，并把 `dota_dir` 记进 `config.toml` | `game.gsi.install_cfg` + `core.config.save` |
+| `uncensor [on\|off\|status]` | 反和谐开关：on / off 记进 `config.toml` 并马上改名 `game\dota_lv`；status 看现在的状态 | `game.uncensor` |
 | `gsi-dump` | 只收 GSI 推送存到 `shots/gsi/` | `game.gsi.dump` |
 | `say <文字>` | 测试语音 | `game.speech.Speaker` |
 | `backtest [--matches N] [--tune]` / `lanes-test` / `lane-test` / `lane-review` / `backtest-ai` | 回测与研究 | `research.*`、`domain.lanes.evaluate` |

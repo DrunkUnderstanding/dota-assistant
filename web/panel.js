@@ -143,6 +143,9 @@ function openSettings() {
   form.ai_model.value = c.ai_model;
   form.dota_dir.value = c.dota_dir;
   form.dota_dir.placeholder = c.dota_found ? `留空 = 自动找（现在用的：${c.dota_found}）` : '没自动找到，填 dota 2 beta 那个文件夹';
+  form.uncensor.checked = c.uncensor;
+  $('#uncensor-note').textContent = c.uncensor_note ? `最近一次：${c.uncensor_note}` : '';
+  $('#uncensor-note').hidden = !c.uncensor_note;
   form.dataset.provider = c.ai_provider;
   showProvider();
   paintHotkeyForm(c.hotkeys);
@@ -191,6 +194,7 @@ form.addEventListener('submit', async (e) => {
     ai_model: form.ai_model.value.trim(),
     ai_base_url: form.ai_base_url.value.trim(),
     dota_dir: form.dota_dir.value.trim(),
+    uncensor: form.uncensor.checked,
   };
   // 有输入才发：只输了空白 = 清掉，什么都没输 = 不改
   if (form.stratz_token.value) payload.stratz_token = form.stratz_token.value.trim();

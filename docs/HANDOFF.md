@@ -45,6 +45,7 @@
 |---|---|---|---|
 | GSI | ✅ | 局内字段没核对；朋友电脑「找 Dota 目录认了空壳」修完没验证 | [game](../dota_assistant/game/NOTES.md)、[core](../dota_assistant/core/NOTES.md) |
 | 热键 / 日志 | ✅ | — | [game](../dota_assistant/game/NOTES.md)、[core](../dota_assistant/core/NOTES.md) |
+| 反和谐开关（改名 `game\dota_lv`） | 🟡 默认关 | 没在装了 Dota 的电脑上看过效果 | [game](../dota_assistant/game/NOTES.md) |
 | 语音 | ⏸ 默认关 | `config.toml` 写 `voice = true` 能开 | [game](../dota_assistant/game/NOTES.md) |
 | 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **默认不弹**（`ingame_tips = false`，只记日志） | 没接过真实游戏，GSI 字段没在真实推送里核对 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 野区提醒（Dota 时钟正下方的倒数；第二行抢莲花） | 🟡 | 实战看位置挡不挡、秒数和按住 Alt 的一样不 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
@@ -73,8 +74,9 @@
 2. **下一局天梯，局内**：野区倒数位置和秒数、买活 / 大招小条、局内卡片确实不弹只记日志（[domain 局内](../dota_assistant/domain/NOTES-ingame.md)、[app/live](../dota_assistant/app/live/NOTES.md)）。
 3. **弄清「触发 VAC」那回事**，再决定游戏画面野点框开不开回来（[vision](../dota_assistant/vision/NOTES.md)）。
 4. **发版后**：开着旧版看会不会自己弹更新窗口（[app](../dota_assistant/app/NOTES.md)）；新打包版发给朋友，看 Dota 目录 / 阵营对不对（[core](../dota_assistant/core/NOTES.md)）；干净电脑上试免安装版（[packaging](../packaging/NOTES.md)）。
-5. **有 `D:\dota-golden` 的机器**上跑 `python tools/golden/run.py check`，确认第 41 / 43 / 45 / 50 节带来的快照差异都是该有的再更新。
-6. **远期**：队友预选识别（避免推荐撞车）；局内打法（需求③，做成事件提醒：肉山时间、对面核心没 BKB 等，不做持续解说）；可选：大模型生成一句话推荐理由（现在模板拼的已够用）。
+5. **装了 Dota 的电脑上试反和谐**：设置里打开「反和谐」、重开 Dota，看血 / 骷髅回来没有；Dota 开着时打开，看是不是等关了游戏才改（[game](../dota_assistant/game/NOTES.md) 第 64 节）。
+6. **有 `D:\dota-golden` 的机器**上跑 `python tools/golden/run.py check`，确认第 41 / 43 / 45 / 50 / 64 节带来的快照差异都是该有的再更新。
+7. **远期**：队友预选识别（避免推荐撞车）；局内打法（需求③，做成事件提醒：肉山时间、对面核心没 BKB 等，不做持续解说）；可选：大模型生成一句话推荐理由（现在模板拼的已够用）。
 
 ## 4. 关键设计决策（为什么这么做）
 
@@ -120,7 +122,7 @@
 | 组合研究（精灵老鹿等） | [research/](research/) |
 
 **以后怎么写**：
-- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 61），标题带日期和关键函数；同时把节号加进下面的索引。
+- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 65），标题带日期和关键函数；同时把节号加进下面的索引。
 - 状态变了：改本文第 2 节那一行（一句话），细节写进模块 NOTES 的「当前状态」。
 - 新的待验证项：写进模块 NOTES 的「待实战验证 / 下一步」；要紧的在本文第 3 节加一句。
 - 本文保持在一两屏内，**不要再往这里堆过程记录**。
@@ -211,3 +213,4 @@
 | 61 | 抢莲花回来：Dota 时钟下方倒数的第二行 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 62 | 野区倒数加游戏物品图标：封野放眼、莲花放治疗莲花 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 63 | 屯野 / 拉野也有图标了：黄色野点、自家小兵 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
+| 64 | 反和谐开关：把低暴力资源 game\dota_lv 改名挪开 | [game/NOTES](../dota_assistant/game/NOTES.md) |
