@@ -132,16 +132,19 @@ class InGameMixin:
         self.camp_marks = marks
 
     def jungle_bar_view(self) -> dict:
-        """给 topbar.html：这局要做的野区动作（jungle.Plan.timeline）+ 时钟锚点，页面自己挑下一件、倒数。死了不显示"""
+        """给 topbar.html：这局要做的野区动作（jungle.Plan.timeline）+ 抢莲花（lotus_timeline，第二行单独挑）+ 时钟锚点，
+        页面自己挑下一件、倒数。死了不显示"""
         st = self.gsi.state if self.gsi else None
         alive = st is not None and (st.raw.get("hero") or {}).get("alive") is not False
         if not (self.jungle and self._bb_show and alive and self._bb_anchor is not None):
             return {"show": False}
-        events = self.jungle.timeline(self._cue_muted)
-        if not events:
+        events, lotus = self.jungle.timeline(self._cue_muted), self.jungle.lotus_timeline()
+        if not (events or lotus):
             return {"show": False}
+        def rows(evs):
+            return [{"at": a, "end": e, "kind": k, "word": w} for a, e, k, w in evs]
         return {"show": True, "anchor": round(self._bb_anchor * 1000), "paused": self._bb_paused,
-                "events": [{"at": a, "end": e, "kind": k, "word": w} for a, e, k, w in events]}
+                "events": rows(events), "lotus": rows(lotus)}
 
     def minimap_view(self) -> dict:
         """给 minimap.html：要圈的野点（小地图上 0~1 的位置）+ 时钟锚点（页面自己倒数）+ 小地图在屏幕上哪（1080 高时的像素）"""

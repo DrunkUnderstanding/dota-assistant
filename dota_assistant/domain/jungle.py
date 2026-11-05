@@ -7,9 +7,14 @@
 - 一 / 二 / 三号位：只有这个英雄这个位置同分段 10 分钟平均屯野 ≥ STACK_MIN_AVG 组才提醒屯野
   （STRATZ heroStats.campsStacked，2026-10-26 查：中单炸弹人 3.4、光法 2.8、天涯墨客 2.8、炼金 1.5、米波 1.1、
   修补匠 0.8、圣堂 0.7；一 / 三号位只有炼金过 0.5；辅助平均 0.5）
-- 抢莲花不提醒了（玩家 2026-11-03：「莲花提示也可以去掉」；原来三 / 四 / 五号位 3:00、6:00 提醒，见 HANDOFF 第 27 节）
+- 三 / 四 / 五号位：3:00、6:00 抢莲花，只在 Dota 时钟下方倒数的第二行（Plan.lotus_timeline），不占封野 / 拉野 / 屯野那一行
+  （玩家 2026-11-05：「莲花的提醒多横起一行吧，不占用封野拉野屯野的提醒」；2026-11-03 去掉过一次，原来是叠加层卡片，见第 27、57 节）。
+  不进 kinds：叠加层卡片（cue）、野点框 / 小地图圈都没有莲花
 
 只看游戏时钟（玩家自己也看得到），不读别的东西。时间来源：
+- 莲花池：上下路各一个，在那条路劣势路一塔旁边（上路天辉塔、下路夜魇塔），每 3 分钟整（3:00、6:00…）各长一朵治疗莲花，
+  最多攒 6 朵，两边都看得见；站进池子就自动拾取，对面英雄也在时进度倒退（dota2-tools.com「Lotus Pool Timer」、neznakov.com，
+  不是官方原文；知识库里没有治疗莲花）。三 / 四号位的池子在自家一塔边，五号位那条路的在对面一塔边
 - 野怪 1:00 第一次刷，之后每个整分钟刷，刷新框里有单位（英雄 / 眼 / 召唤物）就不刷（Liquipedia / Fandom「Neutral Creeps」）
 - 屯野 x:53~x:55 打一下往外拉（TeamSmurf 7.41d：小野 :53~:55，大野 :52~:54，远古 :51~:53）
 - 拉野是一段时间（玩家 2026-11-03：「拉野应该有一个时间范围而不是一个时间点」）：每个野点、每个阵营各自的起止秒数
@@ -31,6 +36,9 @@ PULL_UNTIL = 10
 STACK_MIN_AVG = 0.5          # 核心位：同分段 10 分钟平均屯野 ≥ 这么多组才提醒
 SUPPORTS = (4, 5)
 OFFLANE_PULLERS = (3, 4)     # 劣势路拉野提醒谁（三号位是实现假设，玩家 2026-11-03 确认要）
+LOTUS_MINUTES = (3, 6)       # 抢莲花提醒哪几分钟（玩家 2026-10-26 指定 3、6 分钟）
+LOTUS_POSITIONS = (3, 4, 5)  # 谁去抢：劣势路两人的池子在自家一塔边上；五号位那条路的池子在对面一塔边上
+LOTUS_LINGER = 5             # 莲花长出来后倒数行再留几秒（「现在」闪）
 PULL_GROUP_GAP = 15          # 两次拉野隔不到这么多秒就合成一张卡片
 # 顶栏倒数（玩家 2026-11-04：打起来不看叠加层、不要声音、高频截图怕 VAC）：只靠游戏时钟，在 Dota 时钟正下方挂一小块「下一件事 + 几秒」
 BAR_WORDS = {"small": "拉野", "big": "拉大野", "off": "拉大野"}
@@ -64,6 +72,7 @@ class Plan:
     stack_second: int = 53
     pull_second: int = 15
     pulls: tuple[Pull, ...] = ()
+    lotus: bool = False              # 提不提醒抢莲花（只在倒数第二行，不在 kinds 里）
 
     def cue(self, clock: float, muted=()) -> Cue | None:
         """游戏时钟 clock（秒，号角前是负数）这一刻该显示哪条；muted 是本局关掉的种类"""
@@ -101,6 +110,12 @@ class Plan:
         if "pull" in kinds:
             out += [(m * 60 + p.start, m * 60 + p.end, "pull", BAR_WORDS[p.role]) for m in range(1, PULL_UNTIL) for p in self.pulls]
         return sorted(out)
+
+    def lotus_timeline(self) -> list[tuple[int, int, str, str]]:
+        """抢莲花 [(开始, 结束, "lotus", 词)]：顶栏倒数的第二行，和 timeline() 的封野 / 拉野 / 屯野分开挑，互不挤"""
+        if not self.lotus:
+            return []
+        return [(m * 60, m * 60 + LOTUS_LINGER, "lotus", "莲花") for m in LOTUS_MINUTES]
 
     def pull_groups(self) -> list[tuple[Pull, ...]]:
         """一分钟里的几次拉野按时间分组：前后隔不到 PULL_GROUP_GAP 秒的算一组（一张卡片）。
@@ -166,4 +181,4 @@ def make(pos: int, bench: dict | None, stack_second: int = 53, pull_second: int 
         kinds.add("stack")
     if pulls:
         kinds.add("pull")
-    return Plan(pos, frozenset(kinds), stacks10, stack_second, pull_second, tuple(pulls))
+    return Plan(pos, frozenset(kinds), stacks10, stack_second, pull_second, tuple(pulls), pos in LOTUS_POSITIONS)

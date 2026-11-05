@@ -48,7 +48,7 @@ class Config:
     coach_voice: bool = False         # 局内缺口提醒要不要念出来（先只弹卡片）
     ingame_tips: bool = False         # 局内弹打法 / 出装卡片（缺口提醒、死亡复盘、中后期本局要点）；先关着（玩家 2026-11-02），野区提醒不受影响
     jungle_cards: bool = False        # 野区提醒在叠加层弹卡片；默认关（玩家 2026-11-04：打起来不看叠加层），只在 Dota 时钟正下方倒数
-    jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野，jungle.py；抢莲花 2026-11-03 去掉了）；局内点 × 能按种类关掉这一局的
+    jungle_cues: bool = True          # 野区计时提醒（封野 / 拉野 / 屯野，jungle.py；抢莲花只在顶栏倒数第二行）；局内点 × 能按种类关掉这一局的
     stack_second: int = 53            # 屯野提醒的秒数（x:53 拉）
     pull_second: int = 15             # 拉野提醒的秒数（x:15 拉）；不同野点 / 阵营差几秒，按自己那边调
     world_marks: bool = False         # 野区提醒到点时在游戏画面里的野点上描框、写几秒打（camps.py、vision/camera.py、web/world.html）；

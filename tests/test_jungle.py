@@ -44,6 +44,17 @@ class TimelineTest(unittest.TestCase):
         self.assertEqual({k for _, _, k, _ in p.timeline({"stack", "block"})}, {"pull"})
         self.assertEqual(jungle.make(1, None).timeline(), [])
 
+    def test_lotus_own_row(self):
+        """抢莲花单独一行：三 / 四 / 五号位 3:00、6:00，不混进 timeline()（不挤封野 / 拉野 / 屯野）"""
+        lotus = [(at(3, 0), at(3, 5), "lotus", "莲花"), (at(6, 0), at(6, 5), "lotus", "莲花")]
+        for pos in (3, 4, 5):
+            p = jungle.make(pos, None)
+            self.assertEqual(p.lotus_timeline(), lotus)
+            self.assertNotIn("lotus", {k for _, _, k, _ in p.timeline()})
+            self.assertNotIn("lotus", p.kinds)
+        self.assertEqual(jungle.make(1, None).lotus_timeline(), [])
+        self.assertEqual(jungle.make(2, bench(3.4)).lotus_timeline(), [])
+
 
 class CueTest(unittest.TestCase):
     def test_block_before_first_spawn(self):
@@ -112,7 +123,7 @@ class CueTest(unittest.TestCase):
         self.assertEqual(jungle.make(1, None, pulls=()).kinds, set())
 
     def test_no_lotus(self):
-        """抢莲花不提醒了：3:00 前只有屯野"""
+        """叠加层卡片没有抢莲花（莲花只在顶栏倒数第二行）：3:00 前只有屯野"""
         self.assertEqual(jungle.make(4, None).cue(at(2, 50)).key, "stack:2")
         self.assertIsNone(jungle.make(4, None).cue(at(2, 57)))
         self.assertIsNone(jungle.make(3, None).cue(at(5, 50)))

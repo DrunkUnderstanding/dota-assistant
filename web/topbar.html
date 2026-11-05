@@ -92,9 +92,10 @@
     font: 600 calc(14px * var(--s)) / 1 var(--font); color: var(--c);
     background: rgba(10, 13, 18, 0.72); border: 1px solid var(--c); border-radius: calc(4px * var(--s));
   }
+  .jg.row2 { top: calc(97px * var(--s)); }   /* 第二行：抢莲花，和上面那行各挑各的（玩家 2026-11-05） */
   .jg[hidden] { display: none; }
   .jg .n { font-family: var(--num); font-variant-numeric: tabular-nums; }
-  .jg.pull { --c: #5eaeea; } .jg.stack { --c: var(--gold); } .jg.block { --c: #e5675c; }
+  .jg.pull { --c: #5eaeea; } .jg.stack { --c: var(--gold); } .jg.block { --c: #e5675c; } .jg.lotus { --c: #e58fd0; }
   .jg.soon, .jg.now { color: #0b0f14; background: var(--c); }
   .jg.now { animation: jg-blink 0.5s steps(2, jump-none) infinite alternate; }
   @keyframes jg-blink { to { background: rgba(10, 13, 18, 0.72); color: var(--c); } }
@@ -179,40 +180,48 @@ connect((snap) => {
 
 // 野区倒数（玩家 2026-11-04：打起来不看叠加层、不要声音，只会瞄一眼时钟）：Python 给这局全部动作 [{at, end, kind, word}]
 // （游戏时钟秒，jungle.Plan.timeline），这里按时钟挑下一件：提前 JG_AHEAD 秒出来（封野号角前 1 分钟就出来），过了 end 再留 JG_LINGER 秒
+// 第二行只放抢莲花（jungle.lotus，Plan.lotus_timeline），不挤第一行的封野 / 拉野 / 屯野（玩家 2026-11-05）
 const JG_AHEAD = 15, JG_BLOCK_AHEAD = 120, JG_LINGER = 1, JG_SOON = 3;
-const jg = document.createElement('div');
-jg.className = 'jg';
-jg.hidden = true;
-const jgWord = document.createElement('span');
-const jgNum = document.createElement('span');
-jgNum.className = 'n';
-jg.append(jgWord, jgNum);
-document.body.append(jg);
+function jgRow(extra) {
+  const el = document.createElement('div');
+  el.className = 'jg';
+  el.hidden = true;
+  const word = document.createElement('span');
+  const num = document.createElement('span');
+  num.className = 'n';
+  el.append(word, num);
+  document.body.append(el);
+  return { el, word, num, extra };
+}
+const jgRows = [[jgRow(''), 'events'], [jgRow(' row2'), 'lotus']];
 
 function demoJungle() {
-  // 预览用：五号位，时钟停在 3:12，下一件是 3:19 拉野（还剩 7 秒）
+  // 预览用：五号位，时钟停在 2:50，第一行 2:49 拉野「现在」，第二行 3:00 莲花（还剩 10 秒）
   const ev = [];
   for (let m = 1; m < 10; m++) {
     ev.push({ at: m * 60 + 19, end: m * 60 + 21, kind: 'pull', word: '拉野' }, { at: m * 60 + 27, end: m * 60 + 29, kind: 'pull', word: '拉大野' },
       { at: m * 60 + 49, end: m * 60 + 51, kind: 'pull', word: '拉野' }, { at: m * 60 + 53, end: m * 60 + 55, kind: 'stack', word: '屯野' },
       { at: m * 60 + 57, end: m * 60 + 59, kind: 'pull', word: '拉大野' });
   }
-  return { show: true, anchor: Date.now(), paused: 192, events: ev };
+  const lotus = [3, 6].map((m) => ({ at: m * 60, end: m * 60 + 5, kind: 'lotus', word: '莲花' }));
+  return { show: true, anchor: Date.now(), paused: 170, events: ev, lotus };
 }
 
 function renderJungle() {
   const clock = jungle.show ? jungle.paused ?? (Date.now() - jungle.anchor) / 1000 : null;
-  const ev = clock == null ? null : (jungle.events || []).find((e) => clock <= e.end + JG_LINGER
-    && clock >= e.at - (e.kind === 'block' ? JG_BLOCK_AHEAD : JG_AHEAD));
-  jg.hidden = !ev;
-  if (!ev) return;
-  const left = Math.ceil(ev.at - clock);
-  const now = left <= 0;
-  const cls = `jg ${ev.kind}${now ? ' now' : left <= JG_SOON ? ' soon' : ''}`;
-  if (jg.className !== cls) jg.className = cls;
-  if (jgWord.textContent !== ev.word) jgWord.textContent = ev.word;
-  const num = now ? '现在' : left >= 60 ? mmss(left) : String(left);
-  if (jgNum.textContent !== num) jgNum.textContent = num;
+  for (const [row, key] of jgRows) {
+    const ev = clock == null ? null : (jungle[key] || []).find((e) => clock <= e.end + JG_LINGER
+      && clock >= e.at - (e.kind === 'block' ? JG_BLOCK_AHEAD : JG_AHEAD));
+    row.el.hidden = !ev;
+    if (!ev) continue;
+    const left = Math.ceil(ev.at - clock);
+    const now = left <= 0;
+    const cls = `jg${row.extra} ${ev.kind}${now ? ' now' : left <= JG_SOON ? ' soon' : ''}`;
+    if (row.el.className !== cls) row.el.className = cls;
+    if (row.word.textContent !== ev.word) row.word.textContent = ev.word;
+    const num = now ? '现在' : left >= 60 ? mmss(left) : String(left);
+    if (row.num.textContent !== num) row.num.textContent = num;
+  }
 }
 
 function demo() {

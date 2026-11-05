@@ -47,7 +47,7 @@
 | 热键 / 日志 | ✅ | — | [game](../dota_assistant/game/NOTES.md)、[core](../dota_assistant/core/NOTES.md) |
 | 语音 | ⏸ 默认关 | `config.toml` 写 `voice = true` 能开 | [game](../dota_assistant/game/NOTES.md) |
 | 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **默认不弹**（`ingame_tips = false`，只记日志） | 没接过真实游戏，GSI 字段没在真实推送里核对 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
-| 野区提醒（Dota 时钟正下方的倒数） | 🟡 | 实战看位置挡不挡、秒数和按住 Alt 的一样不 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
+| 野区提醒（Dota 时钟正下方的倒数；第二行抢莲花） | 🟡 | 实战看位置挡不挡、秒数和按住 Alt 的一样不 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 游戏画面野点框 / 小地图野点 | 🟡 **默认关** | 玩家说「触发 VAC 了」，先弄清提示原话和有没有封禁记录再决定开不开 | [vision](../dota_assistant/vision/NOTES.md)、[domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 买活计时（含截图自动记）/ 对面大招冷却 | 🟡 | 补漏改完没在真实对局跑过；`hero.level` 没见过 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 局内打法 | ❌ | 本局要点 + 缺口提醒算雏形；敌方装备识别、热键提问待做 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
@@ -208,3 +208,4 @@
 | 58 | 游戏画面野点框默认关 | [vision/NOTES](../dota_assistant/vision/NOTES.md) |
 | 59 | 野区提醒改成 Dota 时钟正下方的倒数 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 60 | 组合研究：精灵老鹿（艾欧 + 拉席克） | [research/NOTES](../dota_assistant/research/NOTES.md) |
+| 61 | 抢莲花回来：Dota 时钟下方倒数的第二行 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |

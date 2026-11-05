@@ -920,6 +920,8 @@ class CoachLiveTest(unittest.TestCase):
         self.assertIsInstance(bar["anchor"], int)
         self.assertIn({"at": 60, "end": 65, "kind": "block", "word": "看拉野点"}, bar["events"])
         self.assertIn("屯野", {e["word"] for e in bar["events"]})
+        self.assertEqual(bar["lotus"][0], {"at": 180, "end": 185, "kind": "lotus", "word": "莲花"})   # 第二行
+        self.assertNotIn("lotus", {e["kind"] for e in bar["events"]})
         self.push(2 + 20 / 60, alive=False)
         self.assertFalse(json.loads(self.live.current_snapshot)["jungle_bar"]["show"])
 
