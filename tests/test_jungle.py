@@ -53,6 +53,14 @@ class TimelineTest(unittest.TestCase):
             self.assertNotIn("lotus", {k for _, _, k, _ in p.timeline()})
             self.assertNotIn("lotus", p.kinds)
         self.assertEqual(jungle.make(1, None).lotus_timeline(), [])
+
+    def test_bar_icons(self):
+        """顶栏倒数的物品图标：莲花 = 治疗莲花；封野四号位假眼、五号位真眼；屯野 / 拉野没有（换台装了 Dota 的电脑再找）"""
+        self.assertEqual(jungle.make(4, None).bar_icon("lotus"), "famango")
+        self.assertEqual(jungle.make(4, None).bar_icon("block"), "ward_observer")
+        self.assertEqual(jungle.make(5, None).bar_icon("block"), "ward_sentry")
+        self.assertEqual(jungle.make(5, None).bar_icon("pull"), "")
+        self.assertEqual(jungle.make(5, None).bar_icon("stack"), "")
         self.assertEqual(jungle.make(2, bench(3.4)).lotus_timeline(), [])
 
 

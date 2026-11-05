@@ -43,6 +43,10 @@ PULL_GROUP_GAP = 15          # 两次拉野隔不到这么多秒就合成一张�
 # 顶栏倒数（玩家 2026-11-04：打起来不看叠加层、不要声音、高频截图怕 VAC）：只靠游戏时钟，在 Dota 时钟正下方挂一小块「下一件事 + 几秒」
 BAR_WORDS = {"small": "拉野", "big": "拉大野", "off": "拉大野"}
 LABELS = {"block": "封野", "stack": "屯野", "pull": "拉野"}
+# 顶栏倒数前面的游戏物品图标（data/items，页面走 /items/<key>.png；玩家 2026-11-05：莲花、封野必须换上图标，屯野 / 拉野换台装了 Dota 的电脑再找）。
+# 封野：四号位插假眼封（侦查守卫），五号位看自家野点被封没、带真眼去扫（岗哨守卫）；莲花：治疗莲花（item_famango，回 125 血 125 蓝）
+BAR_ICONS = {"lotus": "famango"}
+BLOCK_ICONS = {4: "ward_observer", 5: "ward_sentry"}
 PULL_ROLES = {"small": "拉野点（小野）", "big": "大野", "off": "对面大野"}
 
 
@@ -110,6 +114,10 @@ class Plan:
         if "pull" in kinds:
             out += [(m * 60 + p.start, m * 60 + p.end, "pull", BAR_WORDS[p.role]) for m in range(1, PULL_UNTIL) for p in self.pulls]
         return sorted(out)
+
+    def bar_icon(self, kind: str) -> str:
+        """顶栏倒数这种动作前面放哪个物品图标（data/items 的 key）；没有就是空，页面只写字"""
+        return BLOCK_ICONS.get(self.pos, "") if kind == "block" else BAR_ICONS.get(kind, "")
 
     def lotus_timeline(self) -> list[tuple[int, int, str, str]]:
         """抢莲花 [(开始, 结束, "lotus", 词)]：顶栏倒数的第二行，和 timeline() 的封野 / 拉野 / 屯野分开挑，互不挤"""

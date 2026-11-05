@@ -142,7 +142,7 @@ class InGameMixin:
         if not (events or lotus):
             return {"show": False}
         def rows(evs):
-            return [{"at": a, "end": e, "kind": k, "word": w} for a, e, k, w in evs]
+            return [{"at": a, "end": e, "kind": k, "word": w, "icon": self.jungle.bar_icon(k)} for a, e, k, w in evs]
         return {"show": True, "anchor": round(self._bb_anchor * 1000), "paused": self._bb_paused,
                 "events": rows(events), "lotus": rows(lotus)}
 

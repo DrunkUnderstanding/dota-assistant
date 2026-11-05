@@ -766,3 +766,18 @@ Valve 没公开完整字段表，枚举可能落后于游戏，但没见到任�
 
 **验证**（2026-11-05）：单测 `test_jungle.TimelineTest.test_lotus_own_row`、`test_webui.CoachLiveTest.test_jungle_bar`（快照里有 `lotus`、`events` 里没有）；全部单测、ruff、`check_isolation`、`browser_check` 六个页面 0 报错；
 无头 Edge 截 `topbar.html?preview=1`（预览时钟停在 2:50）：第一行「拉野 现在」、第二行「莲花 10」上下两行都在。golden 没跑成（本机没有冻结目录 `D:\dota-golden\home.zip`）。没进真游戏看。
+
+## 62. 野区倒数加游戏物品图标：封野放眼、莲花放治疗莲花（2026-11-05，`jungle.Plan.bar_icon` + `web/topbar.html`）
+
+玩家问屯野 / 拉野 / 莲花能不能用游戏里的图片表示；看过三种写法的对比图（纯字 / 图标 + 字 / 只图标）后：「莲花封野必须换上，屯野拉野我换台电脑你再看」。
+
+**做法**：`jungle.BAR_ICONS` / `BLOCK_ICONS` + `Plan.bar_icon(kind)`：莲花 = 治疗莲花 `famango`（OpenDota 物品表 Healing Lotus，「Instantly restores 125 health and mana」）；
+封野四号位 = 侦查守卫 `ward_observer`（插假眼封），五号位 = 岗哨守卫 `ward_sentry`（看自家野点被封没、带真眼扫）。`jungle_bar_view` 每条动作多一个 `icon`（没有是空串）。
+`topbar.html` 字前面放 `/items/<key>.png`（`data/items` 的装备图标，打包版也带着），图加载出来才显示，下不到就只剩字。图高 20、倒数块宽 120 → 136（「看拉野点 1:55」带图放得下）。
+`topbar.html?preview=1&clock=-55` 能看封野那一条（预览时钟默认还是 2:50）。
+
+**屯野 / 拉野还没图标**：物品 / 技能里没有对应的图；候选是游戏里按住 Alt 时野点上的标记、小地图野点图标，都在游戏资源包里（`.vtex_c` 要解码成 PNG）。
+这台开发机没装 Dota（D 盘 Steam、E 盘 SteamLibrary 都没有 dota 2 beta），**等玩家换到装了 Dota 的电脑再从 `pak01_dir.vpk` 里找**，有合适的加进 `BAR_ICONS` 就行。
+
+**验证**（2026-11-05）：单测 `test_jungle.TimelineTest.test_bar_icons`、`test_webui.CoachLiveTest.test_jungle_bar`（快照里的 `icon`）；全部单测、ruff、`check_isolation`、`browser_check` 六页 0 报错；
+无头 Edge 截了 `topbar.html?preview=1`（2:50「拉野 现在」+ 第二行治疗莲花图标「莲花 10」）和 `&clock=30` / `&clock=-55`（真眼图标「看拉野点 30」「看拉野点 1:55」），字和图都在框里。没进真游戏看。
