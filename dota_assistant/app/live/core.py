@@ -176,7 +176,8 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self._slot_learned: dict[tuple[str, int], int] = {}   # 这局每格记了几张模板（learn_slot 封顶用）
         self.fix_file = consts.FIX_FILE
         # 选人网格上的禁用（红斜线），见 grid.py；新布局在后台建图
-        self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher()
+        self.grid = ban_watcher if ban_watcher is not None else grid.BanWatcher(shot_dir=consts.SHOTS_DIR / "grid")
+        self.grid.name = lambda i: self.db.by_id[i].name_cn if i in self.db.by_id else str(i)
         self._grid_building = False
         self._grid_retry_at = 0.0                # 建图失败后隔一会儿再试
         self._grid_last_boxes: tuple = ()

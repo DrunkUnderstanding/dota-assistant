@@ -12,7 +12,7 @@
 |---|---|
 | `capture.py` | 截屏：`WindowGrabber` 优先 PrintWindow 只截 Dota 窗口（盖在上面的叠加层、弹幕窗口不会截进去）；找不到窗口 / 全黑再退回 `Screen` 用 mss 截整屏 |
 | `recognize.py` | 顶栏识别（原 `vision.py`）：校准 `Calibration`（`calibration.json`，格子存占屏幕比例）、模板库 `TemplateBank`（官方头像 `data/portraits/` + 学到的 `templates/<英雄 id>/`，`templates/0/` 是空位）、`recognize()`、`similarity` / `feature` / `confident`、`DraftView` / `Slot` |
-| `grid.py` | 选人网格认禁用：`find_cells` 找格子、`GridMap` 认格子是谁（按布局存 `data/grid_map.json`）、`banned` 看红斜线；`BanWatcher` 选人时一直看 |
+| `grid.py` | 选人网格认禁用：`find_cells` 找格子、`GridMap` 认格子是谁（按布局存 `data/grid_map.json`；`moved` 把干净图平移到挪了位置的同一套格子）、`wrong_cells` 核对图、`covered` 认被放大卡片盖住的格子、`banned` 看红斜线；`BanWatcher` 选人时一直看，`review` 边用边核对 / 补认存的图，给了 `shot_dir` 就把禁用变化 / 改图 / 禁用没认出的帧存到 `shots/grid/` |
 | `gamefiles.py` | 从 Dota 资源包导出选人网格用的英雄图到 `data/portraits_grid/`（`GRID_PORTRAIT_DIR`；VTEX 里的 YCoCg-DXT5 解码 `dxt5` / `decode_vtex` / `extract_selection`） |
 | `roles.py` | 自动认位置：Windows OCR（PowerShell 调 `Windows.Media.Ocr`）认顶栏名字下面的「优势路 / 中路 / 劣势路 / 辅助 / 纯辅助」，按 GSI 玩家名找自己那格（`ocr` / `find_roles` / `find_name` / `read_roles`） |
 | `buybackscan.py` | 买活自动记：`Watcher` 每秒看顶栏头像变灰 / 变回彩色 + OCR 复活倒计时；`FeedCheck` / `read_feed` 认左侧消息栏「买活了」+ 行首英雄小图；样本存 `shots/buyback/` |
@@ -47,7 +47,7 @@
 - 学模板会学坏：2026-10-29 帮认把空位裁图记成风行者，下一局空格全认成风行者。现在同一英雄认进好几格不算、像空位的裁图不记（`app/live/consts.EMPTY_LIKE`，HANDOFF 第 40 节）；改完没在真实选人里跑过。
 - 出了选人就不再认顶栏，策略时间只补空格子：选完人以后顶栏会认乱，曾把对面阵容冲掉（HANDOFF 第 37 节）。
 - 买活自动记的阈值 / 判据大多是实现假设，只有两次真买活样本、都是 1080p；不灵先看 `shots/buyback/`（HANDOFF 第 31.1~31.3 节）。灰不灰看头像饱和度**中位数**，不看平均（小图标会把平均抬到阈值附近）。
-- 网格认禁用：玩家可自定义布局，不写死坐标；布局不变就沿用 `data/grid_map.json`（HANDOFF 第 19 节）。
+- 网格认禁用：玩家可自定义布局，不写死坐标；布局不变就沿用 `data/grid_map.json`（HANDOFF 第 19 节）。**格子位置一样、英雄排列也可能变**（2026-11-06 力丸 / 斯温 / 复仇之魂轮换，禁了力丸报成斯温），所以存的图边用边核对：没变暗的格子对不上就按长相改，变暗的留着以前记的（第 65、66 节）。**鼠标停在英雄上时放大的卡片会盖住周围 3×3 格**：盖住的格子不认、不算禁用（`covered`，第 66 节）。
 - 截图按物理像素、校准存比例；多屏 + 不同缩放没测过，`monitor` 编号 mss 和 Electron 各自解释（HANDOFF 第 8 节）。
 
 ## 设计记录（原「相关 HANDOFF 节」）
@@ -59,6 +59,7 @@
 - HANDOFF 第 31.1 / 31.2 / 31.3 节（买活自动记）
 - HANDOFF 第 37 / 37.1 / 37.2 节（局内重识别冲掉阵容、帮认）
 - HANDOFF 第 39 节（顶栏去噪点）、第 40 节（「全是风行者」）
+- HANDOFF 第 65 节（禁用认错格：存的网格图排列过期）、第 66 节（放大卡片盖住格子，黑鸟漏报）
 
 ## 变更记录 (Changelog)
 

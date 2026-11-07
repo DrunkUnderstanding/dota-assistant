@@ -34,7 +34,7 @@
 | 数据层（OpenDota 克制 / 配合、STRATZ 分位置、个人数据、头像） | ✅ | — | [sources](../dota_assistant/sources/NOTES.md) |
 | 打分引擎 + 推荐四小组（熟练 / 不熟练 × 胜率最高 / 克制最强） | ✅ 回测过 | 四小组、熟练度分组没实战看过 | [domain](../dota_assistant/domain/NOTES.md) |
 | 屏幕识别（校准、模板、学习模板、去噪点、防误记） | 🟡 | 「全是风行者」「齐天大圣垃圾模板」修完，下一局天梯看日志 | [vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md) |
-| 禁用识别（选人网格红斜线） | 🟡 | 没在有禁用的真实天梯里实时跑过 | [vision](../dota_assistant/vision/NOTES.md) |
+| 禁用识别（选人网格红斜线） | 🟡 | 11-06 / 11-07 天梯里认错格、漏报黑鸟（旧图排列过期；鼠标停在英雄上的放大卡片盖住格子），改成边用边核对、跳过被盖住的格子 + 自动截图，下一局看 `shots/grid/`（第 65、66 节） | [vision](../dota_assistant/vision/NOTES.md) |
 | 对面分路 + 对线打法、剩余位置、机制说明 / 「如果选 X」 | 🟡 | 没在真实选人 / Electron 里看过 | [domain](../dota_assistant/domain/NOTES.md) |
 | 这局不想玩、对面最后一手（猜）、叠加层上改位置 | 🟡 | 真实选人里没用过 | [domain](../dota_assistant/domain/NOTES.md) |
 | 叠加层 + 控制面板（网页 + Electron）、上下滚 / 收起 | ✅ / 🟡 | 没在 Dota 上方实测；副屏拖动、真鼠标拉宽高没跑完 | [web](../web/NOTES.md)、[electron](../electron/NOTES.md) |
@@ -70,7 +70,7 @@
 
 **一句话：大部分功能代码都写完了，最缺的是真实天梯里跑一遍。** 每条要看什么在对应 NOTES 的「待实战验证 / 下一步」小节里写全了。
 
-1. **下一局天梯，选人阶段**看日志：识别有没有漏认 / 乱认 / 同一英雄进好几格、Dota 没开时不再识别（[vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md)）；推荐四小组、对面最后一手、这局不想玩、分路 / 剩余位置合不合常识（[domain](../dota_assistant/domain/NOTES.md)）。
+1. **下一局天梯，选人阶段**看日志：禁用对不对（第 65、66 节：「核对改了 N 格」「有红斜线，但不知道是哪个英雄」，`shots/grid/` 截图核对）；识别有没有漏认 / 乱认 / 同一英雄进好几格、Dota 没开时不再识别（[vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md)）；推荐四小组、对面最后一手、这局不想玩、分路 / 剩余位置合不合常识（[domain](../dota_assistant/domain/NOTES.md)）。
 2. **下一局天梯，局内**：野区倒数位置和秒数、买活 / 大招小条、局内卡片确实不弹只记日志（[domain 局内](../dota_assistant/domain/NOTES-ingame.md)、[app/live](../dota_assistant/app/live/NOTES.md)）。
 3. **弄清「触发 VAC」那回事**，再决定游戏画面野点框开不开回来（[vision](../dota_assistant/vision/NOTES.md)）。
 4. **发版后**：开着旧版看会不会自己弹更新窗口（[app](../dota_assistant/app/NOTES.md)）；新打包版发给朋友，看 Dota 目录 / 阵营对不对（[core](../dota_assistant/core/NOTES.md)）；干净电脑上试免安装版（[packaging](../packaging/NOTES.md)）。
@@ -122,7 +122,7 @@
 | 组合研究（精灵老鹿等） | [research/](research/) |
 
 **以后怎么写**：
-- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 65），标题带日期和关键函数；同时把节号加进下面的索引。
+- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 67），标题带日期和关键函数；同时把节号加进下面的索引。
 - 状态变了：改本文第 2 节那一行（一句话），细节写进模块 NOTES 的「当前状态」。
 - 新的待验证项：写进模块 NOTES 的「待实战验证 / 下一步」；要紧的在本文第 3 节加一句。
 - 本文保持在一两屏内，**不要再往这里堆过程记录**。
@@ -214,3 +214,5 @@
 | 62 | 野区倒数加游戏物品图标：封野放眼、莲花放治疗莲花 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 63 | 屯野 / 拉野也有图标了：黄色野点、自家小兵 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 64 | 反和谐开关：把低暴力资源 game\dota_lv 改名挪开 | [game/NOTES](../dota_assistant/game/NOTES.md) |
+| 65 | 禁用认错格：存的网格图英雄排列过期了，改成每局先核对 + 自动截图 | [vision/NOTES](../dota_assistant/vision/NOTES.md) |
+| 66 | 黑鸟被禁了没报：放大卡片盖住格子，改成边用边核对、跳过被盖住的格子 | [vision/NOTES](../dota_assistant/vision/NOTES.md) |
