@@ -84,6 +84,7 @@ class Advice:
     targeted_rate: list[Suggestion] = field(default_factory=list)   # 不熟练 · 胜率最高：不熟的里按综合胜率排的前 cfg.top_other 个
     next: list[NextGuess] = field(default_factory=list)   # 我是我方最后一手、对面还剩 1 手：猜对面拿谁（前 nextpick.SHOW 个），各自假设拿了给我的推荐
     next_open: dict[int, float] = field(default_factory=dict)   # 同上，猜的对面空着的位置 {位置: 概率}
+    countered: list[Suggestion] = field(default_factory=list)   # 被已选敌人强克、本来会进上面四组的（drop_countered），只列出来说明为什么没推荐
 
     def shown(self) -> list[Suggestion]:
         """给我的推荐，四小组按显示顺序连起来"""
@@ -121,10 +122,19 @@ class Advisor:
     def _suggest(self, draft: Draft, position: int) -> list[Suggestion]:
         history, by_pos = (player.player_history(self.me, position, self.engine.positions)
                            if self.me else ({}, False))
-        return self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
-                                   bans=[*draft.bans, *draft.skip], pool=self.pool, only_pool=self.cfg.only_pool,
-                                   history=history, history_by_position=by_pos,
-                                   position_filter=self.cfg.position_filter, top=None)
+        return self._with_cores(self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
+                                                    bans=[*draft.bans, *draft.skip], pool=self.pool, only_pool=self.cfg.only_pool,
+                                                    history=history, history_by_position=by_pos,
+                                                    position_filter=self.cfg.position_filter, top=None), draft)
+
+    def _with_cores(self, res: list[Suggestion], draft: Draft) -> list[Suggestion]:
+        """给每个推荐填上对面的 1~3 号位（Suggestion.cores，「强克」只算克这几个的）：玩家定的位置优先，其余按常打位置猜（和分路同一个猜法）；
+        猜不出位置的（没分位置数据）也算"""
+        guessed = {g.hero: g.pos for g in lanes.guess([e.id for e in draft.enemies], self.engine.positions, fixed=draft.enemy_pos)}
+        cores = frozenset(e.id for e in draft.enemies if guessed.get(e.id, 1) <= 3)
+        for s in res:
+            s.cores = cores
+        return res
 
     def familiar(self, career: dict[int, tuple[int, int]] | None, pool: list[Hero] = ()) -> set[int] | None:
         """会玩的英雄：生涯打过 cfg.familiar_games 局以上，或者写进了手写英雄池；None = 不分（没生涯数据 / 门槛设成 0）"""
@@ -169,8 +179,9 @@ class Advisor:
                 slots[p] = TeamSlot(p, mine=True)
             else:
                 slots[p] = TeamSlot(p)
-                res_of[p] = self.engine.suggest(position=p, allies=allies, enemies=draft.enemies, bans=draft.bans,
-                                                position_filter=self.cfg.position_filter, top=None)
+                res_of[p] = drop_countered(self._with_cores(self.engine.suggest(
+                    position=p, allies=allies, enemies=draft.enemies, bans=draft.bans,
+                    position_filter=self.cfg.position_filter, top=None), draft))[0]
         used = {s.hero.id for s in shown}
         home = {}                                            # 英雄 → 它综合分最高的那个空位置
         for p, res in res_of.items():
@@ -198,8 +209,11 @@ class Advisor:
                           team=self.team_slots(draft, position), duo=duo, rest=rest)
         res = self._suggest(draft, position)
         familiar = self._mark(res, self.career, self.pool)
-        picks, counter, targeted, targeted_rate = split_four(res, self.cfg.top, self.cfg.top_other,
-                                                             bool(draft.enemies or draft.allies), familiar)
+        has_draft = bool(draft.enemies or draft.allies)
+        # 被强克的只列本来会进四小组的（不去掉时的四组里有它），免得一长串没人想选的
+        countered = [s for s in sum(split_four(res, self.cfg.top, self.cfg.top_other, has_draft, familiar), []) if s.hard_by]
+        res = drop_countered(res)[0]
+        picks, counter, targeted, targeted_rate = split_four(res, self.cfg.top, self.cfg.top_other, has_draft, familiar)
         shown = picks + counter + targeted + targeted_rate
         slots = self.team_slots(draft, position, shown) if draft.allies else []
         # 这个位置一个会玩的都没有时不分（split_four），标题也就不写「你打过 N 局以上的」
@@ -208,7 +222,7 @@ class Advisor:
                       team=slots, familiar_min=gated, duo=duo, rest=rest, picks_counter=counter, targeted_rate=targeted_rate,
                       next=self.next_guesses(draft, position) if last_pick(draft) else [],
                       next_open=nextpick.open_positions([e.id for e in draft.enemies], self.engine.positions, draft.enemy_pos)
-                      if last_pick(draft) else {})
+                      if last_pick(draft) else {}, countered=countered)
 
     def next_guesses(self, draft: Draft, position: int) -> list[NextGuess]:
         """猜对面最后一手（只看我方已选 4 人，不看我这手，见 nextpick），前 nextpick.SHOW 个各自假设对面拿了，
@@ -219,7 +233,7 @@ class Advisor:
         out = []
         for h, p in guesses[:nextpick.SHOW]:
             e = self.db.by_id[h]
-            res = self._suggest(replace(draft, enemies=[*draft.enemies, e]), position)
+            res = drop_countered(self._suggest(replace(draft, enemies=[*draft.enemies, e]), position))[0]
             picks = split_next(res, NEXT_TOP, NEXT_OTHER, self._mark(res, self.career, self.pool))
             out.append(NextGuess(e, p, sum(self.engine.advantage(h, a.id) for a in draft.allies), picks,
                                  self.explain(picks, [*draft.enemies, e])))
@@ -249,9 +263,17 @@ class Advisor:
                 for s in picks if s.hero.id in self.kb.heroes}
 
 
+def drop_countered(res: list[Suggestion]) -> tuple[list[Suggestion], list[Suggestion]]:
+    """(留下的, 被强克去掉的)：被某个已选敌人克到 engine.AVOID_COUNTER 个百分点以上的，综合胜率再高也不推荐
+    （玩家 2026-11-08：「有强被克制关系的时候这种被克制英雄不要推荐，即使这个英雄的胜率很高」）。顺序不变"""
+    keep = [s for s in res if not s.hard_by]
+    return keep, [s for s in res if s.hard_by]
+
+
 def _by_situational(res) -> list[Suggestion]:
-    """按「克制 + 配合」（显示的百分点，和卡片上的数字顺序一致）排，只要综合胜率不低于 50%（免得挑出自身太弱、克一个人也救不回来的）"""
-    return sorted((s for s in res if s.score >= 0), key=lambda s: -s.situational_pct)
+    """按「克制 + 配合」（显示的百分点，和卡片上的数字顺序一致）排，只要综合胜率不低于 50%（免得挑出自身太弱、克一个人也救不回来的）。
+    强克对面 1~3 号位（Suggestion.hard_over）的排在最前面（玩家 2026-11-08：「有强克制对手的英雄也可以选择」），它们之间仍按克制 + 配合"""
+    return sorted((s for s in res if s.score >= 0), key=lambda s: (not s.hard_over, -s.situational_pct))
 
 
 def split_four(res: list[Suggestion], top: int, other: int, has_draft: bool,
@@ -374,6 +396,8 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
                 if s.syn:          # 和每个已选队友的配合，负的也列出来（相互拖累，例如抢同一个位置）
                     out.append(("dim", "　配合 " + "  ".join(f"{a.name_cn} {pct(v):+.1f}" for a, v in s.syn)))
                 out += [("dim", f"　{'✓' if w.kind == 'good' else '✗'} {w.text}") for w in advice.why.get(s.hero.id, [])]
+    if advice.countered:
+        out.append(("warn", "被克太狠，没推荐：" + "、".join(countered_text(s) for s in advice.countered)))
     if advice.next:
         out.append(("head", f"{NEXT_TITLE}（按我方 4 人推算）"))
         out.append(("dim", "　对面空着：" + " / ".join(f"{POSITION_NAMES[p]} {q:.0%}" for p, q in
@@ -389,6 +413,12 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
         e, v = advice.threat
         out.append(("warn", f"注意：{e.name_cn} 对我方威胁最大（{pct(v):+.1f}%）"))
     return out
+
+
+def countered_text(s: Suggestion) -> str:
+    """「殁境神蚀者（怕 司夜刺客 -5.4%）」"""
+    e, v = s.hard_by
+    return f"{s.hero.name_cn}（怕 {e.name_cn} {pct(v):+.1f}%）"
 
 
 def team_line(advice: Advice) -> str:
@@ -455,6 +485,9 @@ def render_view(advice: Advice, side: str | None) -> dict:
         "my_hero": hero_ref(d.my_hero) if d.my_hero else None,
         "groups": out,
         "skipped": [] if d.my_hero else [hero_ref(h) for h in d.skip],   # 这局不想玩的，叠加层列出来、点名字恢复
+        # 被已选敌人强克、本来会进四小组的（drop_countered）：叠加层列一行说明为什么没推荐
+        "countered": [{**hero_ref(s.hero), "by": hero_ref(s.hard_by[0]), "delta": round(pct(s.hard_by[1]), 1)}
+                      for s in advice.countered],
         "threat": threat,
         # 对面分路（猜的）+ 我选好英雄后我这路的对线提示
         "lanes": lanes.view(replace(advice.lanes, side=side), lambda i: {"id": i, "name": _namer(d)(i)},

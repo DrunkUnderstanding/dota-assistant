@@ -1,11 +1,26 @@
 """推荐卡片上点 ×「这局不想玩」：从给我的推荐里去掉、后面的顺位补上来，点名字恢复，新一局清空。不联网、不碰 data/。"""
 import json
 import unittest
+from unittest import mock
 
 from dota_assistant.core.config import Config
 from dota_assistant.domain import advisor as adv
+from dota_assistant.domain import engine as E
 from tests.test_engine import AXE, CM, PL, TIDE
 from tests.test_webui import fake_advisor, make_live, wait
+
+# 人造数据里幻影长矛手输给潮汐 56%，自身强度被拉低，别的英雄打他 50% 就算「被他克 2 点多」，会被「被克太狠不推荐」
+# （engine.AVOID_COUNTER，HANDOFF 第 67 节）筛掉。这里不测强克制（见 test_hard_counter），门槛关掉
+_NO_AVOID = mock.patch.object(E, "AVOID_COUNTER", 99.0)
+
+
+def setUpModule():
+    _NO_AVOID.start()
+
+
+def tearDownModule():
+    _NO_AVOID.stop()
+
 
 
 class AdvisorSkipTest(unittest.TestCase):

@@ -39,11 +39,12 @@
 - 个人数据不参与排名：`W_ME`、`FAMILIAR_BONUS`、`POOL_BONUS` 都是 0（玩家 2026-10-24 / 25 决定）；对线加权 `W_LANE`、反制扣分 `W_RISK` 回测无效，默认 0，只保留「易被反制」文字提示（HANDOFF 第 2.1 节）。
 - 冷门英雄 / 冷门位置打折：`COLD_RANK = 40`、最多扣 `COLD_MAX` ≈ 2 个百分点，只影响自身强度项（HANDOFF 第 43.1、43.2 节）。
 - 「阵容」胜率用 `Engine.draft_rest` + 阵营 `RADIANT_EDGE = 0.13`，只进叠加层标题栏，不影响排名（HANDOFF 第 45 节）。
+- 强克制（HANDOFF 第 67 节）：被某个已选敌人克 ≥ `AVOID_COUNTER = 2.5` 个百分点的不推荐（`advisor.drop_countered`，给我的 / 最后一手假设 / 给队友的都去掉，`Advice.countered` 列出来）；克对面 1~3 号位 ≥ `HARD_COUNTER = 3` 个百分点（`Suggestion.cores`）的标「强克」、「克制最强」排前面。不改分数。
 - 「推荐」只放生涯打过 `familiar_games`（默认 20）局以上的英雄，不熟的进「针对这局」并标出来；含双排队友（HANDOFF 第 43 节）。`Draft.skip`（这局不想玩）只从给我的推荐里去掉、不算禁用、不进 `Draft.key()`（HANDOFF 第 44 节）。
 
 ## 对应测试
 
-`test_engine`（人造数据回归）、`test_familiar`（熟练度分组 + 胜率拆解）、`test_skip`、`test_lanes`、`test_explain`、`test_teamfight`、`test_itembuild`、`test_coach`、`test_brief`、`test_death`、`test_jungle`、`test_camps`、`test_buyback`、`test_ultcd`、`test_mates`、`test_lanestate`（含 `lanelog`）、`test_live`（播报文案）、`test_webui`（结构化视图）、`test_nokey`。
+`test_engine`（人造数据回归）、`test_hard_counter`（强克制）、`test_familiar`（熟练度分组 + 胜率拆解）、`test_skip`、`test_lanes`、`test_explain`、`test_teamfight`、`test_itembuild`、`test_coach`、`test_brief`、`test_death`、`test_jungle`、`test_camps`、`test_buyback`、`test_ultcd`、`test_mates`、`test_lanestate`（含 `lanelog`）、`test_live`（播报文案）、`test_webui`（结构化视图）、`test_nokey`。
 
 ## 注意事项 / 坑
 
@@ -58,7 +59,7 @@
 
 本模块的设计 / 验证 / 待验证记录在 [NOTES.md](NOTES.md)（选人推荐 + 队友战绩）、[NOTES-ingame.md](NOTES-ingame.md)（局内）（2026-11-04 从 HANDOFF 拆过来，节号不变）。下面列的节号不在本目录 NOTES 里的，按 [HANDOFF 节号索引](../../docs/HANDOFF.md#节号索引) 找。
 
-- 打分 / 推荐：第 2.1 节、第 5 节、第 24 / 24.1 节（剩余位置）、第 26 节（推荐 + 针对这局）、第 43 / 43.1 / 43.2 节、第 44 节、第 45 节
+- 打分 / 推荐：第 67 节（强克制）、第 2.1 节、第 5 节、第 24 / 24.1 节（剩余位置）、第 26 节（推荐 + 针对这局）、第 43 / 43.1 / 43.2 节、第 44 节、第 45 节
 - 机制对位 / 分路：第 16 节（选人时的「为什么选」）、第 18 节（推荐卡片上的「对位」克制）、第 22 节（对面分路 + 对线打法）、第 30 节（后期团战）
 - 局内：第 11 / 11.1 节（缺口提醒）、第 15 节（本局要点）、第 18 节（死亡复盘）、第 25 / 25.1 节（出装、按死法补装）、第 27 节（野区）、第 28 节（本局要点按阶段弹）、第 29 节（后期内容）、第 31 / 32 节（买活、大招）、第 33 节（出装双重依据）、第 34 节（装备图标）
 - 队友战绩：第 38 / 38.1 / 38.2 节

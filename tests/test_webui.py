@@ -7,11 +7,13 @@ import unittest
 import urllib.error
 import urllib.request
 from types import SimpleNamespace
+from unittest import mock
 
 import cv2
 import numpy as np
 
 from dota_assistant.domain import advisor as adv
+from dota_assistant.domain import engine as E
 from dota_assistant.vision import camera
 from dota_assistant.vision import grid
 from dota_assistant.core import config
@@ -69,6 +71,19 @@ TMP = Path(tempfile.mkdtemp(prefix="dota-webui-"))
 lanelog.LOG_FILE = TMP / "lane_log.jsonl"                      # 3 / 6 / 10 分钟的对线记录不写本机 data/
 live_consts.FIX_FILE = TMP / "fixes.jsonl"                           # 帮认记录也不写本机 data/
 mates_mod.MATES_FILE = TMP / "mates.json"                         # 查过的队友也不读写本机 data/
+
+# 人造数据里幻影长矛手输给潮汐 56%，自身强度被拉低，别的英雄打他 50% 就算「被他克 2 点多」，会被「被克太狠不推荐」
+# （engine.AVOID_COUNTER，HANDOFF 第 67 节）筛掉。这里不测强克制（见 test_hard_counter），门槛关掉
+_NO_AVOID = mock.patch.object(E, "AVOID_COUNTER", 99.0)
+
+
+def setUpModule():
+    _NO_AVOID.start()
+
+
+def tearDownModule():
+    _NO_AVOID.stop()
+
 
 
 def no_brief(*args, **kw):

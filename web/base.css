@@ -330,6 +330,7 @@ img { display: block; }
   color: var(--text-dim); font: 11px/1.5 var(--font); cursor: pointer;
 }
 .ov-skipped button:hover { color: var(--text); border-color: var(--gold); }
+.ov-countered em { font-style: normal; color: var(--bad); }
 /* 「针对这局」卡片：胜率前面分开写克制（绿）、配合（蓝），负数红 */
 .pick-situs { margin-left: auto; display: flex; gap: 4px; }
 .pick-situs + .pick-wr { margin-left: 0; }
@@ -379,6 +380,7 @@ img { display: block; }
   background: rgba(255, 255, 255, 0.06); color: var(--text-dim);
 }
 .tag-good { color: var(--good); background: rgba(92, 199, 127, 0.12); }
+.tag-hard { color: var(--good); background: rgba(92, 199, 127, 0.24); font-weight: 600; }
 .tag-syn { color: var(--syn); background: rgba(94, 174, 234, 0.12); }
 .tag-bad { color: var(--bad); background: rgba(229, 103, 92, 0.12); }
 .tag-risk { color: var(--risk); background: rgba(235, 157, 76, 0.13); }

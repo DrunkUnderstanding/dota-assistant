@@ -367,6 +367,10 @@ function draftHTML(v) {
     html += `<section class="ov-group ${folded ? 'is-folded' : ''}"><h3><span>${esc(g.title)}${note}</span>${fold}</h3>${items}</section>`;
   }
   if (v.next?.guesses?.length) html += nextHTML(v.next, rank);
+  if (v.countered?.length) {                         // 被已选敌人克太狠（engine.AVOID_COUNTER）去掉的，只说明不能点
+    html += `<div class="ov-skipped ov-countered"><span>被克太狠，没推荐</span>${v.countered.map((h) =>
+      `<em title="${esc(`${h.by.name}克${h.name} ${h.delta.toFixed(1)}%，综合胜率再高也不推荐`)}">${esc(h.name)}（怕 ${esc(h.by.name)} ${h.delta.toFixed(1)}%）</em>`).join('')}</div>`;
+  }
   if (v.skipped?.length) {                           // 这局点 × 去掉的：点名字恢复，新一局自动清空
     html += `<div class="ov-skipped"><span>这局不想玩</span>${v.skipped.map((h) => `<button type="button" data-unskip="${h.id}" title="恢复推荐${esc(h.name)}">${esc(h.name)} ↺</button>`).join('')}</div>`;
   }

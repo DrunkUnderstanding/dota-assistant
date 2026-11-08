@@ -22,7 +22,7 @@
 
 | 文件 | 测的模块 |
 |---|---|
-| `test_engine.py` `test_familiar.py` `test_skip.py` | `domain/engine`、`domain/advisor`（打分回归、熟练度分组 + 胜率拆解、这局不想玩） |
+| `test_engine.py` `test_familiar.py` `test_skip.py` `test_hard_counter.py` | `domain/engine`、`domain/advisor`（打分回归、熟练度分组 + 胜率拆解、这局不想玩、强克制） |
 | `test_lanes.py` `test_explain.py` `test_teamfight.py` | `domain/lanes` `explain` `teamfight`（有本地知识库时抽查真实阵容） |
 | `test_itembuild.py` `test_coach.py` `test_brief.py` `test_death.py` `test_jungle.py` `test_camps.py` | 出装、缺口提醒、本局要点、死亡复盘、野区、野点标记（位置 / 秒数） |
 | `test_camera.py` | 游戏画面里的镜头：投影、反推镜头、认自己的血条（用 `tests/data/healthbars_own_and_ally.png`） |

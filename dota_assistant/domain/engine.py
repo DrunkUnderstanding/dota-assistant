@@ -55,6 +55,13 @@ W_LANE = 0.0            # 对线对手的额外克制权重
 W_RISK = 0.0            # 被反制风险的权重
 RISK_TOP = 3            # 取最克我的前几个还没被选的英雄
 RISK_HINT = 4.0         # 对面还剩 ≥3 手、且有英雄克我 ≥ 4 个百分点时，在理由里提示
+# 强克制（玩家 2026-11-08：对面有小强还推荐了黑鸟——黑鸟怕小强 −5.4，靠自身 54.6% 撑到 50.4% 留在「推荐」里）：
+# 被某个已选敌人克到 AVOID_COUNTER 个百分点以上的，综合胜率再高也不推荐（advisor.drop_countered，列在「被克太狠，没推荐」，不分对面位置——小强就是四号位）；
+# 反过来克对面某个 1~3 号位 HARD_COUNTER 个百分点以上的标「强克」，「克制最强」两组排前面（advisor._by_situational）。
+# 门槛同日玩家定：「大概 3 个点其实就非常克制了，改到 2 个点就不建议吧」，再改「改到 2.5 试试」（最初 4 / 4）。
+# 全部约 1.6 万对对位里 ≤ −2.5 的约占 5.1%（每个英雄平均约 6 个克星；−2 是 8.9%、约 11 个），≥ 3 的约 2.8%（约 3.6 个）；≤ −4 才 0.9%，黑鸟怕小强 −5.4 排在前 20 名
+AVOID_COUNTER = 2.5
+HARD_COUNTER = 3.0
 # 我的位置 → 和我对线的敌方位置（优势路 1+5 对劣势路 3+4，中路对中路）
 LANE_OPPONENTS = {1: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5), 5: (3, 4)}
 # 天辉自带的优势（logit），只进叠加层顶上的「阵容」胜率，不影响排名（同一手的候选都在同一边）。
@@ -98,10 +105,24 @@ class Suggestion:
     at_pos: float | None = None        # 加上这个位置相对整体的胜率差（还没按局数收缩）
     counter: float = 0.0
     synergy: float = 0.0
+    cores: frozenset[int] | None = None   # 对面 1~3 号位的英雄 id（advisor 按分路猜的 / 玩家定的填）；None = 不分位置，「强克」谁都算
 
     @property
     def winrate(self) -> float:
         return sigmoid(self.score) * 100
+
+    @property
+    def hard_by(self) -> tuple[Hero, float] | None:
+        """最狠克我的已选敌人 (英雄, 优势)，克我 ≥ AVOID_COUNTER 个百分点才算；没有就 None"""
+        worst = min(self.vs, key=lambda t: t[1], default=None)
+        return worst if worst and pct(worst[1]) <= -AVOID_COUNTER else None
+
+    @property
+    def hard_over(self) -> list[tuple[Hero, float]]:
+        """我强克的已选敌人（克 ≥ HARD_COUNTER 个百分点），从大到小。只算对面 1~3 号位（cores）：
+        玩家 2026-11-08「这个克制尽量针对对手的 1、2、3 号位，不然这个克制不好」——克辅助换不来多少"""
+        return [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1])
+                if pct(v) >= HARD_COUNTER and (self.cores is None or h.id in self.cores)]
 
     @property
     def situational(self) -> float:
@@ -145,13 +166,17 @@ class Suggestion:
         return text + f"＝ {self.winrate:.1f}%"
 
     def reason_parts(self) -> list[tuple[str, str]]:
-        """推荐理由的各段：[(种类, 文字)]，种类 = unfamiliar 不熟 / good 克 / syn 配 / bad 怕 / risk 易被反制 / meta 版本强势 /
-        me 个人 / pool 英雄池。「不熟」放最前面：胜率是会玩的人打出来的，不熟的人拿去不一定有这么多"""
+        """推荐理由的各段：[(种类, 文字)]，种类 = unfamiliar 不熟 / hard 强克 / good 克 / syn 配 / bad 怕 / risk 易被反制 /
+        meta 版本强势 / me 个人 / pool 英雄池。「不熟」放最前面：胜率是会玩的人打出来的，不熟的人拿去不一定有这么多"""
         parts = []
         if self.unfamiliar is not None:
             g, w = self.unfamiliar
             parts.append(("unfamiliar", f"不熟：生涯 {g} 局 {w / g:.0%}" if g else "不熟：没玩过"))
-        good = [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1]) if pct(v) >= 0.8][:2]
+        hard = self.hard_over[:2]
+        if hard:
+            parts.append(("hard", "强克 " + "、".join(f"{h.name_cn}({pct(v):+.1f}%)" for h, v in hard)))
+        good = [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1])
+                if pct(v) >= 0.8 and h not in {x for x, _ in hard}][:2 - len(hard)]
         bad = [(h, v) for h, v in sorted(self.vs, key=lambda t: t[1]) if pct(v) <= -1.5][:1]
         team = [(h, v) for h, v in sorted(self.syn, key=lambda t: -t[1]) if pct(v) >= 1.0][:1]
         unteam = [(h, v) for h, v in sorted(self.syn, key=lambda t: t[1]) if pct(v) <= -1.5][:1]   # 负配合（和「但怕」一样的门槛）

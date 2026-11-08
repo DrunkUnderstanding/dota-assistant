@@ -16,6 +16,19 @@ from tests.test_webui import fake_advisor
 
 TMP = Path(tempfile.mkdtemp(prefix="dota-familiar-"))
 
+# 人造数据里幻影长矛手输给潮汐 56%，自身强度被拉低，别的英雄打他 50% 就算「被他克 2 点多」，会被「被克太狠不推荐」
+# （engine.AVOID_COUNTER，HANDOFF 第 67 节）筛掉。这里不测强克制（见 test_hard_counter），门槛关掉
+_NO_AVOID = mock.patch.object(E, "AVOID_COUNTER", 99.0)
+
+
+def setUpModule():
+    _NO_AVOID.start()
+
+
+def tearDownModule():
+    _NO_AVOID.stop()
+
+
 
 def advisor(career=None, duo=None, familiar_games=20):
     a = fake_advisor(Config(position_filter=False, top=2, top_other=2, familiar_games=familiar_games))
