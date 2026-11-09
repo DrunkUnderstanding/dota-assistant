@@ -140,6 +140,45 @@ def load_positions(cfg: Config) -> dict[int, dict[int, tuple[int, int]]] | None:
     return {int(h): {int(pos): tuple(gw) for pos, gw in v.items()} for h, v in raw.items()}
 
 
+# 对线胜负（STRATZ laneOutcome，2026-11-09 参考同行 gg-go-next 的「对线模式」）：英雄打某个位置时，对上某个英雄那条线的赢 / 平 / 输。
+# 一次 GraphQL 用别名查 LANE_BATCH 个英雄（实测 20 个约 1 秒），5 个位置 × 7 次 ≈ 35 次请求
+LANE_BATCH = 20
+
+
+def fetch_lanes(cfg: Config, hero_ids: list[int], log=http._say) -> dict:
+    """{位置: {英雄: {对线英雄: [线数, 赢线 − 输线]}}}（赢 / 输都含碾压；对线英雄不分他打几号位），STRATZ 对应段位最近的天梯"""
+    br = http._stratz_brackets(cfg)
+    fields = "heroId2 matchCount winCount lossCount stompWinCount stompLossCount"
+    out: dict[str, dict[str, dict[str, list[int]]]] = {}
+    for pos in _POSITIONS:
+        rows: dict[str, dict[str, list[int]]] = {}
+        for i in range(0, len(hero_ids), LANE_BATCH):
+            chunk = hero_ids[i:i + LANE_BATCH]
+            q = ("query($p: [MatchPlayerPositionType], $b: [RankBracketBasicEnum]) { heroStats { "
+                 + " ".join(f"h{h}: laneOutcome(heroId: {h}, isWith: false, positionIds: $p, bracketBasicIds: $b) {{ {fields} }}"
+                            for h in chunk) + " } }")
+            for alias, rs in http._stratz(cfg, q, p=[f"POSITION_{pos}"], b=br)["heroStats"].items():
+                rows[alias[1:]] = {str(r["heroId2"]): [r["matchCount"], r["winCount"] + r["stompWinCount"]
+                                                       - r["lossCount"] - r["stompLossCount"]] for r in rs or []}
+        out[pos] = rows
+        log(f"  {pos} 号位：{len(rows)} 个英雄，{sum(v[0] for r in rows.values() for v in r.values())} 条对位记录")
+    return {"fetched_at": int(time.time()), "brackets": br, "positions": out}
+
+
+def lanes_path(cfg: Config) -> Path:
+    return DATA_DIR / f"lanes_r{cfg.rank_min}-{cfg.rank_max}.json"
+
+
+def load_lanes(cfg: Config) -> dict[int, dict[int, dict[int, tuple[int, int]]]] | None:
+    """{位置: {英雄: {对线英雄: (线数, 赢线 − 输线)}}}；没拉过（没 token / 还没 update）返回 None"""
+    p = lanes_path(cfg)
+    if not p.exists():
+        return None
+    raw = json.loads(p.read_text(encoding="utf-8"))["positions"]
+    return {int(pos): {int(h): {int(e): tuple(v) for e, v in row.items()} for h, row in heroes.items()}
+            for pos, heroes in raw.items()}
+
+
 def load_stats(cfg: Config) -> dict:
     p = stats_path(cfg)
     if not p.exists():

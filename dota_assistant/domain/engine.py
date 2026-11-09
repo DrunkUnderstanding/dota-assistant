@@ -29,7 +29,10 @@ K_VS = 400
 K_SYN = 1100
 # 配合和克制算法一样（实际 − 应有，再按样本收缩），收缩已经按配合样本少、效应小处理过，不再额外打折：
 # 玩家 2026-10-30 要「克制 2.1 和配合 2.1 等价」。回测（1738 场样本外）0.7 → 1.0：区分度 +0.0012（95% 区间 −0.0007 ~ +0.0032），没有可测的差别。
-W_SYN = 1.0
+# 2026-11-09 玩家看了同行 gg-go-next（克制合计 + 0.5 × 配合合计）要「试试 0.5」：3000 场样本外同批配对（docs/research/syn-weight/），
+# 0.5 比 1.0 区分度 +0.0018（95% 区间 −0.0004 ~ +0.0041）、阵容准确率 58.47% vs 58.03%、对数损失 −0.0010（−0.0023 ~ +0.0003）：
+# 三项方向都略好，但都没出噪声范围。改成 0.5；卡片上每个队友的配合数（「配 X」「配合」那排）仍是原值，「配合」合计那一步是减半后的
+W_SYN = 0.5
 # 2026-10-25 玩家要求只按英雄本身（强度、克制、配合）排，不看自己打了几局：下面两项加分关掉（原 0.04 / 0.08）
 POOL_BONUS = 0.0        # 手写英雄池里的英雄加分（0.04 ≈ 1 个百分点）
 FAMILIAR_BONUS = 0.0    # 近期天梯打满 FAMILIAR_FULL 局的英雄加分（0.08 ≈ 2 个百分点），按局数线性
@@ -62,6 +65,18 @@ RISK_HINT = 4.0         # 对面还剩 ≥3 手、且有英雄克我 ≥ 4 个�
 # 全部约 1.6 万对对位里 ≤ −2.5 的约占 5.1%（每个英雄平均约 6 个克星；−2 是 8.9%、约 11 个），≥ 3 的约 2.8%（约 3.6 个）；≤ −4 才 0.9%，黑鸟怕小强 −5.4 排在前 20 名
 AVOID_COUNTER = 2.5
 HARD_COUNTER = 3.0
+# 克制等级 S~F（2026-11-09 玩家看了同行 gg-go-next 的等级觉得有意思）：按「对已选敌人的克制合计 ÷ √敌人数」分档。
+# 除以 √k 是因为 k 个对位的平均会随人数变窄（2026-11-09 实查：1 个敌人时第 90 百分位 +1.87，5 个时平均只有 +0.85），
+# 合计 / √k 不管几个敌人都和单个对位同一个分布，档位才不会「敌人越多越难拿 S」。
+# 档位线 = 全部约 1.6 万对对位（收缩后、百分点）的第 90 / 75 / 50 / 25 / 10 百分位（2026-11-09：+1.88 / +0.96 / 0 / −0.96 / −1.88），
+# 也就是 S 前 10%、A 10~25%、B 25~50%、C 50~75%、D 75~90%、F 最后 10%。gg-go-next 的线（平均 ≥2 S）是按没收缩的胜率差定的，不能照搬。
+# 只看克制、不含配合和自身强度；数据更新后分布变化不大，大改统计方法时重查。
+GRADE_CUTS = ((1.9, "S"), (1.0, "A"), (0.0, "B"), (-1.0, "C"), (-1.9, "D"))
+
+
+def grade_of(z: float) -> str:
+    """合计 ÷ √人数（百分点）→ S~F，见 GRADE_CUTS"""
+    return next((g for cut, g in GRADE_CUTS if z >= cut), "F")
 # 我的位置 → 和我对线的敌方位置（优势路 1+5 对劣势路 3+4，中路对中路）
 LANE_OPPONENTS = {1: (3, 4), 2: (2,), 3: (1, 5), 4: (1, 5), 5: (3, 4)}
 # 天辉自带的优势（logit），只进叠加层顶上的「阵容」胜率，不影响排名（同一手的候选都在同一边）。
@@ -106,6 +121,7 @@ class Suggestion:
     counter: float = 0.0
     synergy: float = 0.0
     cores: frozenset[int] | None = None   # 对面 1~3 号位的英雄 id（advisor 按分路猜的 / 玩家定的填）；None = 不分位置，「强克」谁都算
+    lane: list = field(default_factory=list)   # [(和我对线的敌方英雄, lanes.LaneEdge)]，advisor 填；只显示、不进综合分
 
     @property
     def winrate(self) -> float:
@@ -123,6 +139,21 @@ class Suggestion:
         玩家 2026-11-08「这个克制尽量针对对手的 1、2、3 号位，不然这个克制不好」——克辅助换不来多少"""
         return [(h, v) for h, v in sorted(self.vs, key=lambda t: -t[1])
                 if pct(v) >= HARD_COUNTER and (self.cores is None or h.id in self.cores)]
+
+    @property
+    def counter_grade(self) -> tuple[str, float] | None:
+        """克制等级 (S~F, 合计 ÷ √敌人数 的百分点)，见 GRADE_CUTS；还没有已选敌人时 None"""
+        if not self.vs:
+            return None
+        z = sum(pct(v) for _, v in self.vs) / math.sqrt(len(self.vs))
+        return grade_of(z), z
+
+    @property
+    def countered_grade(self) -> tuple[str, float] | None:
+        """被克等级：对面已选英雄克这个候选多狠（S = 被克最狠，F = 几乎克不动）。数据里「A 克 B」和「B 克 A」正好相反，
+        所以就是 counter_grade 反过来（克 S ↔ 被克 F）；玩家 2026-11-09 要两个方向都写出来，一眼看清方向"""
+        g = self.counter_grade
+        return None if g is None else (grade_of(-g[1]), -g[1])
 
     @property
     def situational(self) -> float:

@@ -37,7 +37,7 @@ BUYBACK_FROM = 30            # 第几分钟起「下一件」要提醒买了还�
 
 # ---------- 一行里的装备（界面显示图标）----------
 
-MARK = {"core": "", "counter": "★", "common": "·", "death": "✚"}
+MARK = {"core": "", "counter": "★", "common": "·", "death": "✚", "avoid": "✗"}
 
 
 def chip(key: str, name: str, sub: str = "", mark: str = "") -> dict:
@@ -110,6 +110,11 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
             continue
         why, quote = n.brief or n.text, "\n".join(n.evidence)
         share, med = stat(k)
+        if n.avoid:                          # 「别买」（coach.AVOID_TIP）：从顺序里拿掉，列成 ✗ 提示
+            steps.pop(k, None)
+            common = [s for s in common if s.key != k]
+            tips.append(Step(k, base.items[k].name, med or 0, "avoid", why, quote, share))
+            continue
         if n.tip:
             minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
             tips.append(Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0))
@@ -207,8 +212,9 @@ def next_parts(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[
 def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]:
     """本局要点「出装」一节：[lo, hi) 分钟的顺序一行 + 每件针对装的理由（悬停看原文）+ 只作提示的针对装"""
     inside = lambda s: s.minute >= lo and (hi is None or s.minute < hi)
-    steps, tips = [s for s in b.steps if inside(s)], [s for s in b.tips if inside(s)]
-    if not (steps or tips):
+    steps, tips = [s for s in b.steps if inside(s)], [s for s in b.tips if inside(s) and s.kind != "avoid"]
+    avoid = [s for s in b.tips if s.kind == "avoid"] if lo == 0 else []     # 「别买」只在第一页说一次，不分时间段
+    if not (steps or tips or avoid):
         return []
     order = []
     for i, s in enumerate(steps):
@@ -217,6 +223,7 @@ def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]
     lines += [("warn" if s.urgent else "row", [chip(s.key, s.name, mark="counter"), f"：{s.why}"], s.quote)
               for s in steps if s.kind == "counter"]
     lines += [("row", ["提示 · ", chip(s.key, s.name), f"：{s.why}（{coach.NO_DATA}）"], s.quote) for s in tips]
+    lines += [("warn", ["这局别出 ", chip(s.key, s.name, mark="avoid"), f"：{s.why}"], s.quote) for s in avoid]
     if steps:
         lines.append(("dim", "′ = 同分段中位购买时间；无标记 = 核心（≥40% 的局买）；"
                       + ("★ = 针对这局阵容；" if any(s.kind == "counter" for s in steps) else "") + "· = 之后常见"))
@@ -232,7 +239,7 @@ def late_lines(b: Build, late: float) -> list[tuple]:
     early = [chip(s.key, s.name) for s in b.steps if s.kind == "counter" and s.minute < late]
     if early:
         lines.insert(1 if lines else 0, ("row", ["针对这局的", group(early), "前面就该有，到后期还没有先补"]))
-    early_tips = [chip(s.key, s.name) for s in b.tips if s.minute < late]
+    early_tips = [chip(s.key, s.name) for s in b.tips if s.minute < late and s.kind != "avoid"]
     if early_tips:
         lines.insert(1 if lines else 0, ("row", ["提示 · 前面提过的", group(early_tips), f"，到后期还没有可以补（{coach.NO_DATA}）"]))
     if not lines:

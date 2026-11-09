@@ -100,6 +100,23 @@ class EngineTest(unittest.TestCase):
         self.assertIn(CM, [s.hero for s in eng.suggest(position=1, history=hist, history_by_position=True,
                                                        top=None)])
 
+    def test_counter_grade(self):
+        """克制等级：合计 ÷ √敌人数 分档（E.GRADE_CUTS），没有已选敌人时 None"""
+        lg = lambda p: p / 25          # 百分点 → logit（pct 的反函数）
+        S = E.Suggestion
+        self.assertIsNone(S(TIDE, 0, 0).counter_grade)
+        self.assertEqual(S(TIDE, 0, 0, vs=[(PL, lg(2.0))]).counter_grade[0], "S")
+        self.assertEqual(S(TIDE, 0, 0, vs=[(PL, lg(0.5))]).counter_grade[0], "B")
+        self.assertEqual(S(TIDE, 0, 0, vs=[(PL, lg(-2.0))]).counter_grade[0], "F")
+        # 4 个敌人各 +1：合计 4 ÷ √4 = 2 → S（只看平均会是 +1，只够 A）
+        four = S(TIDE, 0, 0, vs=[(h, lg(1.0)) for h in (PL, AXE, CM, WK)])
+        self.assertEqual(four.counter_grade[0], "S")
+        self.assertAlmostEqual(four.counter_grade[1], 2.0)
+        # 被克等级 = 反过来：克 S ↔ 被克 F，克 F ↔ 被克 S
+        self.assertEqual(four.countered_grade[0], "F")
+        self.assertEqual(S(TIDE, 0, 0, vs=[(PL, lg(-2.0))]).countered_grade[0], "S")
+        self.assertIsNone(S(TIDE, 0, 0).countered_grade)
+
     def test_lookup_by_alias(self):
         db = HeroDB(HEROES)
         self.assertEqual(db.find("潮汐"), TIDE)

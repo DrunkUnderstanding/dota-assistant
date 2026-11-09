@@ -125,6 +125,19 @@ function vsRow(item, syn = false) {
   return `<div class="pick-vs"><span class="pick-vs-label">${syn ? '配合' : '对位'}</span>${cells}</div>`;
 }
 
+// 对线（advisor.pick_view 的 lane，lanes.LaneEdge）：和我这个位置对线的已选敌人，比这个英雄平时每 100 条线多赢几条（STRATZ 对线胜负，收缩过）。
+// 2026-11-09 参考同行 gg-go-next 的「对线模式」加的，只显示、不进胜率；好打绿 / 难打红，和「对位」一排同样的样子
+function laneRow(item) {
+  if (!item.lane?.length) return '';
+  const cells = item.lane.map((e) => {
+    const cls = e.verdict === '好打' ? 'vs-good' : e.verdict === '难打' ? 'vs-bad' : '';
+    const num = `${e.edge > 0 ? '+' : ''}${e.edge}`;
+    const tip = `${item.name} 对线 ${e.name}：比它平时每 100 条线多赢 ${num} 条（${e.verdict}，${e.lanes} 条线）`;
+    return `<span class="vs ${cls}" title="${esc(tip)}">${face(e, 'face-xs')}<b>${num}</b></span>`;
+  }).join('');
+  return `<div class="pick-vs pick-lane"><span class="pick-vs-label">对线</span>${cells}</div>`;
+}
+
 // 对面分路（按常见位置猜）：三路各一行，我这路高亮；我选好英雄后下面接我这路的对线提示（原句在悬停提示里）
 // 点英雄头像改他的位置（2026-11-02 玩家：「你的位置判断可能有误，我需要你能够让我主动调整」）：对面分路、剩余位置里的队友都能点，
 // 下面接一行「1~5 号位 / 自动猜」（posPick = 正在改谁，只在页面里记），点了回传 set_hero_pos；改过的标金色「改」，只管这一局
@@ -254,6 +267,12 @@ const situBadge = (c, kind, label) => {
   const v = c[kind]?.value ?? 0;
   return `<span class="pick-situ situ-${kind} ${v < 0 ? 'is-neg' : ''}">${label} <b>${v >= 0 ? '+' : ''}${v.toFixed(1)}</b></span>`;
 };
+// 克制等级 S~F（advisor.grade_view，玩家 2026-11-09 看了同行 gg-go-next 要的）：只看克制，按「合计 ÷ √敌人数」分档，悬停看算法。还没有已选敌人时不显示。
+// 两个方向都写（玩家同日要的）：「克 S」= 它克对面，「被克 F」= 对面克它（同一个数的反面）。颜色都按对我好不好：被克那块用克制等级的颜色（被克 F = 绿）
+const gradeBadge = (item, small = false) => (item.grade
+  ? `<span class="pick-grades${small ? ' is-small' : ''}">`
+    + `<span class="pick-grade grade-${item.grade.letter}" title="${esc(item.grade.note)}"><i>克</i>${item.grade.letter}</span>`
+    + `<span class="pick-grade grade-${item.grade.letter}" title="${esc(item.grade.by_note)}"><i>被克</i>${item.grade.by}</span></span>` : '');
 function card(item, rank, targeted = false) {
   const tags = item.tags.map((t) => `<span class="tag tag-${t.kind}">${esc(t.text)}</span>`).join('');
   // 机制上为什么克 / 怕（知识库原句放在悬停提示里）
@@ -268,12 +287,13 @@ function card(item, rank, targeted = false) {
     const c = Object.fromEntries(item.calc.map((x) => [x.kind, x]));
     return `<span class="pick-situs">${situBadge(c, 'counter', '克制')}${situBadge(c, 'syn', '配合')}</span>`;
   })() : ''}
-          <span class="pick-wr">${item.winrate.toFixed(1)}<small>%</small></span>
+          ${gradeBadge(item)}<span class="pick-wr">${item.winrate.toFixed(1)}<small>%</small></span>
         </div>
         <div class="pick-bar"><i style="width:${barPct(item.winrate)}%"></i></div>
         <div class="pick-tags">${tags}</div>
         ${calcRow(item)}
         ${vsRow(item)}
+        ${laneRow(item)}
         ${vsRow(item, true)}
         ${why ? `<div class="pick-why">${why}</div>` : ''}
       </div>
@@ -293,7 +313,7 @@ function toggleGroup(title) {
 }
 function mini(item, rank) {
   return `<span class="pick-mini ${rank === 0 ? 'is-top' : ''}" data-id="${item.id}" title="${esc(`${item.name} ${item.winrate.toFixed(1)}%\n点一下：看选${item.name}怎么打这套阵容`)}">`
-    + `${face(item)}<b>${item.winrate.toFixed(1)}</b>`
+    + `${face(item)}${gradeBadge(item, true)}<b>${item.winrate.toFixed(1)}</b>`
     // 收起时也能点 × 这局不想玩（玩家 2026-11-02），和卡片上的 × 一样
     + `<button class="mini-skip" type="button" data-skip="${item.id}" title="这局不想玩${esc(item.name)}：去掉，后面的顺位补上来">×</button></span>`;
 }

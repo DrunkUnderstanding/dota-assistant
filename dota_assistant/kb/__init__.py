@@ -270,6 +270,9 @@ class Entry:
     granted: bool = False                                # 神杖 / 魔晶才给的技能
     channelled: bool = False                             # 官方字段 behavior 带「持续施法」位
     targets_enemy: bool = False                          # 官方字段：能指向敌方单位施放（behavior 带「单位目标」位、target_team 含敌方）
+    strong_dispel: bool = False                          # 官方字段 dispellable = 1：效果只能被强驱散
+    innate: bool = False                                 # 官方字段 ability_is_innate：先天技能
+    target_team: int = 0                                 # 官方字段 target_team：0 无目标 / 1 友方 / 2 敌方 / 3 双方
     # 冷却的加成（官方 special_values 里 AbilityCooldown 那一项）：天赋 [(天赋 key, 数值, operation)]，
     # operation 2 = 减几秒、4 = 减百分之几（对过天赋原文：末日「-10秒 末日冷却」是 2，撼地者「-50% 回音击冷却」是 4）；
     # 神杖 / 魔晶只有数值、没有符号（绝冥再生的 10 是「-10」，激怒的 30/24/18 是「=30 =24 =18」，datafeed 分不出来），符号见 kb/cd_ops.py
@@ -341,6 +344,9 @@ def _entry(ab: dict, is_item: bool) -> Entry:
         granted=bool(ab.get("ability_is_granted_by_scepter") or ab.get("ability_is_granted_by_shard")),
         channelled=bool(int(ab.get("behavior") or 0) & BEHAVIOR_CHANNELLED),
         targets_enemy=bool(int(ab.get("behavior") or 0) & BEHAVIOR_UNIT_TARGET) and ab.get("target_team") in TARGET_TEAM_ENEMY,
+        strong_dispel=ab.get("dispellable") == 1 and not is_item,
+        innate=bool(ab.get("ability_is_innate")),
+        target_team=int(ab.get("target_team") or 0),
         cd_talents=[(x["name"], float(x["value"]), int(x.get("operation") or 0)) for x in cd_sv.get("bonuses") or []],
         cd_scepter=[float(v) for v in cd_sv.get("values_scepter") or []],
         cd_shard=[float(v) for v in cd_sv.get("values_shard") or []],

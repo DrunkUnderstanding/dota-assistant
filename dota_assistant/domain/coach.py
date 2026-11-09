@@ -42,6 +42,13 @@ MAX_PER_MOMENT = 2
 # 都还没有「出了更容易赢」的数据（HANDOFF 第 33 节：剑圣对上幻象英雄，哪件装备都测不出效果），先都算提示
 NO_DATA = "还没有大数据说明出了更容易赢"
 SUPPORT_POSITIONS = (4, 5)   # 辅助：对抗装（黑皇杖 / 金箍棒）不催你出，改成「提醒核心」
+# 「别买」：对面无视技能免疫的控制技能合计 ≥ 2 个时，黑皇杖不进出装顺序 / 「下一件」、不催（HANDOFF 第 69 节，docs/research/bkb/）。
+# 大数据：7.41f 超凡～冠绝 2 万局，核心 25 分钟前出黑皇杖、同英雄同经济下比钱花在别的装上：对面 0 个这种技能 +0.6 ±1.3，
+# 2 个以上 −3.2 ±1.8（2 个以上 − 0 个 = −3.8，z = −3.5，过多重比较校正；30 / 35 分钟 −2.4 / −2.0 同方向）。
+# 本局：对面技能的官方字段（immunity = 对敌方无视技能免疫）。计数规则必须和研究里的一样（bkb_piercers），研究结论才能套用
+BKB_PIERCE_AVOID = 2
+BKB_PIERCE_TAGS = {"眩晕", "妖术", "沉默", "缠绕 / 定身"}
+AVOID_TIP = "别买"            # Need.tip 的一种：有大数据 + 本局两种依据、说「这件不值得」的（itembuild 从顺序里拿掉、列成 ✗ 提示）
 
 
 # ---------- 同分段基准 ----------
@@ -150,6 +157,7 @@ class Need:
     brief: str = ""               # 开局（本局要点卡片）的说法：那时还没到点，不能说「你还没有」
     minute: float = 0             # 建议几分钟出（出装顺序用）；0 = 按同分段中位购买时间
     tip: str = ""                 # 非空 = 只算提示，写缺哪种依据（不进出装顺序 / 「下一件」）
+    avoid: bool = False           # True = 「别买」：items 是这局不值得出的（不催、不进顺序，check 不当缺口）
 
 
 @dataclass(frozen=True)
@@ -236,6 +244,15 @@ def _player_rule(rules: list[kb.Rule], me: kb.HeroKB, key: str, base: kb.Knowled
     return None
 
 
+def bkb_piercers(e: kb.HeroKB) -> list[kb.Entry]:
+    """无视技能免疫的控制技能（和黑皇杖研究 docs/research/bkb/scripts/c_an.py 同一个规则，改了要一起改、重跑研究）：
+    不是先天技能、作用于敌方或无目标，官方字段 immunity = 对敌方无视技能免疫，并且「只能强驱散」或带控制标签（眩晕 / 妖术 / 沉默 / 缠绕定身）。
+    神杖 / 魔晶给的技能也算（研究里也算了）。已知漏项（研究 README）：时间结界、黑洞的原文写「定住」「拉向」，没算成控制"""
+    return [ab for ab in e.abilities
+            if not ab.innate and ab.target_team in (0, 2, 3) and ab.pierces_immunity
+            and (ab.strong_dispel or BKB_PIERCE_TAGS & set(ab.tags()))]
+
+
 def _who(hits: list[tuple[kb.HeroKB, list]], limit: int = 3) -> str:
     return "、".join(f"{e.name}（{f[0][0]}）" for e, f in hits[:limit]) + ("等" if len(hits) > limit else "")
 
@@ -254,7 +271,19 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
     share, med = (item_timings(bench).get(base.item_ids.get("item_black_king_bar"), (0, 0)) if bench else (0, 0))
     # 自带技能免疫的英雄（噬魂鬼狂暴）一般不用黑皇杖；但同分段多数人照样做的（哈斯卡跳跃只免疫一下）还是提醒
     self_immune = "提供技能免疫" in my_tags and share < 0.3
-    if len(ctrl) >= BKB_CONTROL_MIN and not self_immune:
+    piercers = [(e, ab) for e in enemies for ab in bkb_piercers(e)]
+    if len(piercers) >= BKB_PIERCE_AVOID:
+        who = "、".join(f"{e.name}的{ab.name}" for e, ab in piercers)
+        why = (f"对面{who}无视技能免疫，黑皇杖挡不住；同版本 2 万局：对面有 2 个以上这种控制时，"
+               f"核心出黑皇杖比把钱花在别的装上胜率低约 3 个百分点，这局保命考虑别的装备")
+        if support:
+            notes.append(f"对面{who}无视技能免疫，这局黑皇杖价值低，不用催核心出")
+        elif share >= MENU_SHARE or not bench:
+            needs.append(Need("avoid:bkb", why, ("black_king_bar",), 0, 0,
+                              [f"{e.name}·{ab.name}：官方字段「对敌方无视技能免疫」" for e, ab in piercers]
+                              + ["黑皇杖研究（HANDOFF 第 69 节）：对面 2 个以上 −3.2 ±1.8 个百分点（25 分钟），0 个 +0.6 ±1.3"],
+                              why, tip=AVOID_TIP, avoid=True))
+    elif len(ctrl) >= BKB_CONTROL_MIN and not self_immune:
         minute = med if share >= 0.15 else 0
         if minute and len(ctrl) >= BKB_EARLY_MIN:
             minute = item_quantile(bench, base.item_ids.get("item_black_king_bar"), 0.25) or minute
@@ -306,6 +335,15 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
                      + (f"；你的{mine[0]}也能显形" if mine else "")
                      + (f"（{'、'.join(immune)}不会被反隐发现，粉对它没用）" if immune else ""))
 
+    # 3b. 显形：你常出的隐身装（微光披风 / 影刃 / 白银之锋）会被对面看穿（2026-11-09，参考同行 gg-go-next 的「别买」规则）。
+    # 只有本局依据（对面技能原文），没有「出了更容易输」的大数据，所以只算开局提示，不动出装顺序
+    reveal = [(e, hits) for e in enemies if (hits := _base_hits(e, "反隐 / 显形"))]
+    invis = [base.items[k].name for k in ("glimmer_cape", "invis_sword", "silver_edge")
+             if k in base.items and timings.get(base.item_ids.get(f"item_{k}"), (0, 0))[0] >= MENU_SHARE]
+    if reveal and invis:
+        who = "、".join(f"{e.name}的{hits[0][0].name}" for e, hits in reveal)
+        notes.append(f"对面{who}能显形，你常出的{'、'.join(invis)}的隐身可能被看穿（{NO_DATA}）")
+
     # 4. 其他针对装：只从这个英雄同分段会出的装备里挑（没有同分段数据就不推，宁缺毋滥）
     for c in COUNTERS:
         hits = [(e, f) for e in enemies if (f := c.find(e))]
@@ -352,7 +390,8 @@ class State:
 def check(needs: list[Need], st: State, bench: dict | None, tree, base: kb.KnowledgeBase,
           checkpoint: bool) -> list[Need]:
     """这个时刻还缺什么（按优先级）"""
-    out = [n for n in needs if st.minute >= n.due and not any(has(st.owned, i, tree) for i in n.items)]
+    out = [n for n in needs if not n.avoid and st.minute >= n.due and not any(has(st.owned, i, tree) for i in n.items)]
+    avoided = {k for n in needs if n.avoid for k in n.items}
     if bench:
         # 核心装：同分段大多数人这时候已经有了
         timings = item_timings(bench)
@@ -361,7 +400,7 @@ def check(needs: list[Need], st: State, bench: dict | None, tree, base: kb.Knowl
             share, med = timings.get(base.item_ids.get(e.key), (0, 0))
             k = e.key.removeprefix("item_")
             if share >= CORE_SHARE and e.cost >= CORE_MIN_COST and st.minute >= med + CORE_LATE \
-                    and not has(st.owned, k, tree):
+                    and k not in avoided and not has(st.owned, k, tree):
                 late.append((med, e.name, k, share))
         if late:
             med, name, k, share = min(late)
@@ -510,7 +549,7 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None) -> str:
         L.append(f"对照：STRATZ {'/'.join(bench['brackets'])} {my.name} {pos}号位最近一周 {bench['matches']} 局")
     L += [f"开局提示：{n}" for n in notes]
     for n in needs:
-        L.append(f"本局缺口：{n.text}（{n.due:.0f} 分钟后开始提醒）")
+        L.append(f"这局别出：{n.text}" if n.avoid else f"本局缺口：{n.text}（{n.due:.0f} 分钟后开始提醒）")
         L += [f"    依据 {e}" for e in n.evidence[:5]]
     if build.steps:
         L.append("出装顺序：" + " → ".join(f"{s.name} {s.minute:.0f}′" for s in build.steps))

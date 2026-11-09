@@ -66,6 +66,48 @@ SHARD_STUN = kb.Entry("魔晶技能", "g", text="眩晕敌人。", granted=True)
 ULT_STUN = kb.Entry("法力虚空", "v", text="所有受到伤害的单位都会被短暂眩晕。", ultimate=True)
 
 
+class LaneEdgeTest(unittest.TestCase):
+    """选人卡片上的「对线」：比这个英雄平时每 100 条线多赢几条，按 LANE_K 条线收缩；太少的不显示"""
+
+    def test_edge_shrunk_and_filtered(self):
+        # 英雄 1 对所有人平时：1210 条线、净 0 → 平时 0
+        matrix = {1: {2: (100, 30), 3: (100, -30), 4: (1000, 0), 5: (10, 0)}}
+        out = {e.foe: e for e in lanes.lane_edges(matrix, 1, [2, 3, 5, 9])}
+        self.assertEqual(set(out), {2, 3})                 # 5 只有 10 条线、9 没数据：不显示
+        self.assertAlmostEqual(out[2].edge, 30 / (100 + lanes.LANE_K) * 100)   # 往平时（0）拉
+        self.assertEqual(out[2].verdict, "好打")
+        self.assertEqual(out[3].verdict, "难打")
+        self.assertEqual(lanes.lane_edges(None, 1, [2]), [])
+        self.assertEqual(lanes.lane_edges(matrix, 7, [2]), [])
+
+    def test_lane_foes_by_guessed_position(self):
+        positions = {10: {3: (900, 450), 1: (100, 50)}, 11: {5: (900, 450)}, 12: {2: (900, 450)}}
+        self.assertEqual(lanes.lane_foes([10, 11, 12], positions, 1), [10])        # 一号位对上对面 3 / 4 号位
+        self.assertEqual(lanes.lane_foes([10, 11, 12], positions, 2), [12])
+        self.assertEqual(lanes.lane_foes([10, 11, 12], positions, 1, fixed={11: 4}), [10, 11])
+
+
+class AdvisorLaneTest(unittest.TestCase):
+    def test_cards_carry_lane(self):
+        """推荐卡片带「对线」：只算和我这个位置对线的已选敌人（这里玩家定了幻影长矛手打 3 号位），不改胜率"""
+        from dota_assistant.core.config import Config
+        from dota_assistant.domain import advisor as adv
+        from tests.test_engine import PL, TIDE
+        from tests.test_webui import fake_advisor
+        a = fake_advisor(Config(position_filter=False, top=5, top_other=5, familiar_games=0))
+        before = {s.hero.id: s.winrate for s in a.advise(adv.Draft(enemies=[PL], enemy_pos={PL.id: 3}), 1).shown()}
+        a.lanes = {1: {TIDE.id: {PL.id: (200, 60), 99: (800, 0)}}}
+        advice = a.advise(adv.Draft(enemies=[PL], enemy_pos={PL.id: 3}), 1)
+        tide = next(s for s in advice.shown() if s.hero == TIDE)
+        self.assertEqual([(h, e.verdict) for h, e in tide.lane], [(PL, "好打")])
+        self.assertEqual({s.hero.id: s.winrate for s in advice.shown()}, before)
+        card = next(c for g in adv.render_view(advice, None)["groups"] for c in g["items"] if c["id"] == TIDE.id)
+        self.assertEqual((card["lane"][0]["id"], card["lane"][0]["verdict"], card["lane"][0]["lanes"]), (PL.id, "好打", 200))
+        # 对面打中路：不和一号位对线，不显示
+        advice = a.advise(adv.Draft(enemies=[PL], enemy_pos={PL.id: 2}), 1)
+        self.assertEqual(next(s for s in advice.shown() if s.hero == TIDE).lane, [])
+
+
 class TipsTest(unittest.TestCase):
     def test_interrupt_channel(self):
         ws = lanes.tips(hero("莱恩", STUN), [hero("对手", DRAIN)])

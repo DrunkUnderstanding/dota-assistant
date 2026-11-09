@@ -103,6 +103,16 @@ def update(cfg: Config, log=http._say) -> None:
             log(f"  {len(pos['heroes'])} 个英雄")
         else:   # 2026-10-26 STRATZ 偶尔返回空表，覆盖掉以后推荐退回按定位标签筛位置（赏金猎人进中单），所以保留旧的
             log("  STRATZ 返回了空数据，保留原来的分位置数据")
+        log("拉取对线胜负（STRATZ，选人卡片上的「对线」）…")
+        try:
+            lanes = stats_mod.fetch_lanes(cfg, [h["id"] for h in heroes], log)
+        except http.NETWORK_ERRORS as e:          # 对线只是附加显示，没拉到不影响推荐
+            log(f"  没拉到（{e}），{'沿用上次的' if stats_mod.lanes_path(cfg).exists() else '选人卡片先不显示对线'}")
+        else:
+            if any(lanes["positions"].values()):
+                stats_mod.lanes_path(cfg).write_text(json.dumps(lanes), encoding="utf-8")
+            else:
+                log("  STRATZ 返回了空数据，保留原来的对线数据")
     elif not stats_mod.positions_path(cfg).exists():      # 打包版自带 STRATZ 的分位置数据，有就不用凑
         log("没填 STRATZ token：用 OpenDota 的分路数据凑分位置数据（约 2 分钟）…")
         try:

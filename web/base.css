@@ -334,6 +334,21 @@ img { display: block; }
 /* 「针对这局」卡片：胜率前面分开写克制（绿）、配合（蓝），负数红 */
 .pick-situs { margin-left: auto; display: flex; gap: 4px; }
 .pick-situs + .pick-wr { margin-left: 0; }
+/* 克制等级 S~F（advisor.grade_view）：胜率前面一个小方块；S/A 绿、B/C 灰、D/F 红 */
+.pick-grades { margin-left: auto; align-self: center; display: flex; gap: 3px; }
+.pick-situs + .pick-grades, .pick-grades + .pick-wr { margin-left: 0; }
+.pick-grades.is-small { margin-left: 0; gap: 2px; }
+.pick-grade {
+  min-width: 20px; padding: 2px 4px; border-radius: 4px; text-align: center; white-space: nowrap;
+  font: 800 13px/1 var(--num); color: var(--text-dim); background: rgba(255, 255, 255, 0.07); cursor: help;
+}
+.pick-grade i { font: 500 10px/1 var(--font); font-style: normal; margin-right: 2px; opacity: 0.85; }
+.pick-grades.is-small .pick-grade { min-width: 0; padding: 2px 3px; font-size: 11px; }
+.pick-grades.is-small .pick-grade i { font-size: 9px; margin-right: 1px; }
+.grade-S { color: #0f1a12; background: var(--good); }
+.grade-A { color: var(--good); background: rgba(92, 199, 127, 0.18); }
+.grade-D { color: var(--bad); background: rgba(229, 103, 92, 0.16); }
+.grade-F { color: #fff; background: rgba(229, 103, 92, 0.75); }
 .pick-situ { padding: 1px 6px; border-radius: 4px; white-space: nowrap; font-size: 11px; }
 .pick-situ b { font: 700 14px/1 var(--num); font-variant-numeric: tabular-nums; }
 .situ-counter { color: var(--good); background: rgba(92, 199, 127, 0.14); }

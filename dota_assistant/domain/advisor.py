@@ -109,6 +109,8 @@ class Group(NamedTuple):
 
 
 class Advisor:
+    lanes: dict | None = None        # 对线胜负（__init__ 里读）；类上默认 None，测试里手搭的 Advisor 不用管
+
     def __init__(self, cfg: Config):
         self.cfg = cfg
         self.db: HeroDB = assets.load_heroes()
@@ -118,14 +120,26 @@ class Advisor:
         self.duo = player.load_duo(cfg)                        # 双排队友 {name, career}；没填 = None
         self.pool = self.db.find_many(cfg.pool)
         self.kb = kb.KnowledgeBase.load()      # 没有知识库也能推荐，只是没有机制说明
+        self.lanes = stats_mod.load_lanes(cfg)  # 对线胜负（STRATZ，update 拉）；没有就不显示「对线」
 
     def _suggest(self, draft: Draft, position: int) -> list[Suggestion]:
         history, by_pos = (player.player_history(self.me, position, self.engine.positions)
                            if self.me else ({}, False))
-        return self._with_cores(self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
-                                                    bans=[*draft.bans, *draft.skip], pool=self.pool, only_pool=self.cfg.only_pool,
-                                                    history=history, history_by_position=by_pos,
-                                                    position_filter=self.cfg.position_filter, top=None), draft)
+        res = self._with_cores(self.engine.suggest(position=position, allies=draft.allies, enemies=draft.enemies,
+                                                   bans=[*draft.bans, *draft.skip], pool=self.pool, only_pool=self.cfg.only_pool,
+                                                   history=history, history_by_position=by_pos,
+                                                   position_filter=self.cfg.position_filter, top=None), draft)
+        return self._with_lane(res, draft, position)
+
+    def _with_lane(self, res: list[Suggestion], draft: Draft, position: int) -> list[Suggestion]:
+        """给每个推荐填上对线胜负（Suggestion.lane）：已选敌人里按猜的位置会和我这个位置对线的（lanes.lane_foes）"""
+        if not (self.lanes and draft.enemies):
+            return res
+        foes = lanes.lane_foes([e.id for e in draft.enemies], self.engine.positions, position, draft.enemy_pos)
+        matrix = self.lanes.get(position)
+        for s in res:
+            s.lane = [(self.db.by_id[e.foe], e) for e in lanes.lane_edges(matrix, s.hero.id, foes) if e.foe in self.db.by_id]
+        return res
 
     def _with_cores(self, res: list[Suggestion], draft: Draft) -> list[Suggestion]:
         """给每个推荐填上对面的 1~3 号位（Suggestion.cores，「强克」只算克这几个的）：玩家定的位置优先，其余按常打位置猜（和分路同一个猜法）；
@@ -389,10 +403,14 @@ def render_lines(advice: Advice, side: str | None) -> list[tuple[str, str]]:
                 # 按克制 + 配合挑的组，胜率后面分开写这两项（玩家 2026-10-30：一眼看到这个选项的克制值，克制 / 配合分开）
                 b = {k: v for k, _, v in s.breakdown()}
                 situ = f"（克制 {b['counter']:+.1f} 配合 {b['syn']:+.1f}）" if counter else ""
-                out.append(("row", f"{s.hero.name_cn}  {s.winrate:.1f}%{situ}　{s.reason()}"))
+                grade = f"  克{s.counter_grade[0]} 被克{s.countered_grade[0]}" if s.counter_grade else ""
+                out.append(("row", f"{s.hero.name_cn}  {s.winrate:.1f}%{grade}{situ}　{s.reason()}"))
                 out.append(("dim", "　算法 " + s.calc_text(POSITION_NAMES[advice.position])))
                 if s.vs:
                     out.append(("dim", "　对位 " + "  ".join(f"{e.name_cn} {pct(v):+.1f}" for e, v in s.vs)))
+                if s.lane:         # 对线胜负（只显示、不进综合分）
+                    out.append(("dim", "　对线 " + "  ".join(f"{h.name_cn} {e.edge:+.0f} {e.verdict}（{e.lanes} 线）" for h, e in s.lane)
+                                + "（比它平时每 100 条线多赢几条）"))
                 if s.syn:          # 和每个已选队友的配合，负的也列出来（相互拖累，例如抢同一个位置）
                     out.append(("dim", "　配合 " + "  ".join(f"{a.name_cn} {pct(v):+.1f}" for a, v in s.syn)))
                 out += [("dim", f"　{'✓' if w.kind == 'good' else '✗'} {w.text}") for w in advice.why.get(s.hero.id, [])]
@@ -501,6 +519,9 @@ def render_view(advice: Advice, side: str | None) -> dict:
 def pick_view(s: Suggestion, position: int, why: dict[int, list[explain.Why]]) -> dict:
     """一张推荐卡片"""
     return {**hero_ref(s.hero), "winrate": round(s.winrate, 1),
+            "grade": grade_view(s),
+            # 对线胜负（lanes.LaneEdge）：和我对线的敌方英雄，比这个英雄平时每 100 条线多赢几条
+            "lane": [{**hero_ref(h), "edge": round(e.edge), "lanes": e.lanes, "verdict": e.verdict} for h, e in s.lane],
             "tags": [{"kind": k, "text": t} for k, t in s.reason_parts()],
             # 对每个已选敌人的克制（百分点，正 = 这个推荐克他），按敌方选人顺序，各卡片列对齐
             "vs": [{**hero_ref(e), "delta": round(pct(v), 1)} for e, v in s.vs],
@@ -509,6 +530,21 @@ def pick_view(s: Suggestion, position: int, why: dict[int, list[explain.Why]]) -
             # 胜率怎么来的：整体 → 位置 → 冷门打折 → 自身（小计）→ 克制 → 配合 → 其他，依次加起来 = winrate
             "calc": calc_view(s, position),
             "why": [w.__dict__ for w in why.get(s.hero.id, [])]}
+
+
+def grade_view(s: Suggestion) -> dict | None:
+    """克制等级（engine.GRADE_CUTS）：{letter, note}；还没有已选敌人时 None"""
+    g = s.counter_grade
+    if g is None:
+        return None
+    letter, z = g
+    by, _ = s.countered_grade
+    total = sum(pct(v) for _, v in s.vs)
+    cuts = "S 前 10% · A 10~25% · B 25~50% · C 50~75% · D 75~90% · F 最后 10%，只看克制"
+    return {"letter": letter, "by": by,
+            "note": f"克制等级 {letter}：{s.hero.name_cn}克对面已选 {len(s.vs)} 个英雄合计 {total:+.1f} 个百分点（按人数折算 {z:+.1f}；{cuts}）",
+            "by_note": f"被克等级 {by}：对面已选 {len(s.vs)} 个英雄克{s.hero.name_cn}合计 {-total:+.1f} 个百分点"
+                       f"（S = 被克最狠 … F = 几乎克不动；和克制等级是同一个数的反面）"}
 
 
 def next_view(advice: Advice) -> dict | None:

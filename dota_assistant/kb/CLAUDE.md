@@ -19,7 +19,7 @@
 
 | 文件 | 管什么 |
 |---|---|
-| `__init__.py` | 拉取（`current_patch` / `fetch` / `update`）、文本整理（`fill`、天赋数值）、`Entry`（技能 / 物品条目，`full_text` / `main_text` / `tags`）、`HeroKB`（`tags` / `with_tag`）、`KnowledgeBase`（`load` / `item` / `search`，`heroes` 按 id）、`TAGS`、`ITEM_ALIASES`（BKB、MKB、跳刀…）、规则 / 误判读写、展示（`render_hero` / `render_item` / `hero_brief`） |
+| `__init__.py` | 拉取（`current_patch` / `fetch` / `update`）、文本整理（`fill`、天赋数值）、`Entry`（技能 / 物品条目，`full_text` / `main_text` / `tags`；官方字段 `pierces_immunity` `strong_dispel` `innate` `target_team` 等）、`HeroKB`（`tags` / `with_tag`）、`KnowledgeBase`（`load` / `item` / `search`，`heroes` 按 id）、`TAGS`、`ITEM_ALIASES`（BKB、MKB、跳刀…）、规则 / 误判读写、展示（`render_hero` / `render_item` / `hero_brief`） |
 | `cd_ops.py` | 大招冷却用到的知识库条目：`pick`（每个英雄要计时的大招）、`cooldowns`（各级冷却）、`MIN_CD = 40`；神杖 / 魔晶改冷却的原样写法 `update_ops` / `load_ops`（存 `data/kb/cd_ops.json`） |
 
 ## 对外接口

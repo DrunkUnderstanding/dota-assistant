@@ -129,6 +129,49 @@ def assign(enemy_ids: list[int], ally_ids: list[int], my_pos: int, side: str | N
                  guess(ally_ids, positions, taken={my_pos}, fixed=ally_pos))
 
 
+# ---------- 对线胜负（选人卡片上的「对线」）----------
+
+# STRATZ laneOutcome（sources.stats.fetch_lanes）：候选英雄打我这个位置，对上对面某个英雄那条线「每 100 条线 赢线 − 输线」，
+# 比这个英雄这个位置平时（对所有人）高多少。2026-11-09 参考同行 gg-go-next 的「对线模式」，只显示、不进综合分
+# （W_LANE 回测过，按克制胜率加权没有可测的提升，engine.W_LANE 注释）。
+# 收缩：每条线结果是 +1 / 0 / −1，单条方差约 0.75；2026-11-09 实查 ≥100 线的对位，真实差别的标准差约 15（中路约 25）
+# → 0.75 / 0.15² ≈ 33，取 LANE_K = 35 条线时实际和平时各占一半。好打 / 难打的门槛和本局要点（brief.LANE_GAP = 8）一样
+LANE_K = 35
+LANE_MIN = 30                 # 少于这么多条线的对位不显示
+LANE_GAP = 8.0
+
+
+@dataclass
+class LaneEdge:
+    foe: int                  # 对线的敌方英雄 id
+    edge: float               # 比平时多赢多少（每 100 条线，收缩过）
+    lanes: int                # 线数
+
+    @property
+    def verdict(self) -> str:
+        return "好打" if self.edge >= LANE_GAP else "难打" if self.edge <= -LANE_GAP else "正常"
+
+
+def lane_edges(matrix: dict[int, dict[int, tuple[int, int]]] | None, hero: int, foes: list[int]) -> list[LaneEdge]:
+    """matrix = 某个位置的 {英雄: {对线英雄: (线数, 赢线 − 输线)}}；foes = 和这个位置对线的敌方英雄（按猜的位置挑好的）"""
+    row = (matrix or {}).get(hero)
+    if not row:
+        return []
+    n_all = sum(n for n, _ in row.values())
+    base = sum(x for _, x in row.values()) / n_all if n_all else 0.0
+    out = []
+    for f in foes:
+        n, x = row.get(f, (0, 0))
+        if n >= LANE_MIN:
+            out.append(LaneEdge(f, ((x + LANE_K * base) / (n + LANE_K) - base) * 100, n))
+    return out
+
+
+def lane_foes(enemy_ids: list[int], positions, my_pos: int, fixed: dict[int, int] | None = None) -> list[int]:
+    """已选的敌方英雄里，按猜的位置（和分路同一个猜法）会和 my_pos 对线的"""
+    return [g.hero for g in guess(enemy_ids, positions, fixed=fixed) if g.pos in LANE_VS[my_pos]]
+
+
 # ---------- 对线提示 ----------
 
 def _lane_abilities(h: kb.HeroKB, ultimate: bool = False) -> list[kb.Entry]:

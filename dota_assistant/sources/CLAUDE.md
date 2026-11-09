@@ -14,7 +14,7 @@
 |---|---|
 | `http.py` | 联网基础：`OPENDOTA` / `STRATZ` 地址、带连接层重试的 `_session`、`_get` / `_stratz` / `_sql` / `_stratz_brackets`、出错类型 `APIError`、`NETWORK_ERRORS` |
 | `assets.py` | 死数据：英雄表（`fetch_heroes` / `load_heroes`）、头像（`fetch_portraits`）、顶栏 / 技能图标（`fetch_icon`、`ICON_DIR`、`ICONS_DONE`）、装备常量（`items_const` / `fetch_items_const`，原 `coach.ITEMS_CONST`）和装备图标（`fetch_item_icons`） |
-| `stats.py` | 克制 / 配合统计（OpenDota explorer，`fetch_stats` / `stats_path` / `load_stats`）；英雄分位置场次 / 胜率（STRATZ `fetch_positions`，或没 token 时 OpenDota 分路凑的 `OPENDOTA_POSITIONS`）；`positions_source` / `load_positions` |
+| `stats.py` | 克制 / 配合统计（OpenDota explorer，`fetch_stats` / `stats_path` / `load_stats`）；英雄分位置场次 / 胜率（STRATZ `fetch_positions`，或没 token 时 OpenDota 分路凑的 `OPENDOTA_POSITIONS`）；`positions_source` / `load_positions`；对线胜负（STRATZ laneOutcome，`fetch_lanes` / `lanes_path` / `load_lanes`，`data/lanes_r*.json`，选人卡片「对线」用） |
 | `player.py` | 个人数据：段位（`MEDALS` / `rank_name`）、最近天梯每个英雄在每个位置的局数 / 胜场（`fetch_player` / `update_player` / `load_player`）、`player_history()` 按位置归类、生涯局数（`fetch_career`）、双排队友（`update_duo` / `load_duo`，`data/duo.json`）、`needs_update` |
 
 ## 对外接口 / 调用约定

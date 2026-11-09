@@ -100,7 +100,14 @@ class AdviseTest(unittest.TestCase):
         self.assertIn("熟练 · 胜率最高（你打过 20 局以上的）", lines)
         # 两组显示一样（总胜率 + 同一行算法），「针对这局」只是按克制 + 配合（= 总胜率 − 自身）排
         b = {k: val for k, _, val in tide.breakdown()}
-        self.assertIn(f"潮汐猎人  {tide.winrate:.1f}%（克制 {b['counter']:+.1f} 配合 {b['syn']:+.1f}）　不熟", "\n".join(lines))
+        self.assertIn(f"潮汐猎人  {tide.winrate:.1f}%  克{tide.counter_grade[0]} 被克{tide.countered_grade[0]}（克制 {b['counter']:+.1f} 配合 {b['syn']:+.1f}）　不熟",
+                      "\n".join(lines))
+        # 克制等级（engine.GRADE_CUTS）：卡片上也有，悬停说明写合计
+        grade = v["groups"][1]["items"][0]["grade"]
+        self.assertEqual(grade["letter"], tide.counter_grade[0])
+        self.assertIn("合计", grade["note"])
+        self.assertEqual(grade["by"], tide.countered_grade[0])
+        self.assertIn("被克等级", grade["by_note"])
         self.assertEqual([g["targeted"] for g in v["groups"]], [False, True])      # 网页上「针对这局」卡片单独标克制、配合
         self.assertIn(("dim", "　算法 " + tide.calc_text("三号位")), adv.render_lines(advice, None))
         self.assertAlmostEqual(tide.situational_pct, tide.winrate - sigmoid(tide.base) * 100)
@@ -212,11 +219,11 @@ class DraftRateTest(unittest.TestCase):
 
     @staticmethod
     def whole(eng, ours, theirs):
-        """整局 logit = 我方各人自身强度之和 − 对面之和 + 我方每人对对面每人的克制 + 我方两两配合 − 对面两两配合（backtest.predict_drafts）"""
+        """整局 logit = 我方各人自身强度之和 − 对面之和 + 我方每人对对面每人的克制 + W_SYN ×（我方两两配合 − 对面两两配合）（backtest.predict_drafts）"""
         pairs = lambda hs: [(a, b) for i, a in enumerate(hs) for b in hs[i + 1:]]
         return (sum(eng.base[h] for h in ours) - sum(eng.base[h] for h in theirs)
                 + sum(eng.advantage(a, e) for a in ours for e in theirs)
-                + sum(eng.synergy(a, b) for a, b in pairs(ours)) - sum(eng.synergy(a, b) for a, b in pairs(theirs)))
+                + E.W_SYN * (sum(eng.synergy(a, b) for a, b in pairs(ours)) - sum(eng.synergy(a, b) for a, b in pairs(theirs))))
 
     def test_same_formula_as_whole_draft(self):
         eng = self.engine()
