@@ -236,3 +236,22 @@ GSI 不推送了 → `alive` 为假 → `should_scan` / `should_scan_bans` 走�
 
 **验证**：单测（`test_webui.CoachLiveTest.test_jungle_card_off_with_world_marks` 新加；原来的卡片测试改成关着 `world_marks` 跑；`test_jungle` / `test_camps` 的莲花测试换成「不提醒莲花」）。
 **没在游戏里看过**：玩家的助手正开着（Electron 两个进程在跑）。
+
+## 77. 叠加层标题栏的位置能手动改，改了和队友对调（2026-11-10，`DraftMixin.set_my_position`、`web/view.js` 的 `myPosPickerHTML`）
+
+玩家（原话）：「上面的位置应该也可以手动更改」；「我的位置可能会和队友出现交换，这个位置应该允许更改」。
+
+**界面**：选人叠加层标题栏左上角的「一号位 ▾」变成按钮，点开下面一行「这局我打 1号位 … 5号位」，点一个就改、行收起；改了「自动」标记消失。
+固定（穿透）状态也能点：`overlay.html` 的可点区域加了 `[data-mypos]`（那一行本来就是 `.pos-picker`）。控制面板「位置」、剩余位置点空位置走的是同一个 `set position` 操作。
+
+**换位置**（`set_my_position`，三个入口共用）：从 P 改成 Q 时
+- Q 上有选人界面认出来的队友（`team_roles`）：那一格记成 P、我那格记成 Q（新加 `_role_me` 记 OCR 时我是第几格），队友还没选英雄也照换；
+- Q 上是玩家在叠加层定过位置的队友（`hero_pos`）：他改成 P；
+- Q 上只是按常打位置猜的队友：不动（刷新时重新猜）。
+换了的话面板消息写「和斧王换了位置：你打三号位，斧王打一号位」。和以前一样，手动改了这局不再自动认我的位置。
+
+**验证**：单测 `test_heropos.LivePosTest` 加三条（和认出来的队友换、和定过的队友换、猜的不动）；`tests/data/live_api.json` 多 `set_my_position`。
+全部单测、编译、ruff、`browser_check` 通过；`check_isolation` 报的 `logs/`、`shots/gsi/` 改动是玩家开着的助手写的，不是单测。
+隔离目录起服务 + 无头浏览器（playwright）在叠加层预览里点：假装认出「我第 4 格 1 号位、卓尔 3、斧王 2、水晶室女 5」，点「一号位 ▾」→「3号位」，
+剩余位置变成卓尔 1、斧王 2、我 3、水晶室女 5，「自动」消失，消息对。
+**没验证**：玩家正在用电脑（助手 / demo 开着），没起 Electron 用真鼠标点穿透状态下的按钮；也没在真实选人里用过。golden 快照这台没有冻结目录，没跑。

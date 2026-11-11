@@ -383,6 +383,10 @@
   "kind": "method",
   "signature": "(self, locked: 'bool') -> 'None'"
  },
+ "set_my_position": {
+  "kind": "method",
+  "signature": "(self, pos: 'int') -> 'None'"
+ },
  "set_overlay_style": {
   "kind": "method",
   "signature": "(self, key: 'str', value, save: 'bool' = True) -> 'None'"

@@ -50,6 +50,34 @@ class DraftMixin:
         return adv.Draft(allies, team[other], bans, my, ally_pos, skip, not_next=not_next,
                          enemy_pos=theirs, manual_pos=mine | theirs)
 
+    def set_my_position(self, pos: int) -> None:
+        """玩家手动改自己的位置（控制面板「位置」、叠加层标题栏的位置、剩余位置点空位置）。
+        天梯排位置后队友之间会换位置（玩家 2026-11-10：「我的位置可能会和队友出现交换」）：新位置上要是有
+        认出来的 / 玩家定过的队友，他换到我原来的位置；按常打位置猜的不动（下次刷新会重新猜）。这局不再自动认我的位置"""
+        old = self.position
+        who = None                                   # 和谁换了（队友还没选英雄时只知道是「队友」）
+        if pos != old:
+            mate = next((h for h, p in self.current_draft().ally_pos.items() if p == pos), None)
+            if mate is not None:
+                if mate in self.hero_pos:
+                    self.hero_pos[mate] = old
+                who = self.db.by_id[mate].name_cn if mate in self.db.by_id else "队友"
+            # 选人界面认出来的各格位置跟着换：那一格（不管队友选没选英雄）记成我原来的位置
+            if self._role_me is not None and len(self.team_roles) > self._role_me:
+                for i, r in enumerate(self.team_roles):
+                    if i != self._role_me and r == pos:
+                        self.team_roles[i] = old
+                        who = who or "队友"
+                self.team_roles[self._role_me] = pos
+        self.position = pos
+        self.position_auto = False
+        self._base_position = pos
+        self._role_draft = self._drafts_seen         # 玩家手动选了，这局不再自动改
+        if who:
+            self.message = f"和{who}换了位置：你打{POSITION_NAMES[pos]}，{who}打{POSITION_NAMES[old]}"
+            log.info("手动换位置：我 %d → %d，%s 换到 %d", old, pos, who, old)
+        self.refresh(force_speech=True)
+
     def set_hero_pos(self, hero_id: int, pos: int | None) -> None:
         """叠加层「剩余位置」/「对面分路」上点英雄改位置（2026-11-02 玩家：「你的位置判断可能有误，我需要你能够让我主动调整」）。
         pos = 1~5 定成这个位置，同一边本来定在这个位置的人改回自动猜；pos 为空 / 0 = 改回自动猜。只管这一局（新一局选人 / 清空时清掉）"""
@@ -295,6 +323,7 @@ class DraftMixin:
             return                               # 没有位置这行字（加速、普通匹配）或者被挡住了：过几秒再试
         self._role_draft = draft
         self.team_roles = list(team)
+        self._role_me = me
         log.info("认出位置：我在第 %d 格，排的是 %d 号位（我方：%s）", me + 1, team[me],
                  " ".join(str(r) if r else "?" for r in team))
         if team[me] != self.position or not self.position_auto:

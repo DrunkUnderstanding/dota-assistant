@@ -72,6 +72,14 @@ img { display: block; }
   background: rgba(235, 157, 76, 0.1); color: #f6d3ad; font-size: 12px; line-height: 1.45;
 }
 .ov-sidewarn b { color: #ffe2c2; font-weight: 600; }
+/* 选人推荐标题栏的位置能点（点开下面一行改位置）：看着还是标题，悬停 / 打开时描金边 */
+.ov-pos-btn {
+  padding: 0 6px; margin-left: -6px; border: 1px solid transparent; border-radius: 4px;
+  background: none; font-family: var(--font); line-height: 22px; cursor: pointer;
+}
+.ov-pos-btn i { font-style: normal; font-size: 10px; margin-left: 3px; opacity: 0.7; }
+.ov-pos-btn:hover, .ov-pos-btn.is-open { border-color: rgba(216, 167, 78, 0.6); background: var(--gold-soft); }
+.my-pos-picker { margin: -4px 0 8px; }
 .ov-auto { font-size: 10px; padding: 0 5px; border-radius: 4px; color: var(--gold); background: var(--gold-soft); line-height: 16px; }
 .ov-brand { margin-left: auto; font-size: 11px; color: var(--text-faint); letter-spacing: 1px; }
 /* 已选阵容的胜率（advisor.draft_rate），放在右上角「选人助手」前面 */

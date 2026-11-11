@@ -60,26 +60,47 @@ def gsi_frames(m: dict, me: dict, hero_key: str, speed: float, hold=lambda: Fals
     yield frame("DOTA_GAMERULES_STATE_POST_GAME", m["duration"])
 
 
-def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_speed: float = 60) -> int:
+def match_script(m: dict, account_id: int, names: dict[int, str]) -> tuple[list[tuple[str, str]], str, str]:
+    """一局录像（OpenDota /matches）→ (选人顺序 [(敌 / 友 / 我, 中文名)], 禁用「,」连起来, 我的阵营 radiant / dire)。
+    换一局演示用（demo --match，玩家 2026-11-10：「同样的局已经用了很多遍了」）"""
+    me = next(p for p in m["players"] if p.get("account_id") == account_id)
+    mine = 0 if me["player_slot"] < 128 else 1          # picks_bans 的 team：0 天辉、1 夜魇
+    pb = sorted(m.get("picks_bans") or [], key=lambda x: x["order"])
+    picks = [("我" if x["hero_id"] == me["hero_id"] else "友" if x["team"] == mine else "敌", names[x["hero_id"]])
+             for x in pb if x["is_pick"] and x["hero_id"] in names]
+    bans = ",".join(names[x["hero_id"]] for x in pb if not x["is_pick"] and x["hero_id"] in names)
+    return picks, bans, "radiant" if mine == 0 else "dire"
+
+
+def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_speed: float = 60,
+        match_id: int | None = None) -> int:
     from .live import Live
     from .webui import serve
 
     live = Live(cfg)
     live.mode = "manual"                       # 手动输入：不截屏识别
-    live.side_mode = "radiant"                 # 我在天辉
-    live.position = 1
+    picks, side, position = DEMO_PICKS, "radiant", 1
     live.bans_text = DEMO_BANS
-
-    # 录像在后台线程里拉（要联网），选人演示不用等它
     match: dict = {}
+    if match_id:                               # 换一局：先把录像拉回来（选人顺序、禁用、阵营、位置都从它来）
+        match.update(requests.get(f"https://api.opendota.com/api/matches/{match_id}", timeout=60).json())
+        if not any(p.get("account_id") == cfg.account_id for p in match.get("players") or []):
+            raise SystemExit(f"比赛 {match_id} 里找不到你（好友代码 {cfg.account_id}）")
+        picks, live.bans_text, side = match_script(match, cfg.account_id, {h.id: h.name_cn for h in live.db})
+        from ..domain import coach
+        position = coach._stratz_position(cfg, match_id, cfg.account_id) or cfg.position
+    live.side_mode = side
+    live.position = position
 
+    # 默认那局的录像在后台线程里拉（要联网），选人演示不用等它
     def fetch():
         try:
             match.update(requests.get(f"https://api.opendota.com/api/matches/{DEMO_MATCH}", timeout=60).json())
         except Exception as e:
             logging.getLogger(__name__).warning("演示录像没拉到", exc_info=True)
             match["error"] = str(e)
-    threading.Thread(target=fetch, daemon=True).start()
+    if not match_id:
+        threading.Thread(target=fetch, daemon=True).start()
 
     def pick(side: str, name: str) -> None:
         if side == "我":
@@ -87,13 +108,14 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
             hero = live.db.find(name)
             if live.gsi:
                 live.gsi.state.raw = {"map": {"game_state": "DOTA_GAMERULES_STATE_HERO_SELECTION"},
-                                      "player": {"team_name": "radiant"},
+                                      "player": {"team_name": live.side_mode},
                                       "hero": {"name": f"npc_dota_hero_{hero.key}"}}
                 live.gsi.state.updated = time.time()
                 live.refresh()
                 return
             side = "友"
-        key = "radiant" if side == "友" else "dire"
+        enemy = "dire" if live.side_mode == "radiant" else "radiant"
+        key = live.side_mode if side == "友" else enemy
         i = live.slots[key].index("")
         live.slots[key][i] = name
         live.refresh()
@@ -105,8 +127,8 @@ def run(cfg: Config, step_seconds: float = 4.0, browser: bool = False, game_spee
 
     def director():
         time.sleep(1.5)
-        for side, name in DEMO_PICKS:
-            live.submit(pick, side, name)
+        for who, name in picks:
+            live.submit(pick, who, name)
             time.sleep(step_seconds)
         for _ in range(30):                    # 录像还没拉回来就等一会
             if match:

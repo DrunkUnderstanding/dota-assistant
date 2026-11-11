@@ -36,7 +36,7 @@
 | 屏幕识别（校准、模板、学习模板、去噪点、防误记） | 🟡 | 「全是风行者」「齐天大圣垃圾模板」修完，下一局天梯看日志 | [vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md) |
 | 禁用识别（选人网格红斜线） | 🟡 | 11-06 / 11-07 天梯里认错格、漏报黑鸟（旧图排列过期；鼠标停在英雄上的放大卡片盖住格子），改成边用边核对、跳过被盖住的格子 + 自动截图，下一局看 `shots/grid/`（第 65、66 节） | [vision](../dota_assistant/vision/NOTES.md) |
 | 对面分路 + 对线打法、剩余位置、机制说明 / 「如果选 X」 | 🟡 | 没在真实选人 / Electron 里看过 | [domain](../dota_assistant/domain/NOTES.md) |
-| 这局不想玩、对面最后一手（猜）、叠加层上改位置 | 🟡 | 真实选人里没用过 | [domain](../dota_assistant/domain/NOTES.md) |
+| 这局不想玩、对面最后一手（猜）、叠加层上改位置（含标题栏改我的位置、和队友对调，第 77 节） | 🟡 | 真实选人里没用过 | [domain](../dota_assistant/domain/NOTES.md) |
 | 叠加层 + 控制面板（网页 + Electron）、上下滚 / 收起 | ✅ / 🟡 | 没在 Dota 上方实测；副屏拖动、真鼠标拉宽高没跑完 | [web](../web/NOTES.md)、[electron](../electron/NOTES.md) |
 
 **局内**
@@ -226,3 +226,4 @@
 | 74 | 选人卡片加「对线」：STRATZ 对线胜负，只显示不进胜率 | [domain/NOTES](../dota_assistant/domain/NOTES.md) |
 | 75 | 同一时段做出来的装备胜率高低：91% 是局势，出装旁边不显示胜率 | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 76 | 出装「别买」：对面 2 个以上无视技能免疫的控制不推黑皇杖；显形提示隐身装 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
+| 77 | 叠加层标题栏的位置能手动改，改了和队友对调 | [app/live/NOTES](../dota_assistant/app/live/NOTES.md) |

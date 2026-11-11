@@ -84,6 +84,37 @@ class LivePosTest(unittest.TestCase):
         self.act(AXE.id, 5)                                            # 玩家说斧王打 5：认出来的水晶室女 5 号位不算了
         self.assertEqual(self.draft().ally_pos, {AXE.id: 5})
 
+    def set_me(self, pos):
+        wait(self.live.submit(self.live.action, {"type": "set", "key": "position", "value": pos}))
+
+    def test_my_position_swaps_with_ocr_mate(self):
+        # 认出来：我在第 3 格打 1 号位，斧王 3 号位、水晶室女 5 号位、第 4 格（还没选）2 号位
+        self.live.position, self.live.position_auto = 1, True
+        self.live.team_roles, self.live._role_me = [3, 5, 1, 2, 4], 2
+        self.set_me(3)                                                 # 我和斧王换：斧王去 1 号位
+        self.assertEqual((self.live.position, self.live.position_auto), (3, False))
+        self.assertEqual(self.live.team_roles, [1, 5, 3, 2, 4])
+        self.assertEqual(self.draft().ally_pos, {AXE.id: 1, CM.id: 5})
+        self.assertIn("斧王", self.live.message)
+        self.set_me(2)                                                 # 和还没选英雄的那格换
+        self.assertEqual(self.live.team_roles, [1, 5, 2, 3, 4])
+        self.assertIn("队友", self.live.message)
+        self.assertEqual(self.live._role_draft, self.live._drafts_seen)   # 这局不再自动认
+
+    def test_my_position_swaps_with_manual_mate(self):
+        self.live.position = 1
+        self.act(CM.id, 4)
+        self.set_me(4)                                                 # 我定的水晶室女 4 号位：换到我原来的 1 号位
+        self.assertEqual(self.draft().ally_pos, {CM.id: 1})
+        self.assertEqual(self.live.position, 4)
+
+    def test_my_position_leaves_guessed_mates(self):
+        self.live.position = 1
+        self.set_me(3)                                                 # 斧王只是猜的 3 号位：不动，也不提示换了
+        self.assertEqual(self.live.hero_pos, {})
+        self.assertEqual(self.draft().ally_pos, {})
+        self.assertEqual(self.live.position, 3)
+
     def test_view_marks_manual(self):
         self.act(CM.id, 4)
         wait(self.live.submit(lambda: None))

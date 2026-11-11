@@ -345,13 +345,22 @@ function nextHTML(n, rank) {
     + `<div class="next-head">假设对面拿 <b>${esc(g.name)}</b>（${g.prob.toFixed(1)}%），给你的推荐：</div>${items}${excluded}</section>`;
 }
 
+// 标题栏左上角「我的位置」点开一行 1~5 号位（玩家 2026-11-10：上面的位置也要能手动改），点了回传 set position
+// 和控制面板的「位置」、剩余位置点空位置是同一个操作（live/draft.py 的 set_my_position）：新位置上认出来的 / 定过的队友
+// 换到我原来的位置（玩家同日：「我的位置可能会和队友出现交换」），手动改了这局不再按选人界面自动认
+let myPosOpen = false;
+function myPosPickerHTML(pos) {
+  return `<div class="pos-picker my-pos-picker" title="新位置上认出来的（或你定过的）队友，换到你原来的位置；这局不再自动认你的位置"><span>这局我打</span>${[1, 2, 3, 4, 5].map((p) =>
+    `<button type="button" class="${p === pos ? 'is-on' : ''}" data-mypos-set="${p}">${p}号位</button>`).join('')}</div>`;
+}
+
 // 内容分两栏：A = 阵容 + 分路，B = 我这路怎么打 / 推荐 / 威胁。窄的时候上下接着排（顺序不变），
 // 叠加层拉宽到 640px 以上左右并排（base.css 的容器查询），整张卡片矮一半，不容易超出屏幕
 function draftHTML(v) {
   const sideCls = v.side === 'radiant' ? 'side-radiant' : v.side === 'dire' ? 'side-dire' : 'side-unknown';
   const head = `
     <header class="ov-head">
-      <span class="ov-pos">${esc(v.position_name)}</span>${v.position_auto ? '<span class="ov-auto" title="从选人界面名字下面的位置自动认出来的">自动</span>' : ''}
+      <button type="button" class="ov-pos ov-pos-btn ${myPosOpen ? 'is-open' : ''}" data-mypos title="点一下：改你这局打的位置">${esc(v.position_name)}<i>${myPosOpen ? '▴' : '▾'}</i></button>${v.position_auto ? '<span class="ov-auto" title="从选人界面名字下面的位置自动认出来的；点左边的位置可以改，改了这局不再自动认">自动</span>' : ''}
       <span class="ov-side ${sideCls}">${esc(v.side_name)}</span>
       ${v.draft_rate ? `<span class="ov-rate" title="${esc(`阵容胜率：${v.draft_rate.note}`)}">阵容 <b>${v.draft_rate.winrate.toFixed(1)}</b>%</span>` : ''}
       <span class="ov-brand">选人助手</span>
@@ -402,8 +411,9 @@ function draftHTML(v) {
     html += `<div class="ov-threat">${face(v.threat, 'face-sm')}<span>注意 <b>${esc(v.threat.name)}</b> 对我方威胁最大</span><em>${v.threat.delta > 0 ? '+' : ''}${v.threat.delta.toFixed(1)}%</em></div>`;
   }
   // 标题栏下面的都放进 .ov-body：叠加层窗口放不下时只有这一块上下滚（overlay.html），标题栏和右上角按钮不动
-  if (!a || !html) return `${head}<div class="ov-body">${a}${html}</div>`;   // 只有一栏的内容，不用分
-  return `${head}<div class="ov-body"><div class="ov-cols"><div class="ov-col">${a}</div><div class="ov-col">${html}</div></div></div>`;
+  const top = head + (myPosOpen ? myPosPickerHTML(v.position) : '');
+  if (!a || !html) return `${top}<div class="ov-body">${a}${html}</div>`;   // 只有一栏的内容，不用分
+  return `${top}<div class="ov-body"><div class="ov-cols"><div class="ov-col">${a}</div><div class="ov-col">${html}</div></div></div>`;
 }
 
 // closable：局内提醒，带关闭按钮（点它或按显隐热键关掉）
@@ -465,7 +475,7 @@ export function renderOverlay(root, view) {
 }
 
 // 叠加层和控制面板预览共用的点击：推荐英雄 → 「如果选它」，推荐英雄的 × → 这局不想玩，「这局不想玩」里的名字 → 恢复，
-// 剩余位置 → 切位置，要点卡片的标签 → 翻页，
+// 剩余位置 / 标题栏的位置 → 切位置，要点卡片的标签 → 翻页，
 // 要点小节 / 剩余位置 / 推荐组的「展开 / 收起」→ 只在本地重画，× → 关卡片
 export function bindOverlayClicks(root, act) {
   root.addEventListener('click', (e) => {
@@ -509,6 +519,16 @@ export function bindOverlayClicks(root, act) {
     const groupFold = e.target.closest('.group-fold[data-group-fold]');
     if (groupFold) {
       toggleGroup(groupFold.dataset.groupFold);
+      return renderOverlay(root, root._view);
+    }
+    const myPosSet = e.target.closest('[data-mypos-set]');    // 标题栏下面那一行：把我的位置换成几号位
+    if (myPosSet) {
+      myPosOpen = false;
+      renderOverlay(root, root._view);
+      return act('set', { key: 'position', value: Number(myPosSet.dataset.myposSet) });
+    }
+    if (e.target.closest('[data-mypos]')) {                   // 标题栏左上角的位置：打开 / 关上改位置那一行
+      myPosOpen = !myPosOpen;
       return renderOverlay(root, root._view);
     }
     const setPos = e.target.closest('[data-setpos]');         // 改位置那一行：定成几号位 / 改回自动猜

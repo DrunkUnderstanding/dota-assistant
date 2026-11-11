@@ -5,7 +5,7 @@
           [--me 卓尔 --side radiant]                          已选好英雄：看对面分路 + 我这路的对线提示
   start                        一键启动（「启动助手.bat」就是调这个）：自动补齐配置 / 界面组件 / GSI / 数据再开助手
   run [--browser]              实时助手：叠加层 + 语音 + 控制面板（界面用 Electron；--browser 浏览器预览）
-  demo [--browser]             不开 Dota 演示叠加层和语音（按真实对局逐个选人，再弹局内提醒）
+  demo [--browser] [--match N] 不开 Dota 演示叠加层和语音（按真实对局逐个选人，再弹局内提醒；--match 换一局）
   calibrate <截图>             在选人截图上框出英雄格子
   recognize <截图>             用当前校准识别一张截图（调试用），输出标注图
   label <截图> [更多截图…]      逐格确认 / 纠正识别结果，存成学习模板
@@ -301,6 +301,7 @@ def main(argv: list[str] | None = None) -> int:
     dp.add_argument("--step", type=float, default=4.0, help="每一步间隔秒数")
     dp.add_argument("--browser", action="store_true", help="不开 Electron，用浏览器打开界面")
     dp.add_argument("--speed", type=float, default=60, help="局内部分每真实秒走多少游戏秒（60 = 1 秒 1 分钟）")
+    dp.add_argument("--match", type=int, help="换一局：你打过的、OpenDota 已解析的比赛编号（默认 9054096051 那局卓尔）")
     cp = sub.add_parser("calibrate", help="在选人截图上框出英雄格子")
     cp.add_argument("image", type=Path)
     rp = sub.add_parser("recognize", help="识别一张截图（调试）")
@@ -377,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
         return run(cfg, browser=args.browser)
     if args.cmd == "demo":
         from ..app.demo import run as demo
-        return demo(cfg, args.step, browser=args.browser, game_speed=args.speed)
+        return demo(cfg, args.step, browser=args.browser, game_speed=args.speed, match_id=args.match)
     if args.cmd == "calibrate":
         from ..vision.calibrate import calibrate
         return 0 if calibrate(args.image) else 1

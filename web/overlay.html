@@ -135,8 +135,9 @@ function reportHitRects() {
   // + 剩余位置的空位置（点了切位置）/ 展开收起 + 顶栏对照的格子（点了帮认）和打开的「这格是谁」；其余地方照样点穿
   // + 推荐组的展开收起 / 收起后的小头像
   // + 「对面最后一手（猜）」的头像（点了换假设）+ 对面分路 / 剩余位置里的英雄头像（点了改位置）和改位置那一行
+  // + 标题栏左上角的位置（点开一行改我的位置）
   const hits = ['.pick[data-id]', '.pick-mini[data-id]', '.group-fold', '.next-guess', '.ov-skipped button', '.brief-tab[data-page]', '.brief-fold',
-    '.team-row[data-pos]', '.team-fold', '.slot[data-slot]', '.slot-picker', '[data-hpos]', '.pos-picker'];
+    '.team-row[data-pos]', '.team-fold', '.slot[data-slot]', '.slot-picker', '[data-hpos]', '.pos-picker', '[data-mypos]'];
   const els = locked ? [...document.querySelectorAll(['.ov-tools button', ...hits.map((s) => `.ov:not(.is-hidden) ${s}`)].join(', '))] : [];
   // 选人推荐能上下滚：滚出去的部分不算（裁到滚动区里），滚动条那一条也接鼠标（拖它滚；滚轮在上面这些可点的地方也能滚）
   const scroller = root.querySelector(':scope > .ov-body');

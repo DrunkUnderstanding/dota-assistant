@@ -36,7 +36,7 @@ class InGameMixin:
             self.pick_key = None
             if self.position_auto:               # 上一局自动认的位置不带到这一局（这局可能是加速，没有位置字样）
                 self.position, self.position_auto = self._base_position, False
-            self.team_roles = []
+            self.team_roles, self._role_me = [], None
             log.info("进入选人阶段（第 %d 次）：叠加层自动显示", self._drafts_seen)
         self._in_selection = selecting
         strategy = bool(st and st.alive and st.game_state == STRATEGY_STATE)

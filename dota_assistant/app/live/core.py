@@ -185,6 +185,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         self._read_roles = read_roles or roles.read_roles
         self.position_auto = False               # 当前位置是不是自动认出来的
         self.team_roles: list[int | None] = []   # 这局我方 5 格各自排的位置（OCR 认出来的，猜队友分路用）
+        self._role_me: int | None = None         # team_roles 里哪一格是我（换位置时把我和队友的对调）
         self._base_position = self.position      # 认不出时回到的位置（config 或玩家手动选的）
         self._role_draft = -1                    # 哪一局已经认出来了（或者玩家手动改过），不再认
         self._role_busy = False
@@ -298,11 +299,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
         elif t == "set":
             key, value = a.get("key"), a.get("value")
             if key == "position" and int(value) in POSITION_NAMES:
-                self.position = int(value)
-                self.position_auto = False
-                self._base_position = self.position
-                self._role_draft = self._drafts_seen         # 玩家手动选了，这局不再自动改
-                self.refresh(force_speech=True)
+                self.set_my_position(int(value))
             elif key == "side_mode" and value in consts.SIDE_MODES:
                 self.side_mode = value
                 self.refresh(force_speech=True)
