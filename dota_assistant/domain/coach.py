@@ -269,6 +269,8 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
     from . import itembuild                      # itembuild 顶层 import 了本模块，这里延迟 import
     needs, notes = [], []
     support = pos in SUPPORT_POSITIONS
+    ib = itembuild
+    chip = lambda k, mark="": ib.chip(k, base.items[k].name if k in base.items else k, mark=mark)
     my_tags = me.tags()
     timings = item_timings(bench) if bench else {}
 
@@ -284,13 +286,15 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         why = (f"对面{who}无视技能免疫，黑皇杖挡不住；同版本 2 万局：对面有 2 个以上这种控制时，"
                f"核心出黑皇杖比把钱花在别的装上胜率低约 3 个百分点，这局保命考虑别的装备")
         if support:
-            notes.append(f"对面{who}无视技能免疫，这局黑皇杖价值低，不用催核心出")
+            notes.append(ib.note(f"对面{who}无视技能免疫，这局黑皇杖价值低，不用催核心出",
+                                 [chip("black_king_bar", "avoid"), ib.tag("价值低"), *ib.hero_abs(piercers),
+                                  ib.tag("不用催核心", "dim")]))
         elif share >= MENU_SHARE or not bench:
             needs.append(Need("avoid:bkb", why, ("black_king_bar",), 0, 0,
                               [f"{e.name}·{ab.name}：官方字段「对敌方无视技能免疫」" for e, ab in piercers]
                               + ["黑皇杖研究（HANDOFF 第 69 节）：对面 2 个以上 −3.2 ±1.8 个百分点（25 分钟），0 个 +0.6 ±1.3"],
                               why, tip=AVOID_TIP, avoid=True,
-                              who=[itembuild.hero(e, ab) for e, ab in piercers], label="挡不住", stat="胜率 −3.2"))
+                              who=ib.hero_abs(piercers), label="挡不住", stat="胜率 −3.2"))
     elif len(ctrl) >= BKB_CONTROL_MIN and not self_immune:
         minute = med if share >= 0.15 else 0
         if minute and len(ctrl) >= BKB_EARLY_MIN:
@@ -304,12 +308,14 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         early = f"对面 {len(ctrl)} 个英雄有控制（{who}），可以考虑黑皇杖，{when}"
         tail = f"；注意 {'、'.join(dict.fromkeys(pierce))} 无视技能免疫，黑皇杖挡不住" if pierce else ""
         if support:
-            notes.append(f"对面 {len(ctrl)} 个英雄有控制（{who}），提醒核心早出黑皇杖{tail}")
+            notes.append(ib.note(f"对面 {len(ctrl)} 个英雄有控制（{who}），提醒核心早出黑皇杖{tail}",
+                                 [ib.tag("提醒核心", "dim"), chip("black_king_bar", "counter"), ib.tag(f"控制 ×{len(ctrl)}"),
+                                  *(ib.hero(e) for e, _ in ctrl)]))
         else:
             needs.append(Need("bkb", text + tail, ("black_king_bar",), due, 0,
                               [f"{e.name}·{ab.name}：{s}" for e, hits in ctrl for ab, _, s in hits[:1]], early + tail,
                               minute, NO_DATA, who=[itembuild.hero(e, hits[0][0]) for e, hits in ctrl],
-                              label=f"{due:.0f}′前 · 控制 ×{len(ctrl)}"))
+                              label=f"控制 ×{len(ctrl)}"))
 
     # 2. 闪避：自己能处理就不推
     eva = [(e, _base_hits(e, "提供闪避")) for e in enemies]
@@ -319,11 +325,16 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         player_rule = _player_rule(rules, me, "monkey_king_bar", base)
         if "克敌机先" in my_tags:
             ab, sent = my_tags["克敌机先"]
-            notes.append(f"对面{names}有闪避，但你的{ab}自带克敌机先，不用专门出金箍棒")
+            notes.append(ib.note(f"对面{names}有闪避，但你的{ab}自带克敌机先，不用专门出金箍棒",
+                                 [*(ib.hero(e, hits[0][0]) for e, hits in eva), ib.tag("闪避"), ib.tag("你自带克敌机先", "good"),
+                                  chip("monkey_king_bar", "avoid"), ib.tag("不用出", "dim")]))
         elif player_rule:
-            notes.append(f"对面{names}有闪避；你的规则：{player_rule.text}")
+            notes.append(ib.note(f"对面{names}有闪避；你的规则：{player_rule.text}",
+                                 [*(ib.hero(e, hits[0][0]) for e, hits in eva), ib.tag("闪避"), ib.tag(f"你的规则：{player_rule.text}")]))
         elif support:
-            notes.append(f"对面{names}有闪避，提醒核心考虑金箍棒或血棘")
+            notes.append(ib.note(f"对面{names}有闪避，提醒核心考虑金箍棒或血棘",
+                                 [*(ib.hero(e, hits[0][0]) for e, hits in eva), ib.tag("闪避"), ib.tag("提醒核心", "dim"),
+                                  ib.group([chip("monkey_king_bar"), chip("bloodthorn")])]))
         else:
             # 金箍棒 / 血棘哪件这个英雄出得多就先说哪件
             keys = sorted(("monkey_king_bar", "bloodthorn"),
@@ -341,18 +352,27 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         # 官方原文写明「不会被反隐手段发现」的（斯拉克暗影之舞），买粉没用
         immune = [f"{e.name}的{ab.name}" for e, hits in inv for ab, _, sent in hits if "不会被反隐" in sent]
         mine = my_tags.get("反隐 / 显形")
-        notes.append(f"对面{'、'.join(e.name for e, _ in inv)}能隐身，提醒辅助带粉 / 岗哨"
-                     + (f"；你的{mine[0]}也能显形" if mine else "")
-                     + (f"（{'、'.join(immune)}不会被反隐发现，粉对它没用）" if immune else ""))
+        icons = [*(ib.hero(e, hits[0][0]) for e, hits in inv), ib.tag("隐身"), ib.tag("→", "dim"),
+                 ib.group([chip("dust"), chip("ward_sentry")])]
+        if mine:
+            icons.append(ib.tag(f"你的{mine[0]}能显形", "good"))
+        if immune:
+            icons.append(ib.tag(f"{'、'.join(immune)}粉没用", "bad"))
+        notes.append(ib.note(f"对面{'、'.join(e.name for e, _ in inv)}能隐身，提醒辅助带粉 / 岗哨"
+                             + (f"；你的{mine[0]}也能显形" if mine else "")
+                             + (f"（{'、'.join(immune)}不会被反隐发现，粉对它没用）" if immune else ""), icons))
 
     # 3b. 显形：你常出的隐身装（微光披风 / 影刃 / 白银之锋）会被对面看穿（2026-11-09，参考同行 gg-go-next 的「别买」规则）。
     # 只有本局依据（对面技能原文），没有「出了更容易输」的大数据，所以只算开局提示，不动出装顺序
     reveal = [(e, hits) for e in enemies if (hits := _base_hits(e, "反隐 / 显形"))]
-    invis = [base.items[k].name for k in ("glimmer_cape", "invis_sword", "silver_edge")
-             if k in base.items and timings.get(base.item_ids.get(f"item_{k}"), (0, 0))[0] >= MENU_SHARE]
+    invis_keys = [k for k in ("glimmer_cape", "invis_sword", "silver_edge")
+                  if k in base.items and timings.get(base.item_ids.get(f"item_{k}"), (0, 0))[0] >= MENU_SHARE]
+    invis = [base.items[k].name for k in invis_keys]
     if reveal and invis:
         who = "、".join(f"{e.name}的{hits[0][0].name}" for e, hits in reveal)
-        notes.append(f"对面{who}能显形，你常出的{'、'.join(invis)}的隐身可能被看穿（{NO_DATA}）")
+        notes.append(ib.note(f"对面{who}能显形，你常出的{'、'.join(invis)}的隐身可能被看穿（{NO_DATA}）",
+                             [*(ib.hero(e, hits[0][0]) for e, hits in reveal), ib.tag("显形"), ib.tag("→", "dim"),
+                              ib.group([chip(k, "avoid") for k in invis_keys]), ib.tag("隐身会被看穿"), ib.tag("提示", "dim")]))
 
     # 4. 其他针对装：只从这个英雄同分段会出的装备里挑（没有同分段数据就不推，宁缺毋滥）
     for c in COUNTERS:
@@ -373,10 +393,13 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         name = base.items[k].name
         if c.self_skip and c.self_skip in my_tags:
             ab, _ = my_tags[c.self_skip]
-            notes.append(f"{c.reason.format(who=_who(hits), item=name)}；但你的{ab}自带这个效果，不用专门出")
+            notes.append(ib.note(f"{c.reason.format(who=_who(hits), item=name)}；但你的{ab}自带这个效果，不用专门出",
+                                 [*(ib.hero(e) for e, _ in hits[:3]), ib.tag(c.label), chip(k, "avoid"),
+                                  ib.tag(f"你的{ab}自带", "good")]))
             continue
         if rule := _player_rule(rules, me, k, base):
-            notes.append(f"{c.reason.format(who=_who(hits), item=name)}；你的规则：{rule.text}")
+            notes.append(ib.note(f"{c.reason.format(who=_who(hits), item=name)}；你的规则：{rule.text}",
+                                 [*(ib.hero(e) for e, _ in hits[:3]), ib.tag(c.label), chip(k), ib.tag(f"你的规则：{rule.text}")]))
             continue
         text = c.reason.format(who=_who(hits), item=name)
         due = med + CORE_LATE if med else COUNTER_FALLBACK_MIN

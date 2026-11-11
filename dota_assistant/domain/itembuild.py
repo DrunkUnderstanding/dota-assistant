@@ -83,6 +83,26 @@ def meter(label: str, value: float, ref: float) -> dict:
     return {"meter": {"label": label, "v": round(value), "ref": round(ref)}}
 
 
+def hero_abs(pairs) -> list[dict]:
+    """[(英雄, 技能)] → 头像 + 技能图标；同一个英雄几个技能只放一次头像（凯三个技能都无视免疫）"""
+    out, seen = [], set()
+    for h, ab in pairs:
+        out.append(ability(ab) if h.id in seen and ab is not None else hero(h, ab))
+        seen.add(h.id)
+    return out
+
+
+class Note(str):
+    """一句提示（开局提示 / 「对面要防」）：本身就是那句话（str，原来的用法都不变），另外带卡片上的精简图标 icons"""
+    icons: list
+
+
+def note(t: str, icons: list) -> Note:
+    n = Note(t)
+    n.icons = icons
+    return n
+
+
 def short(full, icons: list) -> dict:
     """一行的两种说法：卡片上显示 icons（图标 + 几个字），悬停看 full 整句；文字版（语音 / 日志 / 命令行 / 给 AI）用 full。
     玩家 2026-11-10：局内叠加层要像 gg-go-next 那样少字多图"""
@@ -119,7 +139,9 @@ def line_view(t) -> dict:
     """界面用的一行：{"text": 文字版}，有图标的再带 {"parts": 片段}；short() 的那种显示精简版，
     "short": True 告诉界面把整句（text）放进悬停提示"""
     if isinstance(t, str):
-        return {"text": t}
+        if getattr(t, "icons", None):            # Note：一句话 + 精简图标
+            return {"text": str(t), "parts": t.icons, "short": True}
+        return {"text": str(t)}
     if isinstance(t, dict) and "short" in t:
         return {"text": text(t["full"]), "parts": t["short"], "short": True}
     return {"text": text(t), "parts": t if isinstance(t, list) else [t]}
@@ -275,7 +297,7 @@ def next_parts(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[
     if sell := sell_pick(slots, s.key, tree, const):
         name = (names or {}).get(sell[0], sell[0])
         parts += ["；格子满了，先卖", chip(sell[0], name), f"（{sell[1]} 金，身上最便宜）"]
-        icons += [tag("先卖", "bad"), chip(sell[0], name, mark="avoid")]
+        icons += [tag("先卖", "bad"), chip(sell[0], name)]
     if after := todo[1:1 + NEXT_SHOW]:
         parts += ["；之后 ", group([chip(x.key, x.name) for x in after])]
         icons += [tag("→", "dim"), group([chip(x.key, x.name, mark="common") for x in after])]

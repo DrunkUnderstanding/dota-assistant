@@ -528,6 +528,7 @@ img { display: block; }
 /* 强势期柱子 */
 .bars { display: flex; gap: 14px; align-items: flex-end; padding: 2px 4px; }
 .is-short .ic-common .ic-mark { display: none; }
+.is-short .ic-counter:not(.ic-big) .ic-mark { display: none; }   /* 金框就够了，不再多一颗星 */
 .bar { display: flex; flex-direction: column; align-items: center; min-width: 56px; font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
 .bar-v { font: 600 12px/1.2 var(--num); color: var(--text); }
 .bar-track { display: flex; align-items: flex-end; height: 30px; }

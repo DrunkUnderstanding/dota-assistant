@@ -249,7 +249,7 @@ def tips(me: kb.HeroKB, foes: list[kb.HeroKB], ally: kb.HeroKB | None = None, li
         f, ab, s = ctrl[0]
         cd = _cd(ab)
         out.append(Why("bad", f"小心{f.name}的{ab.name}" + (f"（{cd}）" if cd else "") + "，交了以后是你换血 / 补刀的窗口",
-                       _quote((f, ab, s)), [ib.hero(f, ab), ib.tag("交了再换血"), *([ib.tag(f"{ab.cooldown}″", "dim")]
+                       _quote((f, ab, s)), [ib.hero(f, ab), ib.tag("交了再换血"), *([ib.tag(f"{str(ab.cooldown).split('/')[0]}″", "dim")]
                                                                                if ab.cooldown else [])]))
 
     # 2. 持续施法：对面的能打断；我的会被对面打断

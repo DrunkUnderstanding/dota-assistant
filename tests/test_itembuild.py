@@ -64,7 +64,7 @@ class MoneyTest(unittest.TestCase):
         # 卡片上：放大的下一件 + 还差多少 + 先卖的（红叉）+ 之后两件（淡）
         self.assertEqual(parts["short"], [
             {"item": "dragon_lance", "name": "魔龙枪", "big": True}, {"tag": "下一件", "tone": "dim"}, {"tag": "还差 2000"},
-            {"tag": "先卖", "tone": "bad"}, {"item": "branches", "name": "树枝", "mark": "avoid"}, {"tag": "→", "tone": "dim"},
+            {"tag": "先卖", "tone": "bad"}, {"item": "branches", "name": "树枝"}, {"tag": "→", "tone": "dim"},
             {"group": [{"item": "black_king_bar", "name": "黑皇杖", "mark": "common"},
                        {"item": "hurricane_pike", "name": "飓风长戟", "mark": "common"}]}])
         self.assertEqual(itembuild.line_view("纯文字"), {"text": "纯文字"})
@@ -82,6 +82,14 @@ class MoneyTest(unittest.TestCase):
         self.assertEqual(itembuild.text(itembuild.meter("补刀", 120, 196.4)), "补刀 120 / 196")
         self.assertEqual(itembuild.text(itembuild.short("整句", [itembuild.tag("短")])), "整句")
         self.assertEqual(itembuild.chip("blink", "闪烁匕首", "17′", pct=0.956), {"item": "blink", "name": "闪烁匕首", "sub": "17′", "pct": 96})
+        # Note：本身是那句话（原来按字符串用的地方不变），界面上显示图标
+        n = itembuild.note("对面帕吉能隐身", [itembuild.tag("隐身")])
+        self.assertTrue("隐身" in n and itembuild.text(n) == "对面帕吉能隐身")
+        self.assertEqual(itembuild.line_view(n), {"text": "对面帕吉能隐身", "parts": [{"tag": "隐身"}], "short": True})
+        # 同一个英雄几个技能：头像只放一次
+        kez = SimpleNamespace(id=145, name="凯")
+        abs_ = [SimpleNamespace(key=f"k{i}", name=f"技能{i}") for i in range(2)]
+        self.assertEqual([("hero" in p) for p in itembuild.hero_abs([(kez, abs_[0]), (kez, abs_[1]), (h, ab)])], [True, False, True])
 
     def test_buyback_after_late(self):
         b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
