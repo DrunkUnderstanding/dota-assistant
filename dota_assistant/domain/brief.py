@@ -202,6 +202,14 @@ class Brief:
         return "\n".join(L)
 
 
+def _why(w) -> tuple:
+    """对线 / 团战的一条（explain.Why）→ 一行：卡片上是 ✓/✗ + 头像技能图标 + 几个字（Why.icons），整句和原文悬停看"""
+    full = w.text if w.kind == "bad" else f"✓ {w.text}"
+    body = itembuild.short(full, [itembuild.tag("✗" if w.kind == "bad" else "✓", "bad" if w.kind == "bad" else "good"),
+                                  *w.icons]) if w.icons else full
+    return ("warn" if w.kind == "bad" else "row", body, w.quote)
+
+
 def _line(x: tuple) -> dict:
     """(kind, 文字或片段列表[, 依据原文]) → 界面用的一行；片段里的装备显示成图标（itembuild.line_view）"""
     k, text, *q = x
@@ -268,13 +276,17 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
                             f"对上{name(h)}对线 胜 {wdl[0] / n:.0%} / 平 {wdl[1] / n:.0%} / 负 {wdl[2] / n:.0%}，{verdict}（{n} 局）"))
     foes = [base.heroes[h] for h in opp if h in base.heroes]
     ally = base.heroes.get(partner.hero) if partner else None
-    tips = [("warn", w.text, w.quote) if w.kind == "bad" else ("row", f"✓ {w.text}", w.quote)
-            for w in lanes.tips(me, foes, ally)]
+    tips = [_why(w) for w in lanes.tips(me, foes, ally)]
     short = None
     if opp:      # 卡片上：一行「对面是谁、好不好打」+ 前两条提示；三路分路、对线胜负数字收起来
         who = "、".join(f"{name(h)}（{guessed[h]}号位{'·' + verdicts[h] if h in verdicts else ''}）" for h in opp)
-        head = ("warn" if "难打" in verdicts.values() else "row", f"你这路对面：{who}"
-                + (f"；队友 {name(partner.hero)}" if partner else ""))
+        icons = [itembuild.hero(me), *([itembuild.hero(ally)] if ally else []), itembuild.tag("vs", "dim")]
+        for h in opp:
+            if h in base.heroes:
+                tone = "bad" if verdicts.get(h) == "难打" else "good" if verdicts.get(h) == "好打" else "dim"
+                icons += [itembuild.hero(base.heroes[h]), itembuild.tag(f"{guessed[h]}号位{'·' + verdicts[h] if h in verdicts else ''}", tone)]
+        head = ("warn" if "难打" in verdicts.values() else "row",
+                itembuild.short(f"你这路对面：{who}" + (f"；队友 {name(partner.hero)}" if partner else ""), icons))
         short = ([head] + tips[:LANE_TIPS_SHOWN], lines[:1] + outcome + tips[LANE_TIPS_SHOWN:])
     b.add("对线", lines + outcome + tips, short)
 
@@ -291,22 +303,27 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
         if counts:
             chips = [itembuild.chip(item_key[i], base.items[item_key[i]].name, f"×{c}" if c > 1 else "")
                      for i, c in counts.items()]
-            b.add("起手", [("row", [itembuild.group(chips), f"（同分段 ≥{START_SHARE:.0%} 的局会带）"])])
+            b.add("起手", [("row", itembuild.short([itembuild.group(chips), f"（同分段 ≥{START_SHARE:.0%} 的局会带）"],
+                                                   [itembuild.group(chips)]))])
 
     # 3. 强势期
     if curves and enemy_ids:
         mine, theirs = team_phases(curves, [my_id, *ally_ids]), team_phases(curves, enemy_ids)
         diffs = [(m - t) if m is not None and t is not None else None for m, t in zip(mine, theirs)]
-        lines = [("dim", "　".join(f"{label} {d:+.1f}" for (_, _, label), d in zip(PHASES, diffs) if d is not None)
-                  + "（在这段时间结束的局里，我方英雄胜率偏差 - 对面，百分点）")]
+        nums = [(label, d) for (_, _, label), d in zip(PHASES, diffs) if d is not None]
+        dim = "　".join(f"{label} {d:+.1f}" for label, d in nums) + "（在这段时间结束的局里，我方英雄胜率偏差 - 对面，百分点）"
+        lines = [("dim", itembuild.short(dim, [itembuild.bars(nums)]) if nums else dim)]
         if diffs[0] is not None and diffs[-1] is not None:
             swing = diffs[-1] - diffs[0]
             if swing >= PHASE_GAP:
-                lines.insert(0, ("row", f"我方越拖越强：{PHASES[0][2]}对面占优，{PHASES[-1][2]}我方占优。前期别硬接团，守住发育"))
+                head = ("row", f"我方越拖越强：{PHASES[0][2]}对面占优，{PHASES[-1][2]}我方占优。前期别硬接团，守住发育",
+                        [itembuild.tag("越拖越强", "good"), itembuild.tag("前期别硬接团，守住发育")])
             elif swing <= -PHASE_GAP:
-                lines.insert(0, ("warn", f"我方前期强、后期弱：趁 {PHASES[0][2]}抱团推进，拖到 {PHASES[-1][2]}对面占优"))
+                head = ("warn", f"我方前期强、后期弱：趁 {PHASES[0][2]}抱团推进，拖到 {PHASES[-1][2]}对面占优",
+                        [itembuild.tag("前期强 后期弱", "bad"), itembuild.tag(f"趁 {PHASES[0][2]}抱团推进")])
             else:
-                lines.insert(0, ("row", "双方强势期差不多，按装备节奏打"))
+                head = ("row", "双方强势期差不多，按装备节奏打", [itembuild.tag("差不多"), itembuild.tag("按装备节奏打")])
+            lines.insert(0, (head[0], itembuild.short(head[1], head[2])))
         b.add("强势期", lines)
 
     # 4. 出装：同分段核心装 + 针对这局阵容的装备（局内提醒用的同一套判断），针对装悬停看原文
@@ -316,8 +333,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
     build = itembuild.make(needs, bench, base)
     b.add("出装", itembuild.brief_lines(build, hi=STAGE_START["late"]))     # 中期那页：后期开始前的
     allies = [base.heroes[h] for h in ally_ids if h in base.heroes]
-    b.add("团战", [("warn", w.text, w.quote) if w.kind == "bad" else ("row", f"✓ {w.text}", w.quote)
-                   for w in teamfight.tips(me, allies, enemies, pos, {name(h): p for h, p in guessed.items()})])
+    b.add("团战", [_why(w) for w in teamfight.tips(me, allies, enemies, pos, {name(h): p for h, p in guessed.items()})])
     b.add("后期出装", itembuild.late_lines(build, STAGE_START["late"]))
     b.add("对面要防", [("row", n) for n in notes])
     return b

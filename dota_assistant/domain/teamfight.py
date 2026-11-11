@@ -13,6 +13,7 @@ import re
 
 from .. import kb
 from .death import SAVE_EXCLUDE, SAVE_RE
+from . import itembuild as ib
 from .explain import Why
 from .lanes import ESCAPE_EXCLUDE, INTERRUPT_TAGS, UNTOUCHABLE
 
@@ -90,20 +91,24 @@ def _ult_line(f: kb.HeroKB, ab: kb.Entry, interrupt, core: bool) -> tuple[int, W
         marks.append("黑皇杖挡不住")
         quote.append((f, ab, "无视技能免疫（官方技能属性）"))
     head = f"{f.name}的{ab.name}（{'，'.join(marks)}）"
+    icons = [ib.hero(f, ab), *([ib.tag(f"{cd}″", "dim")] if cd else []),
+             *([ib.tag("穿黑皇杖", "bad")] if ab.pierces_immunity else [])]
     if ab.channelled and not re.search(UNTOUCHABLE, ab.text) and interrupt:
         h, mab, s, who = interrupt
         quote += [(f, ab, "持续施法（官方技能属性）"), (h, mab, s)]
-        return 3, Why("good", f"{head}要持续施法：留{who}的{mab.name}打断", _quote(*quote))
+        return 3, Why("good", f"{head}要持续施法：留{who}的{mab.name}打断", _quote(*quote),
+                      icons + [ib.tag("←", "dim"), ib.ability(mab) if who == "你" else ib.hero(h, mab), ib.tag("留着打断")])
     if re.search(REVIVE_RE, ab.text):
-        return 1, Why("bad", f"{head}死了能复活：先打别人，或留够技能杀两次", _quote(*quote))
+        return 1, Why("bad", f"{head}死了能复活：先打别人，或留够技能杀两次", _quote(*quote), icons + [ib.tag("能复活")])
     score = 2 if ab.pierces_immunity else 1
     if re.search(AOE_RE, ab.text):
         bkb = ""
         if core and ab.pierces_immunity is False and any(a is ab for a, _ in _hits(f, kb.CONTROL_TAGS)):
             bkb = "，开黑皇杖能躲"
             quote.append((f, ab, "不无视技能免疫（官方技能属性）"))
-        return score, Why("bad", f"{head}没交前别扎堆{bkb}；交了 {cd} 秒内没有，趁机打", _quote(*quote))
-    return score, Why("bad", f"等{head}交了再进；交了 {cd} 秒内没有", _quote(*quote))
+        return score, Why("bad", f"{head}没交前别扎堆{bkb}；交了 {cd} 秒内没有，趁机打", _quote(*quote),
+                          icons + [ib.tag("没交别扎堆")] + ([ib.tag("开黑皇杖能躲", "good")] if bkb else []))
+    return score, Why("bad", f"等{head}交了再进；交了 {cd} 秒内没有", _quote(*quote), icons + [ib.tag("交了再进")])
 
 
 def tips(me: kb.HeroKB, allies: list[kb.HeroKB], enemies: list[kb.HeroKB], pos: int,
@@ -144,14 +149,16 @@ def tips(me: kb.HeroKB, allies: list[kb.HeroKB], enemies: list[kb.HeroKB], pos: 
             cd = _cd(esc)
             text = f"{label}有{esc.name}" + (f"（冷却 {cd} 秒）" if cd else "") + f"保命：骗出来再上{who(h)}的{ab.name}"
             q = [(f, esc, _first_sentence(esc)), (h, ab, s)]
+            icons = [ib.hero(f, esc), ib.tag("骗出来"), ib.tag("→", "dim"), ib.hero(h, ab) if h is not me else ib.ability(ab)]
         else:
             text = f"{who(h)}的{ab.name}留给{label}"
             q = [(h, ab, s)]
+            icons = [ib.hero(h, ab) if h is not me else ib.ability(ab), ib.tag("留给"), ib.hero(f)]
         if immune and esc is not immune[0][0]:
             iab, isent = immune[0]
             text += f"；{ab.name}无视技能免疫，他开{iab.name}也能控" if ab.pierces_immunity else f"；他开{iab.name}免疫，等结束再控"
             q.append((f, iab, isent))
-        keep.append(Why("good", text, _quote(*q)))
+        keep.append(Why("good", text, _quote(*q), icons))
 
     # 3. 对面能保人的：先控住保人的，或者骗掉再集火
     saves = []
@@ -160,7 +167,8 @@ def tips(me: kb.HeroKB, allies: list[kb.HeroKB], enemies: list[kb.HeroKB], pos: 
             ab, sent = hit
             cd = _cd(ab)
             saves.append(Why("bad", f"{f.name}的{ab.name}" + (f"（冷却 {cd} 秒）" if cd else "")
-                             + f"能保人：先控{f.name}或等它交了再集火", _quote((f, ab, sent))))
+                             + f"能保人：先控{f.name}或等它交了再集火", _quote((f, ab, sent)),
+                             [ib.hero(f, ab), ib.tag("能保人"), ib.tag("先控 / 交了再集火")]))
 
     # 4. 反弹指向技能：别把你的指向技能往他身上丢
     reflect = []
@@ -169,7 +177,8 @@ def tips(me: kb.HeroKB, allies: list[kb.HeroKB], enemies: list[kb.HeroKB], pos: 
         for ab, sent in _hits(f, ("抵挡 / 反馈指向技能",)):
             if my_target:
                 reflect.append(Why("bad", f"{f.name}的{ab.name}会挡 / 弹指向技能：先骗掉再对他放{my_target[0].name}",
-                                   _quote((f, ab, sent))))
+                                   _quote((f, ab, sent)), [ib.hero(f, ab), ib.tag("弹指向"), ib.tag("骗掉再放"),
+                                                           ib.ability(my_target[0])]))
                 break
 
     # 5. 你自己的大招：持续施法的等对面打断交了；范围大招等对面保人技能交了
@@ -179,10 +188,11 @@ def tips(me: kb.HeroKB, allies: list[kb.HeroKB], enemies: list[kb.HeroKB], pos: 
         if ab.channelled and not re.search(UNTOUCHABLE, ab.text) and their_interrupt:
             f, fab, s = their_interrupt
             mine_ult.append(Why("bad", f"你的{ab.name}要持续施法，会被{f.name}的{fab.name}打断：等它交了再放",
-                                _quote((me, ab, "持续施法（官方技能属性）"), (f, fab, s))))
+                                _quote((me, ab, "持续施法（官方技能属性）"), (f, fab, s)),
+                                [ib.ability(ab), ib.tag("会被", "dim"), ib.hero(f, fab), ib.tag("打断，交了再放")]))
         elif saves and re.search(AOE_RE, ab.text):
             mine_ult.append(Why("good", f"你的{ab.name}（冷却 {_cd(ab)} 秒）等对面保人技能交了、人挤一起再放",
-                                _quote((me, ab, _first_sentence(ab)))))
+                                _quote((me, ab, _first_sentence(ab))), [ib.ability(ab), ib.tag("保人技能交了、人挤一起再放")]))
         break
 
     # 卡片只显示前几条：最要紧的两个大招 → 留控给谁 → 保人 → 自己的大招 → 反弹 → 其余大招

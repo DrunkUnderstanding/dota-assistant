@@ -812,3 +812,20 @@ Dota 2 Wiki（Fandom）也有一套小地图图标，但它的图床挡命令行
 
 **验证**：`test_coach`：`test_avoid_need_never_nags`（不当缺口、核心装不催）、`test_two_bkb_piercers_avoid_bkb`（马格纳斯 + 兽王 → 别买、出装顺序拿掉、出装页有 ✗ 一行；1 个时照旧推；辅助只提示）、`test_reveal_note_only_for_invis_buyers`。全部单测过。
 **没验证**：没实战、没在本局要点卡片界面上看过 ✗ 那一行（局内卡片默认不弹，`ingame_tips = false`）。
+
+## 78. 局内卡片少字多图：图标 + 几个字，整句悬停看（2026-11-11，`itembuild.short` / `tiles` / `hero` / `tag`、`Why.icons`、`Coach.card`）
+
+**起因**：玩家看了同行 gg-go-next 的局内面板（一行 = 图标 + 名字 + 一个数字），嫌我们的卡片字多，要「少量的字，大量的图片」；装备胜率按第 75 节的结论不照搬原始胜率，选了「1 + 2」：出装标购买比例，胜率只写验证过的。
+
+**做法**：
+- 片段（`itembuild`）新加几种：`tiles`（出装顺序一排图标）、`hero`（头像 + 技能图标，`/icons/abilities/<key>.png`）、`ability`、`tag`（几个字，good / bad / dim）、`bars`（强势期柱子）、`meter`（补刀 / 经济进度条）；`chip` 加 `pct`（同分段多少局买，只在界面显示）、`big`（「下一件」放大）、记号 `avoid`（灰掉 + 红 ✕）/ `got`（灰掉 + 绿 ✓）。
+- `itembuild.short(整句, 图标)`：卡片上显示图标，整句（+ 依据原文）放悬停提示；**文字版（`text()`，语音 / 日志 / 命令行 / 给 AI 的资料）还是整句**，所以 `brief-sim` / `coach-sim` 输出除了图例那行基本不变。
+- 用上的地方：
+  - 本局要点：对线（我 + 队友 vs 对面头像带「3号位·难打」）、对线 / 团战每条（`Why.icons`：✓/✗ + 头像技能 + 几个字，`lanes.tips` / `teamfight.tips` 里逐条写）、起手、强势期（三根柱子）、出装（一排图标，下面「23′ 87%」；针对装 / 提示 / 别买各一行：装备 + `Need.label` + `Need.who` 头像技能）。
+  - 「别买」那行写「胜率 −3.2」（`Need.stat`，第 69 节验证过的）；**其他装备都不写胜率**（第 75 节：同时段装备胜率 91% 是局势）。
+  - 局内提醒卡片：「下一件」放大加金框 +「还差 1600」+ 之后两件小图标 + 已经出了的（灰掉打勾）；补刀 / 经济落后是一根进度条（`Need.view`）；核心装没出、针对装还没有、按死法补装都是图标 + 几个字（`Coach.card`）。
+- 没改：开局提示、「对面要防」、死亡复盘本身还是文字。
+
+**验证**：单测 `test_itembuild.test_short_parts_text` / `test_next_parts_icons`、`test_coach.test_two_bkb_piercers_avoid_bkb`（别买那行：红叉黑皇杖 + 胜率 −3.2 + 挡不住 + 马格纳斯 / 兽王头像技能）、`test_webui` / `ShopCardTest` 改成新结构；全部单测（474 个）、ruff、`check_isolation`（没有意外改动；它里面那轮单测 `test_vision` 因为本机内存只剩约 2 GB 分配失败，单独重跑通过）、`browser_check` 六页 0 报错。
+临时脚本推假 GSI（斯温一号位，对面帕吉 + 兽王 / 对照莱恩 + 斧王 + 潮汐），无头 Edge 截叠加层看过对线期 / 中期 / 后期三页和 20 分钟、死亡两张提醒卡片。
+行为快照：本机没有 `D:\dota-golden`，没跑（brief-sim / coach-sim 的图例行会变）。**没实战、没起 Electron 用真鼠标悬停看整句**；局内提醒卡片默认还是不弹（`ingame_tips = false`）。

@@ -29,6 +29,7 @@ from ..sources import assets
 COMMON_SHARE = 0.15          # 同分段 15%~40% 的局会买的算「之后常见」
 COMMON_MAX = 2               # 「之后常见」最多补几件
 NEXT_SHOW = 2                # 「下一件」后面再列几件
+DONE_SHOW = 4                # 「下一件」卡片上列几件已经出了的（灰掉打勾，只在界面上显示）
 DEATH_MIN = 3                # 同一种死法本局第几次起才推对应装备（玩家 2026-10-25：超过两次才推）
 DEATH_SILENCE = 2            # 被沉默至少几秒才算「被沉默死」
 DEATH_HARD = 2               # 没归到别的死法（瞬间打爆 / 残血拖太久…）时，眩晕 / 妖术至少几秒也按被控处理
@@ -37,12 +38,14 @@ BUYBACK_FROM = 30            # 第几分钟起「下一件」要提醒买了还�
 
 # ---------- 一行里的装备（界面显示图标）----------
 
-MARK = {"core": "", "counter": "★", "common": "·", "death": "✚", "avoid": "✗"}
+MARK = {"core": "", "counter": "★", "common": "·", "death": "✚", "avoid": "✗", "got": "✓"}
 
 
-def chip(key: str, name: str, sub: str = "", mark: str = "") -> dict:
-    """一件装备：界面上是图标（悬停看名字），sub 是图标后面的小字（15′、×3），mark 是 MARK 里的种类"""
-    return {"item": key, "name": name, **({"sub": sub} if sub else {}), **({"mark": mark} if MARK.get(mark) else {})}
+def chip(key: str, name: str, sub: str = "", mark: str = "", pct: float | None = None, big: bool = False) -> dict:
+    """一件装备：界面上是图标（悬停看名字），sub 是小字（15′、×3），mark 是 MARK 里的种类；
+    pct = 同分段多少比例的局会买（0~1，只在界面上显示在图标下面，文字版不写）；big = 界面上放大（「下一件」）"""
+    return {"item": key, "name": name, **({"sub": sub} if sub else {}), **({"mark": mark} if MARK.get(mark) else {}),
+            **({"pct": round(pct * 100)} if pct else {}), **({"big": True} if big else {})}
 
 
 def group(chips: list[dict]) -> dict:
@@ -50,20 +53,76 @@ def group(chips: list[dict]) -> dict:
     return {"group": chips}
 
 
+def tiles(chips: list[dict]) -> dict:
+    """出装顺序：界面上一排大图标、每件下面写时间和购买比例；文字版「A 10′ → B 15′」"""
+    return {"tiles": chips}
+
+
+def hero(h, ab=None) -> dict:
+    """对面 / 我方英雄头像（kb.HeroKB），带技能（kb.Entry）就在头像后面接技能图标；文字版「帕吉的肢解」"""
+    return {"hero": h.id, "name": h.name, **({"ab": ab.key, "ab_name": ab.name} if ab is not None else {})}
+
+
+def ability(ab) -> dict:
+    """单独一个技能图标（kb.Entry），文字版是技能名"""
+    return {"ab": ab.key, "name": ab.name}
+
+
+def tag(t: str, tone: str = "") -> dict:
+    """几个字的小标签；tone：good 绿 / bad 红 / dim 灰 / 空 = 普通"""
+    return {"tag": t, **({"tone": tone} if tone else {})}
+
+
+def bars(values: list[tuple[str, float]]) -> dict:
+    """几根正负柱子（强势期）：[(标签, 数值)]；文字版「标签 +1.3」"""
+    return {"bars": [{"label": label, "v": round(v, 1)} for label, v in values]}
+
+
+def meter(label: str, value: float, ref: float) -> dict:
+    """进度条：value 对 ref（补刀 120 / 196）；文字版「补刀 120 / 196」"""
+    return {"meter": {"label": label, "v": round(value), "ref": round(ref)}}
+
+
+def short(full, icons: list) -> dict:
+    """一行的两种说法：卡片上显示 icons（图标 + 几个字），悬停看 full 整句；文字版（语音 / 日志 / 命令行 / 给 AI）用 full。
+    玩家 2026-11-10：局内叠加层要像 gg-go-next 那样少字多图"""
+    return {"short": icons, "full": full}
+
+
 def text(t) -> str:
     """片段列表 → 文字版；本来就是 str 的原样返回"""
     if isinstance(t, str):
         return t
     if isinstance(t, dict):
+        if "short" in t:
+            return text(t["full"])
         if "group" in t:
             return "、".join(text(x) for x in t["group"])
+        if "tiles" in t:
+            return " → ".join(text(x) for x in t["tiles"])
+        if "hero" in t:
+            return t["name"] + (f"的{t['ab_name']}" if t.get("ab_name") else "")
+        if "tag" in t:
+            return t["tag"]
+        if "bars" in t:
+            return "　".join(f"{b['label']} {b['v']:+.1f}" for b in t["bars"])
+        if "meter" in t:
+            m = t["meter"]
+            return f"{m['label']} {m['v']} / {m['ref']}"
+        if "item" not in t:
+            return t["name"]                     # 单独的技能
         return MARK.get(t.get("mark", ""), "") + t["name"] + (f" {t['sub']}" if t.get("sub") else "")
     return "".join(text(x) for x in t)
 
 
 def line_view(t) -> dict:
-    """界面用的一行的文字部分：{"text": 文字版}，有装备的再带 {"parts": 片段}"""
-    return {"text": t} if isinstance(t, str) else {"text": text(t), "parts": t}
+    """界面用的一行：{"text": 文字版}，有图标的再带 {"parts": 片段}；short() 的那种显示精简版，
+    "short": True 告诉界面把整句（text）放进悬停提示"""
+    if isinstance(t, str):
+        return {"text": t}
+    if isinstance(t, dict) and "short" in t:
+        return {"text": text(t["full"]), "parts": t["short"], "short": True}
+    return {"text": text(t), "parts": t if isinstance(t, list) else [t]}
 
 
 @dataclass
@@ -76,6 +135,9 @@ class Step:
     quote: str = ""           # 依据原文（界面上悬停看）
     share: float = 0          # 同分段多少比例的局会买
     urgent: bool = False      # 黑皇杖这类优先级最高的针对装
+    who: list = field(default_factory=list)      # 针对谁：头像 + 技能图标片段（coach.Need.who）
+    label: str = ""           # 卡片上的几个字（coach.Need.label）
+    stat: str = ""            # 验证过的大数据数字（coach.Need.stat），只有它会在卡片上写胜率
 
 
 @dataclass
@@ -110,22 +172,24 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
             continue
         why, quote = n.brief or n.text, "\n".join(n.evidence)
         share, med = stat(k)
+        extra = {"who": n.who, "label": n.label, "stat": n.stat}
         if n.avoid:                          # 「别买」（coach.AVOID_TIP）：从顺序里拿掉，列成 ✗ 提示
             steps.pop(k, None)
             common = [s for s in common if s.key != k]
-            tips.append(Step(k, base.items[k].name, med or 0, "avoid", why, quote, share))
+            tips.append(Step(k, base.items[k].name, med or 0, "avoid", why, quote, share, **extra))
             continue
         if n.tip:
             minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
-            tips.append(Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0))
+            tips.append(Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0, **extra))
             continue
         if k in steps:                       # 本来就是核心装：标成针对，带上理由
             s = steps[k]
             s.kind, s.why, s.quote, s.urgent = "counter", why, quote, n.priority == 0
             s.minute = n.minute or s.minute
+            s.who, s.label, s.stat = n.who, n.label, n.stat
             continue
         minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
-        steps[k] = Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0)
+        steps[k] = Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0, **extra)
     for s in sorted(common, key=lambda s: -s.share):
         if sum(x.kind == "common" for x in steps.values()) >= COMMON_MAX:
             break
@@ -184,8 +248,9 @@ def next_line(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[s
 
 def next_parts(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[str]], const: dict,
                slots: list[str] | None = None, buyback: tuple[int, float] | None = None, minute: float = 0,
-               names: dict[str, str] | None = None) -> list | None:
-    """「下一件：黑皇杖，还差 850 金；之后 蝴蝶、白银之锋」（片段列表，装备在界面上是图标）。
+               names: dict[str, str] | None = None) -> dict | None:
+    """「下一件：黑皇杖，还差 850 金；之后 蝴蝶、白银之锋」。返回 short()：卡片上是放大的下一件 + 「还差 850」+ 之后两件小图标
+    + 已经出了的（灰掉打勾），整句在悬停 / 文字版里。
     格子满了加一句先卖哪件；BUYBACK_FROM 分钟后钱够了但买完不够买活，也说一声"""
     todo = b.todo(owned, tree)
     if not todo:
@@ -193,20 +258,31 @@ def next_parts(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[
     s = todo[0]
     left = remaining_cost(s.key, owned, const)
     why = "（针对）" if s.kind == "counter" else f"（{s.why}）" if s.kind == "death" else ""
+    no_bb = False
     if gold is None:
-        money = f"还要 {left} 金"
+        money, tip = f"还要 {left} 金", tag(f"要 {left}")
     elif gold >= left:
-        money = f"钱够了（要 {left}，身上 {gold}）"
+        money, tip = f"钱够了（要 {left}，身上 {gold}）", tag("钱够了", "good")
         if buyback and minute >= BUYBACK_FROM and buyback[1] <= 0 and gold - left < buyback[0]:
             money += f"，但买完只剩 {gold - left}，不够买活（{buyback[0]}）"
+            no_bb = True
     else:
-        money = f"还差 {left - gold} 金"
+        money, tip = f"还差 {left - gold} 金", tag(f"还差 {left - gold}")
     parts = ["下一件：", chip(s.key, s.name), f"{why}，{money}"]
+    icons = [chip(s.key, s.name, mark="counter" if s.kind == "counter" else "", big=True), tag("下一件", "dim"), tip]
+    if no_bb:
+        icons.append(tag("买完不够买活", "bad"))
     if sell := sell_pick(slots, s.key, tree, const):
-        parts += ["；格子满了，先卖", chip(sell[0], (names or {}).get(sell[0], sell[0])), f"（{sell[1]} 金，身上最便宜）"]
+        name = (names or {}).get(sell[0], sell[0])
+        parts += ["；格子满了，先卖", chip(sell[0], name), f"（{sell[1]} 金，身上最便宜）"]
+        icons += [tag("先卖", "bad"), chip(sell[0], name, mark="avoid")]
     if after := todo[1:1 + NEXT_SHOW]:
         parts += ["；之后 ", group([chip(x.key, x.name) for x in after])]
-    return parts
+        icons += [tag("→", "dim"), group([chip(x.key, x.name, mark="common") for x in after])]
+    done = [x for x in b.steps if coach.has(owned, x.key, tree)][-DONE_SHOW:]
+    if done:
+        icons.append(group([chip(x.key, x.name, mark="got") for x in done]))
+    return short(parts, icons)
 
 
 def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]:
@@ -216,17 +292,22 @@ def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]
     avoid = [s for s in b.tips if s.kind == "avoid"] if lo == 0 else []     # 「别买」只在第一页说一次，不分时间段
     if not (steps or tips or avoid):
         return []
-    order = []
-    for i, s in enumerate(steps):
-        order += [" → "] * bool(i) + [chip(s.key, s.name, f"{s.minute:.0f}′", s.kind)]
+    order = tiles([chip(s.key, s.name, f"{s.minute:.0f}′", s.kind, pct=s.share) for s in steps])
     lines = [("row", order)] if steps else []
-    lines += [("warn" if s.urgent else "row", [chip(s.key, s.name, mark="counter"), f"：{s.why}"], s.quote)
+    # 卡片上：装备图标 + 针对谁（头像 + 技能图标）+ 几个字；整句理由悬停看。胜率只写验证过的（Step.stat，HANDOFF 第 75 节）
+    lines += [("warn" if s.urgent else "row",
+               short([chip(s.key, s.name, mark="counter"), f"：{s.why}"],
+                     [chip(s.key, s.name, mark="counter"), *([tag(s.label)] if s.label else []), *s.who]), s.quote)
               for s in steps if s.kind == "counter"]
-    lines += [("row", ["提示 · ", chip(s.key, s.name), f"：{s.why}（{coach.NO_DATA}）"], s.quote) for s in tips]
-    lines += [("warn", ["这局别出 ", chip(s.key, s.name, mark="avoid"), f"：{s.why}"], s.quote) for s in avoid]
+    lines += [("row", short(["提示 · ", chip(s.key, s.name), f"：{s.why}（{coach.NO_DATA}）"],
+                            [tag("提示", "dim"), chip(s.key, s.name), *([tag(s.label)] if s.label else []), *s.who]), s.quote)
+              for s in tips]
+    lines += [("warn", short(["这局别出 ", chip(s.key, s.name, mark="avoid"), f"：{s.why}"],
+                             [chip(s.key, s.name, mark="avoid"), *([tag(s.stat, "bad")] if s.stat else []),
+                              *([tag(s.label)] if s.label else []), *s.who]), s.quote) for s in avoid]
     if steps:
-        lines.append(("dim", "′ = 同分段中位购买时间；无标记 = 核心（≥40% 的局买）；"
-                      + ("★ = 针对这局阵容；" if any(s.kind == "counter" for s in steps) else "") + "· = 之后常见"))
+        lines.append(("dim", "′ 同分段中位购买时间 · % 同分段多少局买 · "
+                      + ("金框 针对这局 · " if any(s.kind == "counter" for s in steps) else "") + "淡 之后常见 · 悬停看理由"))
     return lines
 
 
@@ -238,10 +319,12 @@ def late_lines(b: Build, late: float) -> list[tuple]:
     lines = brief_lines(b, lo=late)
     early = [chip(s.key, s.name) for s in b.steps if s.kind == "counter" and s.minute < late]
     if early:
-        lines.insert(1 if lines else 0, ("row", ["针对这局的", group(early), "前面就该有，到后期还没有先补"]))
+        lines.insert(1 if lines else 0, ("row", short(["针对这局的", group(early), "前面就该有，到后期还没有先补"],
+                                                      [group(early), tag("还没有先补")])))
     early_tips = [chip(s.key, s.name) for s in b.tips if s.minute < late and s.kind != "avoid"]
     if early_tips:
-        lines.insert(1 if lines else 0, ("row", ["提示 · 前面提过的", group(early_tips), f"，到后期还没有可以补（{coach.NO_DATA}）"]))
+        lines.insert(1 if lines else 0, ("row", short(["提示 · 前面提过的", group(early_tips), f"，到后期还没有可以补（{coach.NO_DATA}）"],
+                                                      [tag("提示", "dim"), group(early_tips), tag("还没有可以补")])))
     if not lines:
         lines.append(("row", "同分段到后期没有多数人都出的大件，看对面阵容补针对装"))
     lines.append(("dim", f"格子满了先卖身上最便宜的那件；{late:.0f} 分钟后买大件前留够买活钱"))

@@ -81,6 +81,12 @@ class RealKBTest(unittest.TestCase):
         self.assertNotIn("black_king_bar", [s.key for s in b.steps])
         self.assertEqual([(s.kind, s.key) for s in b.tips if s.kind == "avoid"], [("avoid", "black_king_bar")])
         self.assertTrue(any("这局别出" in itembuild.text(line[1]) for line in itembuild.brief_lines(b)))
+        # 卡片上少字多图：红叉的黑皇杖 + 验证过的胜率差 + 「挡不住」+ 两个英雄的头像和技能图标；整句悬停看
+        line = next(x for x in itembuild.brief_lines(b) if "这局别出" in itembuild.text(x[1]))
+        icons = line[1]["short"]
+        self.assertEqual(icons[:3], [{"item": "black_king_bar", "name": "黑皇杖", "mark": "avoid"},
+                                     {"tag": "胜率 −3.2", "tone": "bad"}, {"tag": "挡不住"}])
+        self.assertEqual([(p["name"], p["ab_name"]) for p in icons[3:]], [("马格纳斯", "两极反转"), ("兽王", "原始咆哮")])
         # 只有 1 个能穿的：照旧推黑皇杖，尾巴提一句挡不住
         needs, _ = self.plan("斯温", ["马格纳斯", "莉娜", "斧王", "水晶室女", "莱恩"])
         bkb = next(n for n in needs if n.key == "bkb")

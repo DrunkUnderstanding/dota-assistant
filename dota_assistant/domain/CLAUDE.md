@@ -17,7 +17,7 @@
 | `lanes.py` | 对面分路：`guess` 猜谁打几号位（带把握，`SURE = 0.6` 以下标「?」）、`assign` 三路排法、`tips` 「你这路怎么打」硬规则（每条带官方原文）、`evaluate()` 回测 |
 | `explain.py` | 推荐理由里的机制对位（克敌机先 ↔ 闪避、显形 ↔ 隐身、破坏 ↔ 被动、无视免疫 ↔ 技能免疫），`Why` 带官方原句，不影响排名 |
 | `teamfight.py` | 后期团战提示：要等的大招、留打断、控制留给对面核心、谁能保人、指向技能别往哪丢 |
-| `itembuild.py` | 出装：`make()` 核心装 + 针对装排顺序、「下一件」和还差多少钱（`remaining_cost` / `next_line` / `next_parts`）、后期出装 / 卖哪件（`late_lines` / `sell_pick`）、按死法补装（`death_pick` / `death_sim`）；装备一行写成片段列表（`chip` / `group` / `text`） |
+| `itembuild.py` | 出装：`make()` 核心装 + 针对装排顺序、「下一件」和还差多少钱（`remaining_cost` / `next_line` / `next_parts`）、后期出装 / 卖哪件（`late_lines` / `sell_pick`）、按死法补装（`death_pick` / `death_sim`）；装备一行写成片段列表（`chip` / `group` / `tiles` / `hero` / `ability` / `tag` / `bars` / `meter` / `text`），`short(整句, 图标)` = 卡片上少字多图、整句悬停看 / 文字版（第 78 节） |
 | `coach.py` | 局内缺口提醒：`plan()` 开局定缺口（对抗装、不需要的装备、节奏），`Coach.tick()` 去重、`Coach.on_death()`；`prepare()` 给实时版，`simulate()` 录像重放 |
 | `brief.py` | 本局要点：`build()` 出一张按阶段分页的卡片（`STAGES` 对线期 / 中期 / 后期，`STAGE_START` 10 / 30 分钟弹）：对线、起手装、强势期、出装、对面要防、团战；`simulate()` 录像回放；缓存 `data/brief/` |
 | `death.py` | 死亡复盘：死前 `WINDOW = 20` 秒的 GSI 推送 → `analyze()` 出「怎么死的」几句话（`Recap`）；`dump()` 把原始推送存 `shots/deaths/` |

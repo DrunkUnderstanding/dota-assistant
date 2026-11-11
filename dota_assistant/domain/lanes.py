@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from .. import kb
 from .death import SAVE_EXCLUDE
 from .engine import POSITION_NAMES
+from . import itembuild as ib
 from .explain import Why
 
 # 对线对手：我打几号位 → 对面哪些位置和我同路
@@ -213,15 +214,19 @@ def _quote(*parts: tuple[kb.HeroKB, kb.Entry, str]) -> str:
 def _range(me: kb.HeroKB, foe: kb.HeroKB) -> Why | None:
     q = f"官方数据：{me.name} {me.attack} {me.attack_range}，{foe.name} {foe.attack} {foe.attack_range}"
     if me.attack == "近战" and foe.attack == "远程":
-        return Why("bad", f"{foe.name}远程（射程 {foe.attack_range}）、你近战：补刀时别空站在兵线前白挨普攻", q)
+        return Why("bad", f"{foe.name}远程（射程 {foe.attack_range}）、你近战：补刀时别空站在兵线前白挨普攻", q,
+                   [ib.hero(foe), ib.tag(f"远程 {foe.attack_range}"), ib.tag("别空站线前")])
     if me.attack == "远程" and foe.attack == "近战":
-        return Why("good", f"你远程（射程 {me.attack_range}）、{foe.name}近战：可以用普攻消耗", q)
+        return Why("good", f"你远程（射程 {me.attack_range}）、{foe.name}近战：可以用普攻消耗", q,
+                   [ib.hero(foe), ib.tag("近战"), ib.tag("普攻消耗")])
     if me.attack == foe.attack == "远程":
         gap = foe.attack_range - me.attack_range
         if gap >= RANGED_GAP:
-            return Why("bad", f"{foe.name}射程比你远 {gap}（{foe.attack_range} 对 {me.attack_range}），对拼普攻吃亏", q)
+            return Why("bad", f"{foe.name}射程比你远 {gap}（{foe.attack_range} 对 {me.attack_range}），对拼普攻吃亏", q,
+                       [ib.hero(foe), ib.tag(f"射程 +{gap}"), ib.tag("别对拼普攻")])
         if -gap >= RANGED_GAP:
-            return Why("good", f"你射程比{foe.name}远 {-gap}（{me.attack_range} 对 {foe.attack_range}），站在对方射程外消耗", q)
+            return Why("good", f"你射程比{foe.name}远 {-gap}（{me.attack_range} 对 {foe.attack_range}），站在对方射程外消耗", q,
+                       [ib.hero(foe), ib.tag(f"射程 −{-gap}"), ib.tag("射程外消耗")])
     return None
 
 
@@ -238,12 +243,14 @@ def tips(me: kb.HeroKB, foes: list[kb.HeroKB], ally: kb.HeroKB | None = None, li
     ctrl = [(f, ab, s) for f in foes for ab, _, s in _hits(f, kb.CONTROL_TAGS)[:1]]
     if len(ctrl) >= 2:
         out.append(Why("bad", "对面同路两个控制（" + "、".join(f"{f.name}的{ab.name}" for f, ab, _ in ctrl)
-                       + "）：都在时别压到线前，交了一个再换血", _quote(*ctrl)))
+                       + "）：都在时别压到线前，交了一个再换血", _quote(*ctrl),
+                       [*(ib.hero(f, ab) for f, ab, _ in ctrl), ib.tag("都在别压线")]))
     elif ctrl:
         f, ab, s = ctrl[0]
         cd = _cd(ab)
         out.append(Why("bad", f"小心{f.name}的{ab.name}" + (f"（{cd}）" if cd else "") + "，交了以后是你换血 / 补刀的窗口",
-                       _quote((f, ab, s))))
+                       _quote((f, ab, s)), [ib.hero(f, ab), ib.tag("交了再换血"), *([ib.tag(f"{ab.cooldown}″", "dim")]
+                                                                               if ab.cooldown else [])]))
 
     # 2. 持续施法：对面的能打断；我的会被对面打断
     for f in foes:
@@ -252,14 +259,17 @@ def tips(me: kb.HeroKB, foes: list[kb.HeroKB], ally: kb.HeroKB | None = None, li
                 h, mab, s = interrupt[0]
                 when = "6 级后" if ab.ultimate else ""
                 out.append(Why("good", f"{when}{f.name}的{ab.name}要持续施法，用{who(h)}的{mab.name}打断",
-                               _quote((f, ab, "持续施法（官方技能属性）"), (h, mab, s))))
+                               _quote((f, ab, "持续施法（官方技能属性）"), (h, mab, s)),
+                               [*([ib.tag(when.strip(), "dim")] if when else []), ib.hero(f, ab), ib.tag("←", "dim"),
+                                ib.hero(h, mab) if h is not me else ib.ability(mab), ib.tag("打断")]))
                 break
     their_interrupt = [(f, ab, s) for f in foes for ab, _, s in _hits(f, INTERRUPT_TAGS)]
     for ab in _lane_abilities(me):
         if ab.channelled and not re.search(UNTOUCHABLE, ab.text) and their_interrupt:
             f, fab, s = their_interrupt[0]
             out.append(Why("bad", f"你的{ab.name}要持续施法，会被{f.name}的{fab.name}打断，等{fab.name}交了再放",
-                           _quote((me, ab, "持续施法（官方技能属性）"), (f, fab, s))))
+                           _quote((me, ab, "持续施法（官方技能属性）"), (f, fab, s)),
+                           [ib.ability(ab), ib.tag("会被", "dim"), ib.hero(f, fab), ib.tag("打断，交了再放")]))
             break
 
     # 3. 射程
@@ -274,19 +284,23 @@ def tips(me: kb.HeroKB, foes: list[kb.HeroKB], ally: kb.HeroKB | None = None, li
         if mine and (esc := _escape(f)):
             h, ab, s = mine[0]
             out.append(Why("good", f"{f.name}有{esc.name}能跑" + (f"（{_cd(esc)}）" if esc.cooldown else "")
-                           + f"：等{esc.name}交了再上{who(h)}的{ab.name}", _quote((f, esc, _first_sentence(esc)), (h, ab, s))))
+                           + f"：等{esc.name}交了再上{who(h)}的{ab.name}", _quote((f, esc, _first_sentence(esc)), (h, ab, s)),
+                           [ib.hero(f, esc), ib.tag("骗出来"), ib.tag("→", "dim"),
+                            ib.hero(h, ab) if h is not me else ib.ability(ab)]))
             break
 
     # 5. 我和队友都有控制：能配合打一套
     if len(mine) >= 2:
         out.append(Why("good", f"你的{mine[0][1].name}和队友{mine[1][0].name}的{mine[1][1].name}都能控，"
-                       "两个技能都好的时候找机会一起打", _quote(*mine)))
+                       "两个技能都好的时候找机会一起打", _quote(*mine),
+                       [ib.ability(mine[0][1]), ib.tag("+", "dim"), ib.hero(mine[1][0], mine[1][1]), ib.tag("一起控")]))
 
     # 6. 对面带控制的大招
     for f in foes:
         if ult := _hits(f, kb.CONTROL_TAGS, ultimate=True):
             ab, t, s = ult[0]
-            out.append(Why("bad", f"6 级后小心{f.name}的{ab.name}（{t}）", _quote((f, ab, s))))
+            out.append(Why("bad", f"6 级后小心{f.name}的{ab.name}（{t}）", _quote((f, ab, s)),
+                           [ib.tag("6 级后", "dim"), ib.hero(f, ab), ib.tag(t)]))
             break
     return out[:limit]
 

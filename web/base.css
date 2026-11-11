@@ -487,6 +487,60 @@ img { display: block; }
 .ic-step { display: inline-flex; align-items: center; white-space: nowrap; }
 .ic-step > i { margin: 0 4px; font-style: normal; color: var(--text-faint); }
 .ic-group { display: inline-flex; flex-wrap: wrap; gap: 4px; vertical-align: middle; }
+/* 少字多图（玩家 2026-11-10，参考 gg-go-next）：精简行是一排图标 + 几个字，整句在悬停提示里（itembuild.short） */
+.brief-sec p.is-short, .ov-notice p.is-short { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.ic-avoid, .ic-got { position: relative; }
+.ic-avoid img, .ic-got img { filter: grayscale(1) brightness(0.55); }
+.ic-avoid .ic-mark, .ic-got .ic-mark {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1;
+  font-size: 20px; font-weight: 700; text-shadow: 0 0 3px #000;
+}
+.ic-avoid .ic-mark { color: var(--bad); }
+.ic-got .ic-mark { color: var(--good); font-size: 16px; }
+.ic-big img { width: 66px; height: 48px; border-radius: 5px; box-shadow: 0 0 0 2px var(--gold), 0 0 10px rgba(216, 167, 78, 0.45); }
+.ic-big.ic-counter .ic-mark { position: absolute; top: -4px; right: -4px; }
+.ic-big { position: relative; }
+/* 出装顺序：一排图标，下面「时间 + 购买比例」 */
+.tiles { display: flex; flex-wrap: wrap; gap: 5px 3px; width: 100%; }
+.tile { position: relative; display: inline-flex; flex-direction: column; align-items: center; width: 42px; }
+.tile img { width: 42px; height: 31px; border-radius: 4px; object-fit: cover; box-shadow: 0 0 0 1px var(--line-strong); }
+.tile:not(:has(img)) .ic-name { display: block; font-size: 10px; line-height: 31px; color: var(--text); overflow: hidden; max-width: 42px; }
+.tile-m { display: flex; justify-content: space-between; width: 100%; font: 600 10px/1.3 var(--num); color: var(--text); }
+.tile-m i { font-style: normal; color: var(--text-dim); }
+.tile.ic-counter img { box-shadow: 0 0 0 2px var(--gold); }
+.tile.ic-counter .ic-mark { position: absolute; top: -5px; right: -5px; z-index: 1; padding: 0 2px; border-radius: 6px;
+  background: var(--gold); color: #000; font-size: 9px; }
+.tile.ic-common { opacity: 0.6; }
+.tile.ic-common .ic-mark { display: none; }
+/* 头像 + 技能图标（itembuild.hero / ability） */
+.hx { display: inline-flex; align-items: center; vertical-align: middle; white-space: nowrap; }
+.hx-face { width: 40px; height: 23px; border-radius: 4px 0 0 4px; object-fit: cover; }
+.hx-face:only-child, .hx:not(:has(.hx-ab)) .hx-face { border-radius: 4px; }
+.hx-ab { width: 23px; height: 23px; border-radius: 0 4px 4px 0; object-fit: cover; }
+.hx > .hx-ab:first-child { border-radius: 4px; }
+.hx-name { display: none; }
+.hx:not(:has(.hx-face)):not(:has(.hx-ab)) .hx-name { display: inline; font-size: 12px; color: var(--text); }
+/* 几个字的标签 */
+.tg { font-style: normal; font-size: 12.5px; color: var(--text); white-space: nowrap; }
+.tg-dim { color: var(--text-dim); font-size: 11.5px; }
+.tg-good { color: var(--good); font-weight: 600; }
+.tg-bad { padding: 0 5px; border-radius: 5px; background: rgba(229, 103, 92, 0.22); color: #ff9a8f; font-weight: 700; }
+/* 强势期柱子 */
+.bars { display: flex; gap: 14px; align-items: flex-end; padding: 2px 4px; }
+.is-short .ic-common .ic-mark { display: none; }
+.bar { display: flex; flex-direction: column; align-items: center; min-width: 56px; font-size: 10.5px; color: var(--text-dim); white-space: nowrap; }
+.bar-v { font: 600 12px/1.2 var(--num); color: var(--text); }
+.bar-track { display: flex; align-items: flex-end; height: 30px; }
+.bar-track i { display: block; width: 24px; border-radius: 3px 3px 0 0; }
+.bar.is-up .bar-track i { background: var(--good); }
+.bar.is-down .bar-track i { background: var(--bad); }
+/* 补刀 / 经济进度条 */
+.meter { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px; }
+.meter-l { font-size: 12px; color: var(--text-dim); }
+.meter-t { flex: 1; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.meter-t i { display: block; height: 100%; background: var(--bad); }
+.meter-v { font: 12px var(--num); color: var(--text-dim); white-space: nowrap; }
+.meter-v b { color: var(--text); font-size: 13px; }
 .ov-empty { padding: 14px 4px; font-size: 13px; color: var(--text-dim); text-align: center; }
 
 @keyframes pick-in {

@@ -7,20 +7,54 @@ export const portrait = (id) => `/portraits/${id}.png`;
 
 // 一行字里的装备显示成图标（itembuild.line_view 的 parts：str 原样，{item} 一件装备，{group} 并列几件），名字在悬停提示里；
 // 图标没下载到时显示名字。★ = 针对这局、· = 之后常见、✚ = 按死法补的，和文字版同一套记号
-const MARK = { counter: '★', common: '·', death: '✚' };
+const MARK = { counter: '★', common: '·', death: '✚', avoid: '✕', got: '✓' };
 function itemChip(c) {
   const mark = c.mark ? `<i class="ic-mark">${MARK[c.mark] || ''}</i>` : '';
-  return `<span class="ic ${c.mark ? `ic-${esc(c.mark)}` : ''}" title="${esc(c.name)}">${mark}`
+  return `<span class="ic ${c.mark ? `ic-${esc(c.mark)}` : ''}${c.big ? ' ic-big' : ''}" title="${esc(c.name)}">${mark}`
     + `<img src="/items/${encodeURIComponent(c.item)}.png" alt="" onerror="this.remove()"><span class="ic-name">${esc(c.name)}</span>`
     + `${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</span>`;
 }
+// 出装顺序（itembuild.tiles）：一排图标，每件下面「时间 + 同分段多少局买」
+function tileHTML(c) {
+  const mark = c.mark && MARK[c.mark] ? `<i class="ic-mark">${MARK[c.mark]}</i>` : '';
+  return `<span class="tile ${c.mark ? `ic-${esc(c.mark)}` : ''}" title="${esc(c.name)}${c.pct ? ` · 同分段 ${c.pct}% 的局买` : ''}">${mark}`
+    + `<img src="/items/${encodeURIComponent(c.item)}.png" alt="" onerror="this.remove()"><span class="ic-name">${esc(c.name)}</span>`
+    + `<span class="tile-m"><b>${esc(c.sub || '')}</b>${c.pct ? `<i>${c.pct}%</i>` : ''}</span></span>`;
+}
+// 头像（+ 技能图标）：itembuild.hero / ability；图下不到时写名字
+const abImg = (key, name) => `<img class="hx-ab" src="/icons/abilities/${encodeURIComponent(key)}.png" alt="" title="${esc(name)}" onerror="this.remove()">`;
+function heroHTML(p) {
+  const title = p.ab_name ? `${p.name}的${p.ab_name}` : p.name;
+  return `<span class="hx" title="${esc(title)}"><img class="hx-face" src="${portrait(p.hero)}" alt="" onerror="this.remove()">`
+    + `<span class="hx-name">${esc(p.name)}</span>${p.ab ? abImg(p.ab, p.ab_name) : ''}</span>`;
+}
+function barsHTML(list) {
+  const max = Math.max(1, ...list.map((b) => Math.abs(b.v)));
+  return `<span class="bars">${list.map((b) => `<span class="bar ${b.v >= 0 ? 'is-up' : 'is-down'}">`
+    + `<span class="bar-v">${b.v > 0 ? '+' : ''}${b.v.toFixed(1)}</span><span class="bar-track"><i style="height:${Math.max(4, Math.round(Math.abs(b.v) / max * 100))}%"></i></span>`
+    + `<span class="bar-l">${esc(b.label)}</span></span>`).join('')}</span>`;
+}
+function meterHTML(m) {
+  const pct = m.ref ? Math.max(3, Math.min(100, Math.round(m.v / m.ref * 100))) : 0;
+  return `<span class="meter"><span class="meter-l">${esc(m.label)}</span><span class="meter-t"><i style="width:${pct}%"></i></span>`
+    + `<span class="meter-v"><b>${m.v}</b> / ${m.ref}</span></span>`;
+}
 function partsHTML(parts) {
   const one = (p) => typeof p === 'string' ? esc(p)
-    : p.group ? `<span class="ic-group">${p.group.map(itemChip).join('')}</span>` : itemChip(p);
+    : p.group ? `<span class="ic-group">${p.group.map(itemChip).join('')}</span>`
+    : p.tiles ? `<span class="tiles">${p.tiles.map(tileHTML).join('')}</span>`
+    : p.hero ? heroHTML(p)
+    : p.tag !== undefined ? `<em class="tg${p.tone ? ` tg-${esc(p.tone)}` : ''}">${esc(p.tag)}</em>`
+    : p.bars ? barsHTML(p.bars)
+    : p.meter ? meterHTML(p.meter)
+    : p.ab && !p.item ? `<span class="hx">${abImg(p.ab, p.name)}</span>`
+    : itemChip(p);
   // 出装顺序的「→」和后面那件粘在一起，折行时箭头跟着那件到下一行，不会孤零零挂在上一行行尾
   return parts.map((p, i) => (p === ' → ' ? '' : parts[i - 1] === ' → ' ? `<span class="ic-step"><i>→</i>${one(p)}</span>` : one(p))).join('');
 }
 const lineBody = (l) => (l.parts ? partsHTML(l.parts) : esc(l.text));
+// 精简行（itembuild.short）：卡片上只有图标和几个字，整句（+ 依据原文）放悬停提示
+const lineTitle = (l) => [l.short ? l.text : '', l.quote || ''].filter(Boolean).join('\n\n');
 
 // 胜率条：45% 以下空、60% 满（推荐里的胜率基本落在这个区间）
 const barPct = (wr) => Math.max(4, Math.min(100, ((wr - 45) / 15) * 100));
@@ -421,14 +455,14 @@ function noticeHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭这条提醒">×</button>' : '';
   return `
     <header class="ov-head"><span class="ov-pos">${esc(v.title)}</span><span class="ov-brand">选人助手</span>${close}</header>
-    <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}">${lineBody(l)}</p>`).join('')}</section>`;
+    <section class="ov-notice">${v.lines.map((l) => `<p class="notice-${esc(l.kind)}${l.short ? ' is-short' : ''}"${lineTitle(l) ? ` title="${esc(lineTitle(l))}"` : ''}>${lineBody(l)}</p>`).join('')}</section>`;
 }
 
 // 本局要点：按阶段分页（对线期：分路 + 对线 / 起手 / 对面要防；中期：出装 / 强势期；各页再接 AI 写的这一阶段打法），热键翻页
 // 每个小节只显示前几条，其余（more）折叠，点「展开」看；展开了哪些记在这里，重画（例如 AI 写完补进来）后保持
 const unfolded = new Set();
 const foldKey = (v, s) => `${v.title}|${v.page}|${s.title}`;
-const briefLine = (l) => `<p class="brief-${esc(l.kind)}"${l.quote ? ` title="${esc(l.quote)}"` : ''}>${lineBody(l)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`;
+const briefLine = (l) => `<p class="brief-${esc(l.kind)}${l.short ? ' is-short' : ''}"${lineTitle(l) ? ` title="${esc(lineTitle(l))}"` : ''}>${lineBody(l)}${l.note ? `<small>${esc(l.note)}</small>` : ''}</p>`;
 function briefHTML(v) {
   const close = v.closable ? '<button class="ov-close" type="button" title="关闭">×</button>' : '';
   const tabs = (v.tabs || []).map((t) => `<span class="brief-tab ${t.on ? 'is-on' : ''}" data-page="${esc(t.page)}">${esc(t.label)}</span>`).join('');

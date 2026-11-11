@@ -158,6 +158,11 @@ class Need:
     minute: float = 0             # 建议几分钟出（出装顺序用）；0 = 按同分段中位购买时间
     tip: str = ""                 # 非空 = 只算提示，写缺哪种依据（不进出装顺序 / 「下一件」）
     avoid: bool = False           # True = 「别买」：items 是这局不值得出的（不催、不进顺序，check 不当缺口）
+    # 卡片上少字多图（玩家 2026-11-10，参考 gg-go-next）：整句 text / brief 放悬停，卡片上是这几样
+    who: list = field(default_factory=list)   # 针对谁：itembuild.hero() 头像 + 技能图标片段
+    label: str = ""               # 几个字（「控制 ×3」「闪避」「挡不住」）
+    stat: str = ""                # 验证过的大数据数字（「胜率 −3.2」）；没验证过的不写，卡片上不显示胜率（HANDOFF 第 75 节）
+    view: list | None = None      # 局内提醒卡片上的精简版片段（补刀进度条等）；None = 用 items / who / label 拼
 
 
 @dataclass(frozen=True)
@@ -171,6 +176,7 @@ class Counter:
     items: tuple[tuple[str, str], ...]                   # (装备 key, 说明里要有的原文)；都会出就挑买得多的
     self_skip: str                                       # 自己英雄有这个标签就不用专门出
     reason: str                                          # {who} = 对面英雄（技能），{item} = 装备名
+    label: str = ""                                      # 卡片上的几个字
 
 
 def _base_hits(e: kb.HeroKB, *tags: str) -> list[tuple[kb.Entry, str, str]]:
@@ -213,17 +219,17 @@ def _illusions(e: kb.HeroKB) -> list[tuple[str, str]]:
 
 COUNTERS = (
     Counter("linken", _targeted_ult, 2, (("sphere", r"抵挡.{0,6}指向性技能"), ("lotus_orb", r"指向性技能反馈给施法者")),
-            "抵挡 / 反馈指向技能", "对面{who}是指向性大招，可以出{item}"),
+            "抵挡 / 反馈指向技能", "对面{who}是指向性大招，可以出{item}", "指向大招"),
     Counter("break", _break_hits, 1, (("silver_edge", r"被动技能无效"),),
-            "施加破坏", "对面{who}怕破坏，{item}的破隐一击能让被动失效"),
+            "施加破坏", "对面{who}怕破坏，{item}的破隐一击能让被动失效", "破被动"),
     Counter("heal", _tagged("吸血"), 1, (("spirit_vessel", r"生命回复降低"), ("skadi", r"降低.{0,16}生命回复")),
-            "", "对面{who}能吸血，{item}能降低回复"),
+            "", "对面{who}能吸血，{item}能降低回复", "吸血"),
     Counter("pierce", _tagged("提供技能免疫"), 1, (("abyssal_blade", r"无视减益免疫"),),
-            "无视技能免疫", "对面{who}能技能免疫，{item}的击晕无视减益免疫"),
+            "无视技能免疫", "对面{who}能技能免疫，{item}的击晕无视减益免疫", "技能免疫"),
     # 2026-10-26 玩家：后期出装要看对面英雄。范围伤害一下打一片幻象（实现假设，玩家没确认装备选哪几件）
     Counter("illusion", _illusions, 1, (("mjollnir", r"\d+个目标之间跳跃"), ("bfury", r"锥形区域内敌人造成"),
                                         ("radiance", r"每秒对敌军造成"), ("shivas_guard", r"寒冷的波动，对敌人造成")),
-            "", "对面{who}会造幻象，{item}是范围伤害，一下打一片"),
+            "", "对面{who}会造幻象，{item}是范围伤害，一下打一片", "幻象"),
 )
 
 
@@ -260,6 +266,7 @@ def _who(hits: list[tuple[kb.HeroKB, list]], limit: int = 3) -> str:
 def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules: list[kb.Rule],
          bench: dict | None, pos: int = 1) -> tuple[list[Need], list[str]]:
     """一局开始时就能确定的缺口 + 开局提示"""
+    from . import itembuild                      # itembuild 顶层 import 了本模块，这里延迟 import
     needs, notes = [], []
     support = pos in SUPPORT_POSITIONS
     my_tags = me.tags()
@@ -282,7 +289,8 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
             needs.append(Need("avoid:bkb", why, ("black_king_bar",), 0, 0,
                               [f"{e.name}·{ab.name}：官方字段「对敌方无视技能免疫」" for e, ab in piercers]
                               + ["黑皇杖研究（HANDOFF 第 69 节）：对面 2 个以上 −3.2 ±1.8 个百分点（25 分钟），0 个 +0.6 ±1.3"],
-                              why, tip=AVOID_TIP, avoid=True))
+                              why, tip=AVOID_TIP, avoid=True,
+                              who=[itembuild.hero(e, ab) for e, ab in piercers], label="挡不住", stat="胜率 −3.2"))
     elif len(ctrl) >= BKB_CONTROL_MIN and not self_immune:
         minute = med if share >= 0.15 else 0
         if minute and len(ctrl) >= BKB_EARLY_MIN:
@@ -300,7 +308,8 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         else:
             needs.append(Need("bkb", text + tail, ("black_king_bar",), due, 0,
                               [f"{e.name}·{ab.name}：{s}" for e, hits in ctrl for ab, _, s in hits[:1]], early + tail,
-                              minute, NO_DATA))
+                              minute, NO_DATA, who=[itembuild.hero(e, hits[0][0]) for e, hits in ctrl],
+                              label=f"{due:.0f}′前 · 控制 ×{len(ctrl)}"))
 
     # 2. 闪避：自己能处理就不推
     eva = [(e, _base_hits(e, "提供闪避")) for e in enemies]
@@ -322,7 +331,8 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
             first, second = (base.items[k].name for k in keys)
             needs.append(Need("mkb", f"对面{names}有闪避，考虑{first}或{second}", tuple(keys),
                               30, 2, [f"{e.name}·{hits[0][0].name}：{hits[0][2]}" for e, hits in eva],
-                              f"对面{names}有闪避，后期考虑{first}或{second}", tip=NO_DATA))
+                              f"对面{names}有闪避，后期考虑{first}或{second}", tip=NO_DATA,
+                              who=[itembuild.hero(e, hits[0][0]) for e, hits in eva], label="闪避"))
 
     # 3. 隐身：提醒队伍反隐，自己有反隐也说一声
     inv = [(e, e.with_tag("隐身")) for e in enemies]
@@ -372,7 +382,9 @@ def plan(me: kb.HeroKB, enemies: list[kb.HeroKB], base: kb.KnowledgeBase, rules:
         due = med + CORE_LATE if med else COUNTER_FALLBACK_MIN
         needs.append(Need(c.key, text, (k,), due, 2,
                           [f"{e.name}·{f[0][0]}：{f[0][1]}" for e, f in hits] + [f"{name}：{proof}"],
-                          f"{text}（同分段 {share:.0%} 的局会出，一般 {med:.0f} 分钟）", tip=NO_DATA))
+                          f"{text}（同分段 {share:.0%} 的局会出，一般 {med:.0f} 分钟）", tip=NO_DATA,
+                          who=[itembuild.hero(e, next((a for a in e.abilities if a.name == f[0][0]), None))
+                               for e, f in hits[:3]], label=c.label))
     return needs, notes
 
 
@@ -390,6 +402,7 @@ class State:
 def check(needs: list[Need], st: State, bench: dict | None, tree, base: kb.KnowledgeBase,
           checkpoint: bool) -> list[Need]:
     """这个时刻还缺什么（按优先级）"""
+    from . import itembuild
     out = [n for n in needs if not n.avoid and st.minute >= n.due and not any(has(st.owned, i, tree) for i in n.items)]
     avoided = {k for n in needs if n.avoid for k in n.items}
     if bench:
@@ -405,16 +418,21 @@ def check(needs: list[Need], st: State, bench: dict | None, tree, base: kb.Knowl
         if late:
             med, name, k, share = min(late)
             out.append(Need(f"core:{k}", f"{name}还没出，同分段大多数局会买，一般 {med:.0f} 分钟出",
-                            (k,), 0, 1))
+                            (k,), 0, 1, view=[itembuild.chip(k, name, pct=share), itembuild.tag("还没出", "bad"),
+                                              itembuild.tag(f"一般 {med:.0f}′", "dim")]))
         # 节奏：只在固定时间点比
         ref = bench["per_min"].get(str(int(st.minute)))
         if checkpoint and ref and st.cs is not None:
             if st.cs < ref["cs"] * RHYTHM_RATIO:
                 out.append(Need(f"cs:{int(st.minute)}", f"{int(st.minute)} 分钟正补 {st.cs}，同分段平均 {ref['cs']:.0f}，"
-                                f"落后 {1 - st.cs / ref['cs']:.0%}", (), 0, 1))
+                                f"落后 {1 - st.cs / ref['cs']:.0%}", (), 0, 1,
+                                view=[itembuild.meter("补刀", st.cs, ref["cs"]),
+                                      itembuild.tag(f"−{1 - st.cs / ref['cs']:.0%}", "bad")]))
             elif st.networth is not None and st.networth < ref["networth"] * RHYTHM_RATIO:
                 out.append(Need(f"nw:{int(st.minute)}", f"{int(st.minute)} 分钟经济 {st.networth}，同分段平均 "
-                                f"{ref['networth']:.0f}", (), 0, 1))
+                                f"{ref['networth']:.0f}", (), 0, 1,
+                                view=[itembuild.meter("经济", st.networth, ref["networth"]),
+                                      itembuild.tag(f"−{1 - st.networth / ref['networth']:.0%}", "bad")]))
     return sorted(out, key=lambda n: n.priority)
 
 
@@ -441,8 +459,24 @@ class Coach:
         pick = itembuild.death_pick(rec, st.owned, timings, self.base, self.tree)
         if pick is None:
             return []
-        return [("row", [f"提示：本局第 {n} 次{cause.label}，可以考虑", itembuild.chip(pick.key, pick.name),
-                         f"：{pick.why}（{NO_DATA}）"])]
+        full = [f"提示：本局第 {n} 次{cause.label}，可以考虑", itembuild.chip(pick.key, pick.name), f"：{pick.why}（{NO_DATA}）"]
+        return [("row", itembuild.short(full, [itembuild.tag(f"第 {n} 次{cause.label}", "bad"),
+                                               itembuild.chip(pick.key, pick.name, mark="death"), itembuild.tag("提示", "dim")]))]
+
+    def card(self, n: Need) -> tuple[str, object]:
+        """局内提醒卡片上的一行 (kind, 片段)：整句（提示类带依据缺口）放悬停 / 文字版，卡片上是 Need.view，
+        没有 view 就拼「装备图标 + 几个字 + 对面头像技能」"""
+        from . import itembuild
+        full = f"提示：{n.text}（{n.tip}）" if n.tip else n.text
+        kind = "row" if n.tip else "warn" if n.priority == 0 else "row"
+        icons = n.view
+        if icons is None and n.items:
+            k = n.items[0]
+            name = self.base.items[k].name if self.base and k in self.base.items else k
+            icons = [*([itembuild.tag("提示", "dim")] if n.tip else []), itembuild.chip(k, name, mark="counter"),
+                     *([] if n.tip else [itembuild.tag("还没有", "bad")]),
+                     *([itembuild.tag(n.label)] if n.label else []), *n.who]
+        return kind, itembuild.short(full, icons) if icons else full
 
     def next_line(self, st: State) -> str | None:
         """next_parts 的文字版（命令行回放用）"""

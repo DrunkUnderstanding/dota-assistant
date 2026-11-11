@@ -47,7 +47,7 @@
 | 热键 / 日志 | ✅ | — | [game](../dota_assistant/game/NOTES.md)、[core](../dota_assistant/core/NOTES.md) |
 | 反和谐开关（改名 `game\dota_lv`） | 🟡 默认关 | 没在装了 Dota 的电脑上看过效果 | [game](../dota_assistant/game/NOTES.md) |
 | 语音 | ⏸ 默认关 | `config.toml` 写 `voice = true` 能开 | [game](../dota_assistant/game/NOTES.md) |
-| 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **默认不弹**（`ingame_tips = false`，只记日志） | 没接过真实游戏，GSI 字段没在真实推送里核对；11-09 加黑皇杖「别买」/ 显形提示（第 76 节） | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
+| 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **默认不弹**（`ingame_tips = false`，只记日志） | 没接过真实游戏，GSI 字段没在真实推送里核对；11-09 加黑皇杖「别买」/ 显形提示（第 76 节）；11-11 卡片改成少字多图（第 78 节），没实战 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 野区提醒（Dota 时钟正下方的倒数；第二行抢莲花） | 🟡 | 实战看位置挡不挡、秒数和按住 Alt 的一样不 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 游戏画面野点框 / 小地图野点 | 🟡 **默认关** | 玩家说「触发 VAC 了」，先弄清提示原话和有没有封禁记录再决定开不开 | [vision](../dota_assistant/vision/NOTES.md)、[domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 买活计时（含截图自动记）/ 对面大招冷却 | 🟡 | 补漏改完没在真实对局跑过；`hero.level` 没见过 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
@@ -122,7 +122,7 @@
 | 组合研究（精灵老鹿等） | [research/](research/) |
 
 **以后怎么写**：
-- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 77），标题带日期和关键函数；同时把节号加进下面的索引。
+- 做完一个功能 / 修完一个问题：在**主要涉及的那个模块**的 `NOTES.md` 末尾追加一节，节号接着全局往下编（下一个是 79），标题带日期和关键函数；同时把节号加进下面的索引。
 - 状态变了：改本文第 2 节那一行（一句话），细节写进模块 NOTES 的「当前状态」。
 - 新的待验证项：写进模块 NOTES 的「待实战验证 / 下一步」；要紧的在本文第 3 节加一句。
 - 本文保持在一两屏内，**不要再往这里堆过程记录**。
@@ -227,3 +227,4 @@
 | 75 | 同一时段做出来的装备胜率高低：91% 是局势，出装旁边不显示胜率 | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 76 | 出装「别买」：对面 2 个以上无视技能免疫的控制不推黑皇杖；显形提示隐身装 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 77 | 叠加层标题栏的位置能手动改，改了和队友对调 | [app/live/NOTES](../dota_assistant/app/live/NOTES.md) |
+| 78 | 局内卡片少字多图：图标 + 几个字，整句悬停看；出装标购买比例，胜率只写验证过的 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |

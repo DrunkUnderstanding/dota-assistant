@@ -81,8 +81,7 @@ class InGameMixin:
             needs = self.coach.tick(cst, checkpoint=bool(passed))
             by_death = self.coach.on_death(recap, cst) if recap else []   # 先按死法调顺序，再说下一件
             nxt = self.coach.next_parts(cst)
-        lines = [("row", f"提示：{n.text}（{n.tip}）") if n.tip else ("warn" if n.priority == 0 else "row", n.text)
-                 for n in needs]
+        lines = [self.coach.card(n) for n in needs]
         # 死了正好回家买东西：每次死亡都说下一件买什么；时间点的提醒只在本来就要弹的时候顺带一句
         shop = ([("head", "回家买")] if died else []) + by_death + ([("row" if died else "dim", nxt)] if nxt else [])             if (nxt or by_death) and (died or lines) else []
         if recap and recap.lines:

@@ -6,7 +6,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from .. import kb
 
@@ -33,6 +33,8 @@ class Why:
     kind: str          # good 克 / bad 怕
     text: str
     quote: str         # 依据：官方原句（我方 + 对面）
+    # 卡片上的精简版（itembuild.hero / ability / tag 片段：头像 + 技能图标 + 几个字），整句 text 放悬停；空 = 卡片上照旧写整句
+    icons: list = field(default_factory=list)
 
 
 def _label(ab: kb.Entry, sentence: str) -> str:

@@ -58,10 +58,30 @@ class MoneyTest(unittest.TestCase):
                              itembuild.Step("black_king_bar", "黑皇杖", 25, "counter"),
                              itembuild.Step("hurricane_pike", "飓风长戟", 30, "core")])
         parts = itembuild.next_parts(b, set(full), 0, coach.item_tree(const), const, slots=full, names={"branches": "树枝"})
-        self.assertEqual([p for p in parts if not isinstance(p, str)], [
+        self.assertEqual([p for p in parts["full"] if not isinstance(p, str)], [      # 整句（悬停 / 文字版）
             {"item": "dragon_lance", "name": "魔龙枪"}, {"item": "branches", "name": "树枝"},
             {"group": [{"item": "black_king_bar", "name": "黑皇杖"}, {"item": "hurricane_pike", "name": "飓风长戟"}]}])
+        # 卡片上：放大的下一件 + 还差多少 + 先卖的（红叉）+ 之后两件（淡）
+        self.assertEqual(parts["short"], [
+            {"item": "dragon_lance", "name": "魔龙枪", "big": True}, {"tag": "下一件", "tone": "dim"}, {"tag": "还差 2000"},
+            {"tag": "先卖", "tone": "bad"}, {"item": "branches", "name": "树枝", "mark": "avoid"}, {"tag": "→", "tone": "dim"},
+            {"group": [{"item": "black_king_bar", "name": "黑皇杖", "mark": "common"},
+                       {"item": "hurricane_pike", "name": "飓风长戟", "mark": "common"}]}])
         self.assertEqual(itembuild.line_view("纯文字"), {"text": "纯文字"})
+        self.assertEqual(itembuild.line_view(parts), {"text": itembuild.text(parts), "parts": parts["short"], "short": True})
+
+    def test_short_parts_text(self):
+        """少字多图的片段：文字版都能拼回来（语音 / 日志 / 命令行用）"""
+        h = SimpleNamespace(id=14, name="帕吉")
+        ab = SimpleNamespace(key="pudge_dismember", name="肢解")
+        self.assertEqual(itembuild.text(itembuild.hero(h, ab)), "帕吉的肢解")
+        self.assertEqual(itembuild.hero(h, ab), {"hero": 14, "name": "帕吉", "ab": "pudge_dismember", "ab_name": "肢解"})
+        self.assertEqual(itembuild.text(itembuild.ability(ab)), "肢解")
+        self.assertEqual(itembuild.text(itembuild.tag("挡不住", "bad")), "挡不住")
+        self.assertEqual(itembuild.text(itembuild.bars([("30 分钟前", -4.21), ("40 分钟后", 0.1)])), "30 分钟前 -4.2　40 分钟后 +0.1")
+        self.assertEqual(itembuild.text(itembuild.meter("补刀", 120, 196.4)), "补刀 120 / 196")
+        self.assertEqual(itembuild.text(itembuild.short("整句", [itembuild.tag("短")])), "整句")
+        self.assertEqual(itembuild.chip("blink", "闪烁匕首", "17′", pct=0.956), {"item": "blink", "name": "闪烁匕首", "sub": "17′", "pct": 96})
 
     def test_buyback_after_late(self):
         b = itembuild.Build([itembuild.Step("dragon_lance", "魔龙枪", 15, "core")])
@@ -77,7 +97,7 @@ class MoneyTest(unittest.TestCase):
                              itembuild.Step("hurricane_pike", "飓风长戟", 34, "core")])
         mid = itembuild.brief_lines(b, hi=30)
         self.assertEqual(itembuild.text(mid[0][1]), "魔龙枪 15′ → ★黑皇杖 25′")
-        self.assertEqual(mid[0][1][2], {"item": "black_king_bar", "name": "黑皇杖", "sub": "25′", "mark": "counter"})   # 界面上是图标
+        self.assertEqual(mid[0][1]["tiles"][1], {"item": "black_king_bar", "name": "黑皇杖", "sub": "25′", "mark": "counter"})   # 界面上是图标
         late = itembuild.late_lines(b, 30)
         self.assertEqual(itembuild.text(late[0][1]), "飓风长戟 34′")
         self.assertIn("针对这局的黑皇杖前面就该有，到后期还没有先补", [itembuild.text(x[1]) for x in late])
@@ -239,7 +259,8 @@ class DeathPickTest(unittest.TestCase):
         # 第 3 次：只有本局依据、没有大数据依据，只作提示，不动「下一件」
         (kind, parts), = c.on_death(rec, st)
         self.assertEqual((kind, itembuild.text(parts)), ("row", f"提示：本局第 3 次被控死，可以考虑黑皇杖：黑皇杖开了以后控不住你（{coach.NO_DATA}）"))
-        self.assertIn({"item": "black_king_bar", "name": "黑皇杖"}, parts)
+        self.assertIn({"item": "black_king_bar", "name": "黑皇杖"}, parts["full"])
+        self.assertIn({"item": "black_king_bar", "name": "黑皇杖", "mark": "death"}, parts["short"])
         self.assertTrue(c.next_line(st).startswith("下一件：魔龙枪"))
 
 
@@ -283,9 +304,11 @@ class ShopCardTest(unittest.TestCase):
             time.sleep(0.05)
         self.live.coach_card = None
         lines = self.push(12, deaths=1, gold=1000, items=["ogre_axe"])["view"]["lines"]
-        self.assertEqual(lines[-2:], [{"kind": "head", "text": "回家买"},
-                                      {"kind": "row", "text": "下一件：黑皇杖（针对），还差 2050 金",
-                                       "parts": ["下一件：", {"item": "black_king_bar", "name": "黑皇杖"}, "（针对），还差 2050 金"]}])
+        self.assertEqual(lines[-2]["text"], "回家买")
+        shop = lines[-1]
+        self.assertEqual((shop["kind"], shop["text"], shop["short"]), ("row", "下一件：黑皇杖（针对），还差 2050 金", True))
+        self.assertEqual(shop["parts"][:3], [{"item": "black_king_bar", "name": "黑皇杖", "mark": "counter", "big": True},
+                                             {"tag": "下一件", "tone": "dim"}, {"tag": "还差 2050"}])
 
 
 if __name__ == "__main__":

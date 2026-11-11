@@ -859,7 +859,8 @@ class CoachLiveTest(unittest.TestCase):
 
         ov = self.push(21, deaths=1)
         self.assertIn("死亡", ov["view"]["title"])
-        self.assertEqual(ov["view"]["lines"], [{"kind": "warn", "text": "缺黑皇杖"}])
+        self.assertEqual(ov["view"]["lines"], [{"kind": "warn", "text": "缺黑皇杖", "short": True, "parts": [
+            {"item": "black_king_bar", "name": "black_king_bar", "mark": "counter"}, {"tag": "还没有", "tone": "bad"}]}])
         self.assertTrue(ov["visible"])
         self.assertFalse(any("黑皇杖" in t for t in self.live.speaker.said))   # 局内提醒默认不念
 
@@ -1102,7 +1103,7 @@ class CoachLiveTest(unittest.TestCase):
         self.assertEqual(ov["view"]["title"], "死亡复盘 · 20:12 · 第 1 次")
         lines = ov["view"]["lines"]
         self.assertTrue(lines[0]["text"].startswith("被瞬间打爆"), lines)
-        self.assertEqual(lines[-2:], [{"kind": "head", "text": "还缺"}, {"kind": "warn", "text": "缺黑皇杖"}])
+        self.assertEqual([(x["kind"], x["text"]) for x in lines[-2:]], [("head", "还缺"), ("warn", "缺黑皇杖")])
         self.assertEqual(len(list(death.DUMP_DIR.glob("*.json"))), 1)   # 死前推送存了一份
         self.assertEqual(len(list(death.DUMP_DIR.glob("*-0s.png"))), 1)   # 死的那一刻截了 Dota 窗口；2 秒后那张还没到点
         old = live_consts.DEATH_MIN_SHOW
