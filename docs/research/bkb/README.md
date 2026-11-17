@@ -58,4 +58,4 @@ python docs/research/bkb/scripts/b_fetch.py       # STRATZ 抓详情（可续；
 python docs/research/bkb/scripts/c_an.py          # 分析
 ```
 
-数据和输出（`an.txt`）都在 `data/research/bkb/`，不进 git。
+数据和输出（`an.txt`）都在 `data/research/bkb/`，不进 git；留档在 GitHub Release [research-data-2026-11-16](https://github.com/DrunkUnderstanding/dota-assistant/releases/tag/research-data-2026-11-16) 的 `bkb.tar.gz`（`tar -xzf bkb.tar.gz -C data` 解压回原处）。

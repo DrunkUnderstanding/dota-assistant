@@ -7,19 +7,21 @@ export const portrait = (id) => `/portraits/${id}.png`;
 
 // 一行字里的装备显示成图标（itembuild.line_view 的 parts：str 原样，{item} 一件装备，{group} 并列几件），名字在悬停提示里；
 // 图标没下载到时显示名字。★ = 针对这局、· = 之后常见、✚ = 按死法补的，和文字版同一套记号
-const MARK = { counter: '★', common: '·', death: '✚', avoid: '✕', got: '✓' };
+const MARK = { counter: '★', common: '·', death: '✚', avoid: '✕', got: '✓', less: '↓' };
 function itemChip(c) {
   const mark = c.mark ? `<i class="ic-mark">${MARK[c.mark] || ''}</i>` : '';
   return `<span class="ic ${c.mark ? `ic-${esc(c.mark)}` : ''}${c.big ? ' ic-big' : ''}" title="${esc(c.name)}">${mark}`
     + `<img src="/items/${encodeURIComponent(c.item)}.png" alt="" onerror="this.remove()"><span class="ic-name">${esc(c.name)}</span>`
     + `${c.sub ? `<small>${esc(c.sub)}</small>` : ''}</span>`;
 }
-// 出装顺序（itembuild.tiles）：一排图标，每件下面「时间 + 同分段多少局买」
+// 出装顺序（itembuild.tiles）：一排图标，每件下面「时间 + 同分段多少局买」；有 usual（对面阵容表的平时比例，第 80 节）再接一行「平时 24」，
+// 数字直接写出来不放悬停（玩家 2026-11-16）；less = 对面这套阵容下少买的，灰掉 + 红字
 function tileHTML(c) {
   const mark = c.mark && MARK[c.mark] ? `<i class="ic-mark">${MARK[c.mark]}</i>` : '';
   return `<span class="tile ${c.mark ? `ic-${esc(c.mark)}` : ''}" title="${esc(c.name)}${c.pct ? ` · 同分段 ${c.pct}% 的局买` : ''}">${mark}`
     + `<img src="/items/${encodeURIComponent(c.item)}.png" alt="" onerror="this.remove()"><span class="ic-name">${esc(c.name)}</span>`
-    + `<span class="tile-m"><b>${esc(c.sub || '')}</b>${c.pct ? `<i>${c.pct}%</i>` : ''}</span></span>`;
+    + `<span class="tile-m"><b>${esc(c.sub || '')}</b>${c.pct ? `<i>${c.pct}%</i>` : ''}</span>`
+    + `${c.usual != null ? `<span class="tile-u">平时 ${c.usual}</span>` : ''}</span>`;
 }
 // 头像（+ 技能图标）：itembuild.hero / ability；图下不到时写名字
 const abImg = (key, name) => `<img class="hx-ab" src="/icons/abilities/${encodeURIComponent(key)}.png" alt="" title="${esc(name)}" onerror="this.remove()">`;

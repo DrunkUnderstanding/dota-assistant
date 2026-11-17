@@ -16,7 +16,7 @@
 | `core.py` | 类本体 `class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, SettingsMixin)`：`__init__`（各依赖可注入，测试 / 回放用）、工作线程（`start` / `submit` / `_loop` / `_run`）、订阅推送（`subscribe` / `unsubscribe` / `publish` / `current_snapshot`）、`action` 分发、`snapshot` / `status` / `heroes` / `side` / `save_shot` / `close` |
 | `consts.py` | 模块级常量和小函数：`SHOTS_DIR` `OVERLAY_FILE`（`data/overlay.json`）`FIX_FILE`（`data/fixes.jsonl` 帮认流水）`OVERLAY_WIDTH`（下限 400）`EMPTY_LIKE` `PICKED_COLOR_GAIN` `DEATH_SHOT_DELAYS` `SIDE_MODES` `SCAN_MODES` `SECRET_FIELDS` `TIMER_SWITCHES` `HOTKEY_ACTIONS`、`plan_error` 等 |
 | `draft.py` | 选人：`current_draft` / `refresh` / `draft_view` / `slots_view`、`should_scan` / `tick` / `scan` / `scan_bans` / `scan_role`、帮认和记模板（`learn_slot` / `name_slot` / `learn` / `pick_candidates` / `fill_slots`）、`skip_hero` / `unskip_hero`、`set_my_position`（改我的位置，和认出来 / 定过的队友对调）/ `set_hero_pos`、`clear` |
-| `ingame.py` | 局内：`coach_tick`（缺口提醒）、`_stage_tick`（按阶段弹本局要点）、`_jungle_tick` / `mute_cue`（野区：开着 `world_marks` 只算野点标记 `camp_marks`、不弹叠加层卡片）、`minimap_view`（给 minimap.html）、`_lane_log`（对线记录）、`_death_recap` / `_take_death_shots`（死亡复盘和死亡截图）；`jungle_bar_view`（给 topbar.html 的野区倒数）|
+| `ingame.py` | 局内：`coach_tick`（缺口提醒）、`_stage_tick`（按阶段弹本局要点）、`_jungle_tick` / `mute_cue`（野区：开着 `world_marks` 只算野点标记 `camp_marks`、不弹叠加层卡片）、`minimap_view`（给 minimap.html）、`_lane_log`（对线记录）、`_death_recap` / `_take_death_shots`（死亡复盘和死亡截图）；`jungle_bar_view`（给 topbar.html 的野区倒数）；`item_bar_view`（给 itembar.html 的出装竖条，`cfg.item_bar`，不受 `ingame_tips` 管，第 80 节）|
 | `timers.py` | 顶栏计时：买活（`mark_buyback`、`_buyback_tick`、截图 / 消息栏自动记 `_scan_buyback` / `_check_feed`）、对面大招（`mark_ult` / `set_ult` / `_ult_check`）、`set_timer`（顶栏计时开关）、`buyback_view` |
 | `cards.py` | 本局要点 / 「如果选它」卡片：`show_brief`、`explain_pick`、`set_brief_page`、`pick_view`；后台出数据页 / AI 打法页（`_start_brief` / `_start_plan` …） |
 | `overlay.py` | 叠加层：显隐（`toggle_overlay` / `close_overlay` / `overlay_visible`）、固定 / 解锁（`toggle_lock` / `set_locked`）、拖动后的位置（`overlay_moved`）、底色样式（`set_overlay_style` / `overlay_style`）、`overlay_view` |
@@ -25,7 +25,7 @@
 
 ## 网页动作（`Live.action`）
 
-`{"type": ...}`，在工作线程里执行，返回状态栏提示；不认识的抛 `ValueError`。现有 26 种：`set_slot` `set_bans` `set`（`position` / `side_mode` / `mode` / `voice` / `scan_without_gsi` / `overlay_locked` / 顶栏计时开关 / `overlay_opacity` / `overlay_color`）`refresh` `clear` `rescan` `learn` `shot` `dismiss_coach` `show_brief` `explain_pick` `skip_hero` `unskip_hero` `brief_page` `buyback` `ult` `name_slot` `ult_set` `toggle_overlay` `toggle_lock` `close_overlay` `overlay_moved` `save_settings` `upgrade_check` `upgrade_install` `open_logs`。队友战绩不走这里（webui 直接调 `domain.mates.Service`）。
+`{"type": ...}`，在工作线程里执行，返回状态栏提示；不认识的抛 `ValueError`。现有 26 种：`set_slot` `set_bans` `set`（`position` / `side_mode` / `mode` / `voice` / `scan_without_gsi` / `overlay_locked` / 顶栏计时 + 出装竖条开关（`TIMER_SWITCHES`）/ `overlay_opacity` / `overlay_color`）`refresh` `clear` `rescan` `learn` `shot` `dismiss_coach` `show_brief` `explain_pick` `skip_hero` `unskip_hero` `brief_page` `buyback` `ult` `name_slot` `ult_set` `toggle_overlay` `toggle_lock` `close_overlay` `overlay_moved` `save_settings` `upgrade_check` `upgrade_install` `open_logs`。队友战绩不走这里（webui 直接调 `domain.mates.Service`）。
 
 ## 依赖与分层
 

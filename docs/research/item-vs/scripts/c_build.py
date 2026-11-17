@@ -1,7 +1,7 @@
 """第 3 步：把抓到的对局整理成「对面有某个英雄时，同英雄同位置的人出装怎么变、出了赢得多不多」的统计表。
 
 输入：data/research/item-vs/fetched.jsonl.gz（本研究抓的）+ data/research/bkb/fetched.jsonl（黑皇杖研究的 2 万局，同字段）。
-输出：docs/research/item-vs/item_vs.json（进 git，产品以后要用就读它）和 data/research/item-vs/report.txt（看结论用）。
+输出：knowledge/item_vs.json（进 git，跟着打包走，产品 domain/itemvs.py 读它）和 data/research/item-vs/report.txt（看结论用）。
 
 单位：一个人打一局（英雄 H、位置 P、对面 5 个英雄）。装备只算第一次买（做出来）的那一件，见 ITEM_SET。
 
@@ -34,9 +34,9 @@ from dota_assistant.sources import assets  # noqa: E402
 
 D = DATA_DIR / "research" / "item-vs"
 SOURCES = [D / "fetched.jsonl.gz", DATA_DIR / "research" / "bkb" / "fetched.jsonl"]
-OUT_JSON = Path(__file__).resolve().parents[1] / "item_vs.json"
+OUT_JSON = Path(__file__).resolve().parents[4] / "knowledge" / "item_vs.json"
 OUT_TXT = D / "report.txt"
-VERSION = 1
+VERSION = 2                # 2：rows 加第 11 列「对面有它时买的人的中位购买分钟」
 
 MIN_GROUP = 300          # 一个（英雄, 位置）至少多少人次才统计
 MIN_VS = 80              # 对面有 e 的局至少多少人次
@@ -280,6 +280,20 @@ for g, s in full.items():
             vs[str(int(e))] = {"n": int(s["n_e"][e]), "rows": rows}
     if vs:
         vs_out[hk] = vs
+    # 第 11 列：对面有 e 时买 k 的人的中位购买分钟（只算购买比例那列过了的；对上赏金猎人，粉比平时早得多）
+    bs = b_order[b_bounds[g]:b_bounds[g + 1]]
+    by_item: dict[int, np.ndarray] = {}
+    for e, v in vs.items():
+        for r in v["rows"]:
+            if not r[5]:
+                r.append(None)
+                continue
+            k = ITEM_IX[r[0]]
+            if k not in by_item:
+                by_item[k] = bs[b_item[bs] == k]
+            sel = by_item[k]
+            hit = sel[(pg_enem[b_pg[sel]] == int(e)).any(1)]
+            r.append(float(statistics.median(b_min[hit].tolist())) if len(hit) else None)
 
 print(f"进表：购买比例变化 {n_lift} 条，胜率差 {n_win} 条；两半方向不一致去掉 {n_drop} 条", flush=True)
 
@@ -296,7 +310,8 @@ doc = {
         "base": "「英雄id_位置」→ n 人次、win 胜率、items {装备: [购买比例, 中位购买分钟, 胜率超出]}；"
                 "胜率超出 = 买的人赢没赢 − 按买的那一分钟全队经济差应有的胜率（平均），还混着买的人的水平",
         "vs": "「英雄id_位置」→ {对面英雄id: {n 人次, rows: [[装备, 对面有它时的购买比例, 按时长标准化的期望比例, 变化, "
-              "变化的 z, 变化过校正且两半一致, 对面有它时买的人次, 胜率超出差（有它 − 没它）, 胜率差的 z, 胜率差过校正且两半一致]]}}",
+              "变化的 z, 变化过校正且两半一致, 对面有它时买的人次, 胜率超出差（有它 − 没它）, 胜率差的 z, 胜率差过校正且两半一致, "
+              "对面有它时的中位购买分钟（变化没过校正的是 null）]]}}",
     },
     "base": base_out,
     "vs": vs_out,

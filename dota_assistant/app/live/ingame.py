@@ -130,6 +130,14 @@ class InGameMixin:
             log.info("野点标记：%s", "、".join(m["label"] for m in marks))
         self.camp_marks = marks
 
+    def item_bar_view(self) -> dict:
+        """给 itembar.html（屏幕右边的出装竖条，第 80 节）：下一件 / 之后几件 / 对面阵容的针对装，整局挂着，不受 ingame_tips 管。
+        出装顺序是开局 coach.prepare 定的（同分段核心装 + 对面阵容表），这里按 GSI 的身上装备和钱现算；钱够下一件时 ready"""
+        st = self.gsi.state if self.gsi else None
+        if not (self.cfg.item_bar and self.coach and self.coach.build and st and st.alive and st.in_match):
+            return {"show": False}
+        return {"show": True, **itembuild.bar(self.coach.build, st.items, st.gold, self.coach.tree, self.coach.const)}
+
     def jungle_bar_view(self) -> dict:
         """给 topbar.html：这局要做的野区动作（jungle.Plan.timeline）+ 抢莲花（lotus_timeline，第二行单独挑）+ 时钟锚点，
         页面自己挑下一件、倒数。死了不显示"""

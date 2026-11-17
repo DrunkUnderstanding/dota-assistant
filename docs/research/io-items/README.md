@@ -78,4 +78,4 @@ python docs/research/io-items/scripts/c_an.py --role support  # 分析：--role 
 
 三个脚本都可以加 `--target 英雄id` 换英雄（默认 91 = 艾欧），比如 `c_an.py --target 52 --role core`；别的英雄的数据放 `data/research/hero-items-<id>/`。
 
-数据都在 `data/research/io-items/`（不进 git），分析输出在 `an_support_raw.txt`、`an_core_raw.txt`，用引擎克制定义跑的旧结果在 `an_support.txt`、`an_core.txt`。
+数据都在 `data/research/io-items/`（不进 git；留档在 GitHub Release [research-data-2026-11-16](https://github.com/DrunkUnderstanding/dota-assistant/releases/tag/research-data-2026-11-16) 的 `io-items.tar.gz`、`hero-items-52.tar.gz`，`tar -xzf <文件> -C data` 解压回原处），分析输出在 `an_support_raw.txt`、`an_core_raw.txt`，用引擎克制定义跑的旧结果在 `an_support.txt`、`an_core.txt`。

@@ -47,7 +47,7 @@
 | 热键 / 日志 | ✅ | — | [game](../dota_assistant/game/NOTES.md)、[core](../dota_assistant/core/NOTES.md) |
 | 反和谐开关（改名 `game\dota_lv`） | 🟡 默认关 | 没在装了 Dota 的电脑上看过效果 | [game](../dota_assistant/game/NOTES.md) |
 | 语音 | ⏸ 默认关 | `config.toml` 写 `voice = true` 能开 | [game](../dota_assistant/game/NOTES.md) |
-| 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **默认不弹**（`ingame_tips = false`，只记日志） | 没接过真实游戏，GSI 字段没在真实推送里核对；11-09 加黑皇杖「别买」/ 显形提示（第 76 节）；11-11 卡片改成少字多图（第 78 节），没实战 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
+| 缺口提醒 / 本局要点 / 死亡复盘 / 出装 | 🟡 **卡片默认不弹**（`ingame_tips = false`，只记日志）；**出装竖条默认开**（`item_bar`，屏幕右边常驻） | 没接过真实游戏，GSI 字段没在真实推送里核对；11-09 加黑皇杖「别买」/ 显形提示（第 76 节）；11-11 卡片改成少字多图（第 78 节）；11-16 出装竖条 + 对面阵容大数据进出装顺序（第 80 节），没在 Dota 上方看过 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 野区提醒（Dota 时钟正下方的倒数；第二行抢莲花） | 🟡 | 实战看位置挡不挡、秒数和按住 Alt 的一样不 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 游戏画面野点框 / 小地图野点 | 🟡 **默认关** | 玩家说「触发 VAC 了」，先弄清提示原话和有没有封禁记录再决定开不开 | [vision](../dota_assistant/vision/NOTES.md)、[domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
 | 买活计时（含截图自动记）/ 对面大招冷却 | 🟡 | 补漏改完没在真实对局跑过；`hero.level` 没见过 | [domain 局内](../dota_assistant/domain/NOTES-ingame.md) |
@@ -71,7 +71,7 @@
 **一句话：大部分功能代码都写完了，最缺的是真实天梯里跑一遍。** 每条要看什么在对应 NOTES 的「待实战验证 / 下一步」小节里写全了。
 
 1. **下一局天梯，选人阶段**看日志：禁用对不对（第 65、66 节：「核对改了 N 格」「有红斜线，但不知道是哪个英雄」，`shots/grid/` 截图核对）；识别有没有漏认 / 乱认 / 同一英雄进好几格、Dota 没开时不再识别（[vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md)）；推荐四小组、对面最后一手、这局不想玩、分路 / 剩余位置合不合常识，「被克太狠，没推荐」门槛（被克 2.5 点不推荐、克人 3 点算强克）会不会筛掉太多（第 67 节）（[domain](../dota_assistant/domain/NOTES.md)）。
-2. **下一局天梯，局内**：野区倒数位置和秒数、买活 / 大招小条、局内卡片确实不弹只记日志（[domain 局内](../dota_assistant/domain/NOTES-ingame.md)、[app/live](../dota_assistant/app/live/NOTES.md)）。
+2. **下一局天梯，局内**：屏幕右边的出装竖条挡不挡东西、半透明够不够显眼、钱够了亮不亮、针对装 / 少买的合不合常识（第 80 节）；野区倒数位置和秒数、买活 / 大招小条、局内卡片确实不弹只记日志（[domain 局内](../dota_assistant/domain/NOTES-ingame.md)、[app/live](../dota_assistant/app/live/NOTES.md)）。
 3. **弄清「触发 VAC」那回事**，再决定游戏画面野点框开不开回来（[vision](../dota_assistant/vision/NOTES.md)）。
 4. **发版后**：开着旧版看会不会自己弹更新窗口（[app](../dota_assistant/app/NOTES.md)）；新打包版发给朋友，看 Dota 目录 / 阵营对不对（[core](../dota_assistant/core/NOTES.md)）；干净电脑上试免安装版（[packaging](../packaging/NOTES.md)）。
 5. **装了 Dota 的电脑上试反和谐**：设置里打开「反和谐」、重开 Dota，看血 / 骷髅回来没有；Dota 开着时打开，看是不是等关了游戏才改（[game](../dota_assistant/game/NOTES.md) 第 64 节）。
@@ -229,3 +229,4 @@
 | 77 | 叠加层标题栏的位置能手动改，改了和队友对调 | [app/live/NOTES](../dota_assistant/app/live/NOTES.md) |
 | 78 | 局内卡片少字多图：图标 + 几个字，整句悬停看；出装标购买比例，胜率只写验证过的 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 79 | 对面有某个英雄时出装怎么变：22 万局统计表（购买比例合乎常识，胜率测不出） | [research/NOTES](../dota_assistant/research/NOTES.md) |
+| 80 | 出装竖条（屏幕右边常驻、钱够亮起）+ 对面阵容的大数据进出装顺序（多买进顺序、少买灰掉） | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |

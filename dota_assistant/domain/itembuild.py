@@ -4,6 +4,9 @@
 - 针对这局：coach.plan() 的对抗装（黑皇杖 / 金箍棒 / 林肯 / 白银之锋……，知识库原文对原文）。
   还没有「出了更容易赢」的大数据（Need.tip 非空）的只作提示（Build.tips），不进顺序、不当「下一件」；
   以后有数据支持的（tip 为空）才排进顺序，排在它在同分段的中位购买时间
+- 对面阵容的大数据（itemvs.shifts，knowledge/item_vs.json，第 80 节）：对面有某英雄时同分段 ≥40% 的人买、比平时多 ≥15 个点的
+  （itemvs.Shift.strong）算有数据依据的针对装，排进顺序（Step.usual = 平时比例，界面写「63% 平时 24」）；
+  明显少买的核心装留在顺序里、标 Step.less（界面灰掉 + 红字）。只说明「别人这么出」，不写胜率
 - 之后常见：15%~40% 的局会买的，补几件在后面
 - 下一件：顺序里第一件还没有的（合成后的也算有）；还差多少 = 成品价 - 已有零件价 - 身上的钱
 - 按死法补装（death_pick）：死亡复盘（death.py）看出是被控死 / 瞬间打爆 / 跑不掉……对应一件装备；
@@ -38,14 +41,17 @@ BUYBACK_FROM = 30            # 第几分钟起「下一件」要提醒买了还�
 
 # ---------- 一行里的装备（界面显示图标）----------
 
-MARK = {"core": "", "counter": "★", "common": "·", "death": "✚", "avoid": "✗", "got": "✓"}
+MARK = {"core": "", "counter": "★", "common": "·", "death": "✚", "avoid": "✗", "got": "✓", "less": "↓"}
 
 
-def chip(key: str, name: str, sub: str = "", mark: str = "", pct: float | None = None, big: bool = False) -> dict:
+def chip(key: str, name: str, sub: str = "", mark: str = "", pct: float | None = None, big: bool = False,
+         usual: float | None = None) -> dict:
     """一件装备：界面上是图标（悬停看名字），sub 是小字（15′、×3），mark 是 MARK 里的种类；
-    pct = 同分段多少比例的局会买（0~1，只在界面上显示在图标下面，文字版不写）；big = 界面上放大（「下一件」）"""
+    pct = 同分段多少比例的局会买（0~1，只在界面上显示在图标下面，文字版不写）；big = 界面上放大（「下一件」）；
+    usual = 对面阵容表里的平时比例（有它时 pct 是对上这局对面的比例，界面写「平时 24」）"""
     return {"item": key, "name": name, **({"sub": sub} if sub else {}), **({"mark": mark} if MARK.get(mark) else {}),
-            **({"pct": round(pct * 100)} if pct else {}), **({"big": True} if big else {})}
+            **({"pct": round(pct * 100)} if pct else {}), **({"big": True} if big else {}),
+            **({"usual": round(usual * 100)} if usual is not None else {})}
 
 
 def group(chips: list[dict]) -> dict:
@@ -160,6 +166,8 @@ class Step:
     who: list = field(default_factory=list)      # 针对谁：头像 + 技能图标片段（coach.Need.who）
     label: str = ""           # 卡片上的几个字（coach.Need.label）
     stat: str = ""            # 验证过的大数据数字（coach.Need.stat），只有它会在卡片上写胜率
+    usual: float | None = None   # 对面阵容表（itemvs）里的平时购买比例：有它 = 这件的 share 是「对上这局对面」的比例
+    less: bool = False        # 这局对面阵容下同分段明显少买（itemvs，灰掉 + 红字，还留在顺序里）
 
 
 @dataclass
@@ -171,7 +179,8 @@ class Build:
         return [s for s in self.steps if not coach.has(owned, s.key, tree)]
 
 
-def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) -> Build:
+def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase, shifts: list | None = None) -> Build:
+    """shifts = itemvs.shifts(...)（这局对面阵容下购买比例变了的装备）；None / 空 = 只按核心装 + 知识库针对装"""
     timings = coach.item_timings(bench) if bench else {}
 
     def stat(k: str) -> tuple[float, float]:
@@ -212,6 +221,7 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
             continue
         minute = n.minute or (med if share >= coach.MENU_SHARE and med else n.due)
         steps[k] = Step(k, base.items[k].name, minute, "counter", why, quote, share, n.priority == 0, **extra)
+    _apply_shifts(steps, tips, common, shifts or [], base, timings, stat)
     for s in sorted(common, key=lambda s: -s.share):
         if sum(x.kind == "common" for x in steps.values()) >= COMMON_MAX:
             break
@@ -220,6 +230,45 @@ def make(needs: list[coach.Need], bench: dict | None, base: kb.KnowledgeBase) ->
     # 「之后常见」排在核心和针对装后面：不是必出的，别让它挡住「下一件」
     return Build(sorted(steps.values(), key=lambda s: (s.kind == "common", s.minute)),
                  sorted(tips, key=lambda s: s.minute))
+
+
+def vs_label(s) -> str:
+    """「63% 平时 24」：对面阵容表的两个比例，卡片上直接写（玩家 2026-11-16：数字贴在图标后面，不放悬停）"""
+    return f"{round(s.share * 100)}% 平时 {round(s.usual * 100)}"
+
+
+def _apply_shifts(steps: dict, tips: list, common: list, shifts: list, base: kb.KnowledgeBase, timings: dict, stat) -> None:
+    """对面阵容表（itemvs.Shift）并进顺序：多买的够格（strong）就成有数据依据的针对装（已经是核心装的改标针对），
+    原来只作提示（缺大数据）的同一件从提示里拿掉；明显少买的核心装标 less。时间用对上这几个英雄时的中位购买分钟"""
+    avoided = {x.key for x in tips if x.kind == "avoid"}
+    for sh in shifts:
+        if not sh.strong or sh.key not in base.items or sh.key in avoided:
+            continue
+        if sh.lift < 0:
+            if sh.key in steps:
+                s = steps[sh.key]
+                s.less, s.usual, s.share = True, sh.usual, sh.share
+            continue
+        who = [hero(base.heroes[e]) for e in sh.enemies[:3] if e in base.heroes]
+        names = "、".join(base.heroes[e].name for e in sh.enemies[:3] if e in base.heroes)
+        why = f"对面有{names}，同分段 {sh.share:.0%} 的局买（平时 {sh.usual:.0%}）"
+        quote = (f"7.41f 超凡～冠绝 17.3 万局统计（第 79 节）：对面有{base.heroes[sh.enemies[0]].name}的 {sh.n} 人次里 "
+                 f"{sh.share:.0%} 买了{base.items[sh.key].name}，按对局时长算平时应是 {sh.usual:.0%}；只说明别人这么出，不说明更容易赢"
+                 ) if sh.enemies and sh.enemies[0] in base.heroes else ""
+        old = next((x for x in tips if x.key == sh.key and x.kind == "counter"), None)
+        if old:                                  # 知识库判断要的、现在又有大数据：合成一件，标成有数据
+            tips.remove(old)
+            why, quote = f"{old.why}；{why}", "\n".join(x for x in (old.quote, quote) if x)
+        minute = sh.minute or stat(sh.key)[1] or (old.minute if old else 0)
+        s = steps.get(sh.key) or next((c for c in common if c.key == sh.key), None)
+        if s is None:
+            s = Step(sh.key, base.items[sh.key].name, minute, "counter")
+        common[:] = [c for c in common if c.key != sh.key]
+        s.kind, s.minute, s.share, s.usual = "counter", minute, sh.share, sh.usual
+        s.why = f"{s.why}；{why}" if s.why and s.why not in why else why
+        s.quote = "\n".join(x for x in (s.quote, quote) if x)
+        s.who, s.label = s.who or who, vs_label(sh)
+        steps[sh.key] = s
 
 
 def remaining_cost(key: str, owned: set[str], const: dict) -> int:
@@ -307,6 +356,27 @@ def next_parts(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[
     return short(parts, icons)
 
 
+BAR_AFTER = 3                # 出装竖条「下一件」后面再列几件
+BAR_VS = 3                   # 竖条下半截最多列几件对面阵容的针对装
+
+
+def bar(b: Build, owned: set[str], gold: int | None, tree: dict[str, set[str]], const: dict) -> dict:
+    """局内出装竖条（web/itembar.html，贴屏幕右边整局挂着，第 80 节）：
+    next = 下一件（big，购买比例，还差多少，ready = 钱够了 → 竖条亮起）；after = 之后几件（less 的灰掉 + 红字）；
+    vs = 对面阵容表里够格的针对装：对面头像 + 这局比例 + 平时比例（已经有了的灰掉打勾）"""
+    def view(s: Step, **extra) -> dict:
+        return {**chip(s.key, s.name, f"{s.minute:.0f}′", "less" if s.less else s.kind, pct=s.share, usual=s.usual), **extra}
+    todo = b.todo(owned, tree)
+    nxt = None
+    if todo:
+        s = todo[0]
+        left = remaining_cost(s.key, owned, const)
+        nxt = view(s, left=max(0, left - (gold or 0)), ready=gold is not None and gold >= left)
+    vs = [view(s, heroes=[w["hero"] for w in s.who if "hero" in w], got=coach.has(owned, s.key, tree))
+          for s in b.steps if s.kind == "counter" and s.usual is not None][:BAR_VS]
+    return {"next": nxt, "after": [view(s) for s in todo[1:1 + BAR_AFTER]], "vs": vs}
+
+
 def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]:
     """本局要点「出装」一节：[lo, hi) 分钟的顺序一行 + 每件针对装的理由（悬停看原文）+ 只作提示的针对装"""
     inside = lambda s: s.minute >= lo and (hi is None or s.minute < hi)
@@ -314,7 +384,8 @@ def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]
     avoid = [s for s in b.tips if s.kind == "avoid"] if lo == 0 else []     # 「别买」只在第一页说一次，不分时间段
     if not (steps or tips or avoid):
         return []
-    order = tiles([chip(s.key, s.name, f"{s.minute:.0f}′", s.kind, pct=s.share) for s in steps])
+    order = tiles([chip(s.key, s.name, f"{s.minute:.0f}′", "less" if s.less else s.kind, pct=s.share, usual=s.usual)
+                   for s in steps])
     lines = [("row", order)] if steps else []
     # 卡片上：装备图标 + 针对谁（头像 + 技能图标）+ 几个字；整句理由悬停看。胜率只写验证过的（Step.stat，HANDOFF 第 75 节）
     lines += [("warn" if s.urgent else "row",
@@ -329,7 +400,8 @@ def brief_lines(b: Build, lo: float = 0, hi: float | None = None) -> list[tuple]
                               *([tag(s.label)] if s.label else []), *s.who]), s.quote) for s in avoid]
     if steps:
         lines.append(("dim", "′ 同分段中位购买时间 · % 同分段多少局买 · "
-                      + ("金框 针对这局 · " if any(s.kind == "counter" for s in steps) else "") + "淡 之后常见 · 悬停看理由"))
+                      + ("金框 针对这局 · " if any(s.kind == "counter" for s in steps) else "") + "淡 之后常见 · "
+                      + ("↓ 对面这套阵容下少买 · " if any(s.less for s in steps) else "") + "悬停看理由"))
     return lines
 
 

@@ -1,15 +1,15 @@
 # 对面有某个英雄时，出装怎么变（2026-11-16）
 
-玩家看了 Dota Plus 的出装助手（官网：按分段、分路、双方阵容，用「数百万场近期对局」给建议），想让我们的出装也按「阵容 + 大数据」调整，先把数据积累起来。这一步只做数据和统计表，**产品代码没用它**。
+玩家看了 Dota Plus 的出装助手（官网：按分段、分路、双方阵容，用「数百万场近期对局」给建议），想让我们的出装也按「阵容 + 大数据」调整，先把数据积累起来。2026-11-16 接进了产品（出装顺序 + 屏幕右边的出装竖条，`dota_assistant/domain/itemvs.py`，NOTES-ingame 第 80 节）。
 
 ## 数据
 
 - 7.41f，天梯全英雄选择，时长 ≥ 15 分钟，平均段位超凡～冠绝（`avg_rank_tier` 70~89）。
 - OpenDota explorer 在版本里均匀取 32 块 match_id（每块 25 万个编号），随机抽 20 万局；STRATZ 抓每局 10 人的出装时间、每分钟经济、死亡、位置（2026-11-16，约 4000 次请求，170 分钟）。黑皇杖研究（`docs/research/bkb/`）的 2 万局字段相同，合在一起。
 - 10 个人都有解析数据、都有位置的：**173 427 局**，173 万人次，1596 万次购买；（英雄, 位置）够 300 人次的有 344 组。
-- 原始数据 `data/research/item-vs/fetched.jsonl.gz`（380 MB，不进 git）。
+- 原始数据 `data/research/item-vs/fetched.jsonl.gz`（380 MB，不进 git）；留档在 GitHub Release [research-data-2026-11-16](https://github.com/DrunkUnderstanding/dota-assistant/releases/tag/research-data-2026-11-16) 的 `item-vs.tar.gz`，下载后在仓库根目录 `tar -xzf item-vs.tar.gz -C data` 解压回原处（`SHA256SUMS.txt` 校验）。
 
-## 统计表 `item_vs.json`（进 git）
+## 统计表 `knowledge/item_vs.json`（进 git，跟着打包走）
 
 按「英雄id_位置」组织（字段说明在文件的 `fields` 里）：
 
@@ -17,6 +17,7 @@
 - `vs`：对面有某英雄时，购买比例明显变的装备。
   - **期望比例按对局时长标准化**：对面有 e 的局要是普遍打得长，后期装本来就多，先按 5 分钟一档的时长查「平时同时长的比例」再比。
   - 进表条件：变化 ≥ 5 个百分点；82 万次检验一起 Bonferroni 校正（|z| ≥ 5.42）；按 match_id 奇偶分两半各算一遍，方向一致。结果 **5019 条**。
+  - v2（2026-11-16）每条多一列：对面有 e 时买 k 的人的中位购买分钟（例如斯温 1 号位对上幻影刺客，金箍棒 29 分钟，平时 34）。
   - 每条也带「胜率差」：对上 e 时买 k 的胜率超出 − 没对上 e 时的，再减掉同组全部装备合起来的差（对位本身的胜率差，例如幻影长矛手对上斯温买什么都少赢 10 个点）。
 
 装备范围：有合成配方的成装、≥ 2000 金的非消耗品，加上针对用的便宜东西（显影之尘、岗哨、宝石、魔晶、魔棒、凝魂之露等），一共 142 件，每人每件只算第一次。
@@ -42,7 +43,7 @@
 ```
 python docs/research/item-vs/scripts/a_ids.py 200000   # OpenDota 抽编号（约 3 分钟）
 python docs/research/item-vs/scripts/b_fetch.py        # STRATZ 抓详情（可续；每小时留 150 次给助手自己用）
-python docs/research/item-vs/scripts/c_build.py        # 整理成 item_vs.json + data/research/item-vs/report.txt（约 3 分钟）
+python docs/research/item-vs/scripts/c_build.py        # 整理成 knowledge/item_vs.json + data/research/item-vs/report.txt（约 2 分钟）
 ```
 
 换版本后重跑三步（`a_ids.py` 里的 `PATCH_START` 和编号范围要改）。

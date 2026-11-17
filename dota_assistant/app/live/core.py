@@ -451,6 +451,7 @@ class Live(DraftMixin, InGameMixin, TimersMixin, CardsMixin, OverlayMixin, Setti
             "buyback": self.buyback_view(),
             "minimap": self.minimap_view(),
             "jungle_bar": self.jungle_bar_view(),
+            "item_bar": self.item_bar_view(),
             "overlay": {"visible": self.overlay_visible(), "locked": self.overlay_locked,
                         "lock_key": self.cfg.hotkey_lock, "toggle_key": self.cfg.hotkey_toggle, "style": self.overlay_style(),
                         "view": self.overlay_view()},

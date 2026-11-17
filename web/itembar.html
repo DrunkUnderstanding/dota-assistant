@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>选人助手 · 出装竖条</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* 出装竖条（第 80 节，玩家 2026-11-16 选了「B 右边缘竖条」）：贴屏幕右边整局挂着，整个窗口点穿、不接鼠标。
+     和选人叠加层故意不一样：没有卡片底板，图标描黑边、字描黑影直接盖在游戏上，少字多图、数字贴在图标下面（不放悬停）。
+     平时半透明（不抢眼），钱够买下一件时亮起来、金框闪一下 */
+  html, body { background: transparent; overflow: hidden; height: 100%; }
+  body { zoom: var(--s); }
+  body.preview { background: radial-gradient(60% 50% at 30% 40%, #3b4a2c, #1f2a1a); }
+  #bar {
+    position: absolute; right: 6px; top: 10px; width: 92px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    font-family: var(--num); --sh: 0 0 2px #000, 0 1px 2px #000, 0 0 6px rgba(0, 0, 0, 0.85);
+    opacity: 0.62; transition: opacity 0.4s;
+  }
+  #bar.is-ready { opacity: 1; }
+  .it { position: relative; display: grid; justify-items: center; gap: 1px; }
+  .it img { display: block; width: 44px; height: 32px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.9), 0 2px 6px rgba(0, 0, 0, 0.6); }
+  .it .p { font-size: 14px; font-weight: 700; color: var(--text); text-shadow: var(--sh); line-height: 1; font-variant-numeric: tabular-nums; }
+  .it .t { font-size: 12px; color: #d3dae3; text-shadow: var(--sh); line-height: 1; white-space: nowrap; }
+  .it .t b { color: var(--gold); font-weight: 700; }
+  .it.big img { width: 66px; height: 48px; box-shadow: 0 0 0 2px var(--gold), 0 0 10px rgba(216, 167, 78, 0.55), 0 2px 8px #000; }
+  .it.big .p { font-size: 16px; color: var(--gold); }
+  .is-ready .it.big img { animation: ready 1.2s ease-out 2; }
+  .is-ready .it.big .t { color: var(--good); font-weight: 700; }
+  @keyframes ready { 0% { box-shadow: 0 0 0 2px var(--gold), 0 0 0 rgba(216, 167, 78, 0.9); } 50% { box-shadow: 0 0 0 3px var(--gold), 0 0 22px rgba(216, 167, 78, 0.95); } 100% { box-shadow: 0 0 0 2px var(--gold), 0 0 10px rgba(216, 167, 78, 0.55); } }
+  @media (prefers-reduced-motion: reduce) { .is-ready .it.big img { animation: none; } }
+  .it.counter img { box-shadow: 0 0 0 2px var(--gold), 0 2px 6px #000; }
+  .it.counter::after { content: "★"; position: absolute; top: -8px; right: -6px; color: var(--gold); font-size: 14px; text-shadow: var(--sh); }
+  .it.big.counter::after { top: -9px; right: -8px; }
+  .it.common img { opacity: 0.75; }
+  .it.less img { filter: grayscale(0.8) brightness(0.6); }
+  .it.less .p { color: var(--bad); }
+  .it.got img { filter: grayscale(1) brightness(0.55); }
+  .it.got::after { content: "✓"; position: absolute; top: 2px; left: 50%; transform: translateX(-50%); color: var(--good); font-size: 19px; font-weight: 700; text-shadow: var(--sh); }
+  .hr { width: 40px; height: 1px; background: rgba(255, 255, 255, 0.35); margin: 2px 0; }
+  .vs { display: grid; justify-items: center; gap: 2px; }
+  .faces { display: flex; gap: 2px; }
+  .faces img { display: block; width: 40px; height: 23px; object-fit: cover; border-radius: 3px; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.9), 0 2px 6px rgba(0, 0, 0, 0.6); }
+  .faces img + img { width: 26px; object-position: 35% 0; }
+  .noimg { font: 600 11px/1.2 var(--font); color: var(--text); text-shadow: var(--sh); text-align: center; }
+</style>
+</head>
+<body>
+<div id="bar" hidden></div>
+<script type="module">
+import { connect } from './api.js';
+import { esc, portrait } from './view.js';
+
+// Electron 传 scale（屏幕逻辑高 / 1080）：Dota 界面按屏幕高度等比缩放，竖条跟着缩放；?preview=1 浏览器里塞假数据看样子
+const params = new URLSearchParams(location.search);
+const preview = params.has('preview');
+document.documentElement.style.setProperty('--s', String(Number(params.get('scale')) || 1));
+if (preview) document.body.classList.add('preview');
+const bar = document.getElementById('bar');
+
+// 一件装备：图标 + 下面「63%」（同分段多少局买；有平时比例时是对上这局对面的比例）+ 一行小字（时间 / 平时 / 还差）
+// 图标没下到时写名字
+function item(c, cls = '', line = '') {
+  const mark = c.mark ? ` ${esc(c.mark)}` : '';
+  const sub = line || (c.usual != null ? `平时 ${c.usual}` : esc(c.sub || ''));
+  return `<div class="it${mark}${cls}"><img src="/items/${encodeURIComponent(c.item)}.png" alt="" `
+    + `onerror="this.replaceWith(Object.assign(document.createElement('span'),{className:'noimg',textContent:${esc(JSON.stringify(c.name))}}))">`
+    + `${c.pct ? `<span class="p">${c.pct}%</span>` : ''}${sub ? `<span class="t">${sub}</span>` : ''}</div>`;
+}
+
+let last = '';
+function render(v) {
+  if (!v || !v.show || !(v.next || v.vs?.length)) { bar.hidden = true; last = ''; return; }
+  const n = v.next;
+  let html = n ? item(n, ' big', n.ready ? '钱够了' : `差 <b>${n.left}</b>`) : '';
+  html += (v.after || []).map((c) => item(c)).join('');
+  if (v.vs?.length) {
+    html += '<div class="hr"></div>' + v.vs.map((c) => `<div class="vs"><div class="faces">${(c.heroes || []).slice(0, 2)
+      .map((h) => `<img src="${portrait(h)}" alt="" onerror="this.remove()">`).join('')}</div>${item({ ...c, mark: c.got ? 'got' : '' })}</div>`).join('');
+  }
+  bar.classList.toggle('is-ready', !!n?.ready);
+  if (html !== last) { bar.innerHTML = html; last = html; }   // 只在变了时重画，免得「钱够了」的闪光每秒重放
+  bar.hidden = false;
+}
+
+const DEMO = {
+  show: true,
+  next: { item: 'blink', name: '闪烁匕首', sub: '17′', pct: 96, left: 1600, ready: false },
+  after: [{ item: 'black_king_bar', name: '黑皇杖', sub: '24′', pct: 88 },
+    { item: 'lesser_crit', name: '水晶剑', sub: '24′', mark: 'less', pct: 62, usual: 84 },
+    { item: 'greater_crit', name: '代达罗斯之殇', sub: '28′', mark: 'less', pct: 53, usual: 75 }],
+  vs: [{ item: 'monkey_king_bar', name: '金箍棒', sub: '29′', mark: 'counter', pct: 63, usual: 24, heroes: [44, 1], got: false }],
+};
+if (preview) render(DEMO);
+connect((snap) => render(preview && !snap.item_bar?.show ? DEMO : snap.item_bar), () => {});
+</script>
+</body>
+</html>

@@ -17,7 +17,7 @@
 | `golden/g_common.py` | 路径和小工具；环境变量 `DOTA_GOLDEN_DIR`（快照放哪）、`DOTA_GOLDEN_SOURCE`（冻结目录从哪复制，默认 `D:\dota`） |
 | `golden/g_cassette.py` `g_clock.py` `g_files.py` `g_home.py` `g_normalize.py` | 网络 / OCR 录放、假时钟、文件变动记录、冻结目录、归一化（路径 / 堆栈 / 模块名 / 时间 / 内存地址） |
 | `check_isolation.py` | G4：跑单测前后比对 `data/` `shots/` `logs/` `templates/` `config.toml` `calibration.json`；`--root` 可多给几个目录，`--` 后面传给 unittest |
-| `browser_check.py` + `browser_console.mjs` | G6：临时运行目录起界面服务（同 `run --browser` 的 WebServer + Live，不开 GSI / 热键 / 截屏 / 语音 / AI），无头 Edge / Chrome 打开控制面板、叠加层、顶栏、队友战绩页，`browser_console.mjs`（node）收控制台报错 |
+| `browser_check.py` + `browser_console.mjs` | G6：临时运行目录起界面服务（同 `run --browser` 的 WebServer + Live，不开 GSI / 热键 / 截屏 / 语音 / AI），无头 Edge / Chrome 打开控制面板、叠加层、顶栏、队友战绩页、出装竖条，`browser_console.mjs`（node）收控制台报错；页面每批 4 个、看完关标签页（SSE 长连接占着浏览器对同一主机的 6 条连接，一次开太多会卡死，第 80 节） |
 | `extract_camps.py` | 从本机游戏文件读野点 / 刷新框（触发器模型 PHYS 块）/ 莲花池 / 小地图范围（`maps/dota.vpk` 的地图实体，二进制 KV3 v5，照 ValveResourceFormat 的读法），和 `domain/camps.py` 的表对一遍；要另装 `zstandard lz4`（不进 requirements） |
 | `lock_deps.py` | 重新生成 `requirements.lock`（只锁 `requirements.txt` 里的包及传递依赖） |
 | `refactor/export_names.py` | 搬家清单：导出旧模块名字、合并 `docs/refactor/moves.json`、分层冲突分析（`test_layers` / `test_moves` 引用它） |

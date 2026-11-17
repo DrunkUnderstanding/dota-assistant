@@ -551,9 +551,10 @@ def prepare(cfg: Config, my_id: int, enemy_ids: list[int], pos: int) -> tuple[Co
     if not enemies:
         notes.append("没有对面阵容（选人时没识别 / 没填），这局只看出装节奏")
     needs, hero_notes = plan(me, enemies, base, kb.load_rules(), bench, pos)
-    from . import itembuild
+    from . import itembuild, itemvs
     const = assets.items_const()
-    return Coach(needs, bench, item_tree(const), base, itembuild.make(needs, bench, base), const), hero_notes + notes
+    build = itembuild.make(needs, bench, base, itemvs.shifts(my_id, pos, enemy_ids))
+    return Coach(needs, bench, item_tree(const), base, build, const), hero_notes + notes
 
 
 # ---------- 模拟：拿一局录像重放 ----------
@@ -591,8 +592,8 @@ def simulate(cfg: Config, match_id: int, account_id: int | None = None) -> str:
     const = assets.items_const()
     tree = item_tree(const)
     needs, notes = plan(my, enemies, base, rules, bench, pos)
-    from . import itembuild
-    build = itembuild.make(needs, bench, base)
+    from . import itembuild, itemvs
+    build = itembuild.make(needs, bench, base, itemvs.shifts(my.id, pos, [e.id for e in enemies]))
     coach = Coach(needs, bench, tree, base, build, const)
 
     deaths = sorted(d["time"] for d in me.get("deaths_log") or [])

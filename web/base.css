@@ -512,6 +512,11 @@ img { display: block; }
   background: var(--gold); color: #000; font-size: 9px; }
 .tile.ic-common { opacity: 0.6; }
 .tile.ic-common .ic-mark { display: none; }
+/* 对面阵容表（第 80 节）：针对装下面「平时 24」；少买的灰掉 + 红字 */
+.tile-u { font: 600 10px/1.2 var(--num); color: var(--text-faint); white-space: nowrap; }
+.tile.ic-less img { filter: grayscale(0.8) brightness(0.6); }
+.tile.ic-less .tile-m i { color: var(--bad); }
+.tile.ic-less .ic-mark { position: absolute; top: -5px; right: -3px; z-index: 1; color: var(--bad); font-weight: 700; text-shadow: 0 0 3px #000; }
 /* 头像 + 技能图标（itembuild.hero / ability） */
 .hx { display: inline-flex; align-items: center; vertical-align: middle; white-space: nowrap; }
 .hx-face { width: 40px; height: 23px; border-radius: 4px 0 0 4px; object-fit: cover; }

@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 
 from .. import kb
-from . import coach, itembuild, lanes, teamfight
+from . import coach, itembuild, itemvs, lanes, teamfight
 from ..ai import gameplan
 from ..core.config import DATA_DIR, Config
 from .engine import POSITION_NAMES
@@ -330,7 +330,7 @@ def build(cfg: Config, my_id: int, ally_ids: list[int], enemy_ids: list[int], po
     enemies = [base.heroes[h] for h in enemy_ids if h in base.heroes]
     needs, notes = coach.plan(me, enemies, base, kb.load_rules(), bench, pos)
     b.needs = needs
-    build = itembuild.make(needs, bench, base)
+    build = itembuild.make(needs, bench, base, itemvs.shifts(me.id, pos, enemy_ids))     # 对面阵容的大数据（第 80 节）
     b.add("出装", itembuild.brief_lines(build, hi=STAGE_START["late"]))     # 中期那页：后期开始前的
     allies = [base.heroes[h] for h in ally_ids if h in base.heroes]
     b.add("团战", [_why(w) for w in teamfight.tips(me, allies, enemies, pos, {name(h): p for h, p in guessed.items()})])

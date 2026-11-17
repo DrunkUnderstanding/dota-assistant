@@ -8,7 +8,7 @@ async function openPage(url) {
   const t = await (await fetch(`${base}/json/new?about:blank`, { method: 'PUT' })).json();
   const ws = new WebSocket(t.webSocketDebuggerUrl);
   await new Promise((r) => ws.addEventListener('open', r));
-  const page = { url, errors: [], warnings: [], text: 0, ws, id: 0, waits: new Map() };
+  const page = { url, errors: [], warnings: [], text: 0, ws, id: 0, waits: new Map(), target: t.id };
   page.send = (method, params = {}) => new Promise((resolve) => {
     const id = ++page.id;
     page.waits.set(id, resolve);
@@ -47,6 +47,8 @@ for (const p of pages) {
   p.text = typeof body === 'string' ? body.length : -1;
   p.sample = typeof body === 'string' ? body.replace(/\s+/g, ' ').slice(0, 160) : '';
   p.ws.close();
+  // 关掉标签页：页面的 SSE 长连接占着浏览器对同一主机的 6 条连接，不关下一批页面加载不出来（browser_check.py 分批开）
+  await fetch(`${base}/json/close/${p.target}`).catch(() => {});
 }
 console.log(JSON.stringify(pages.map(({ url, errors, warnings, text, sample }) => ({ url, errors, warnings, text, sample }))));
 process.exit(0);

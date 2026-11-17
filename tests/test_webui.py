@@ -875,6 +875,33 @@ class CoachLiveTest(unittest.TestCase):
         self.push(40, state="DOTA_GAMERULES_STATE_POST_GAME")
         self.assertIsNone(self.live.coach_card)                 # 比赛结束收起
 
+    def test_item_bar(self):
+        """出装竖条（第 80 节）：比赛中、出装准备好了才有，不受 ingame_tips 管；钱够了 ready；控制面板能关、写进 config"""
+        from dota_assistant.domain import itembuild
+        build = itembuild.Build([itembuild.Step("blink", "闪烁匕首", 17, "core", share=0.96),
+                                 itembuild.Step("black_king_bar", "黑皇杖", 23, "core", share=0.88)])
+        const = {"blink": {"cost": 2250}, "black_king_bar": {"cost": 4050}}
+        self.live._coach_prepare = lambda cfg, my_id, enemy_ids, pos: (coach.Coach([], None, {}, None, build, const), [])
+        self.live.config_file.write_text("item_bar = true\n", encoding="utf-8")
+        bar = lambda: json.loads(self.live.current_snapshot)["item_bar"]
+        self.live.cfg.ingame_tips = False                           # 局内卡片关着，竖条照样有
+        self.push(-1, state="DOTA_GAMERULES_STATE_HERO_SELECTION")
+        self.assertEqual(bar(), {"show": False})                    # 选人时没有（出门前的准备阶段就有了）
+        self.push(0)
+        self.wait_coach()
+        self.push(1)
+        v = bar()
+        self.assertTrue(v["show"])
+        self.assertEqual((v["next"]["item"], v["next"]["left"], v["next"]["ready"]), ("blink", 2250, False))
+        self.assertEqual([c["item"] for c in v["after"]], ["black_king_bar"])
+        self.live.gsi.state.raw["player"]["gold"] = 2400
+        wait(self.live.submit(self.live.publish))
+        self.assertTrue(bar()["next"]["ready"])
+        wait(self.live.submit(self.live.action, {"type": "set", "key": "item_bar", "value": False}))
+        self.assertEqual(bar(), {"show": False})
+        self.assertFalse(config.load(self.live.config_file).item_bar)
+        self.assertFalse(json.loads(self.live.current_snapshot)["settings"]["item_bar"])
+
     def test_jungle_cues_for_support(self):
         """关掉游戏画面野点框时，五号位：号角前弹封野，到点前几秒亮屯野 / 拉野；有卡片时叠在顶上；死了不亮；点 × 这局不再提醒这一种"""
         self.live.cfg.world_marks = False

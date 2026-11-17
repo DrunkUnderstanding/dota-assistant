@@ -29,7 +29,8 @@ BROWSERS = [
 ]
 # 页面 → 要不要有文字（顶栏不在比赛里本来就是空的）
 PAGES = {"panel.html": True, "overlay.html?preview=1": True, "topbar.html?preview=1": True, "overlay.html": True,
-         "topbar.html?scale=1": False, "mates.html": True}
+         "topbar.html?scale=1": False, "mates.html": True, "itembar.html?preview=1": True, "itembar.html?scale=1": False}
+BATCH = 4
 # 不算报错的：浏览器自己要的 favicon；顶栏预览故意放了一个下不到的大招图标（测「图标下不到退回写字」）
 IGNORED = ["/favicon.ico", "/icons/abilities/no_such_ability.png"]
 # 设置从这里读（行为快照的冻结目录里那份已经去掉了 token；没有再用本仓库的）
@@ -131,12 +132,16 @@ def main(argv: list[str] | None = None) -> int:
         threading.Thread(target=fill, daemon=True).start()
 
         urls = [f"{srv.url}/{p}" for p in PAGES]
-        out = subprocess.run(["node", str(REPO / "tools" / "browser_console.mjs"), str(dbg), str(args.seconds * 2 + 2),
-                              *urls], capture_output=True, text=True, encoding="utf-8", timeout=120)
-        if out.returncode:
-            print(out.stdout, out.stderr)
-            return 1
-        results = json.loads(out.stdout.strip().splitlines()[-1])
+        # 每批最多 BATCH 个页面：页面大多开着 SSE 长连接，浏览器对同一个主机最多 6 条连接，
+        # 一次开 8 个页面后面的连页面都加载不出来（2026-11-16 加出装竖条两页时卡死）
+        results = []
+        for i in range(0, len(urls), BATCH):
+            out = subprocess.run(["node", str(REPO / "tools" / "browser_console.mjs"), str(dbg), str(args.seconds * 2 + 2),
+                                  *urls[i:i + BATCH]], capture_output=True, text=True, encoding="utf-8", timeout=120)
+            if out.returncode:
+                print(out.stdout, out.stderr)
+                return 1
+            results += json.loads(out.stdout.strip().splitlines()[-1])
     finally:
         proc.terminate()
         try:

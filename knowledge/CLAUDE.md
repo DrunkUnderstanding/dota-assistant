@@ -4,13 +4,14 @@
 
 ## 职责
 
-知识库（`dota_assistant/kb/`）里**人写的那两层**，跟着 git 走、换机器也在。官方原文本身在 `data/kb/`（`update` 拉的，不进 git），这里只放官方数据里看不出来的「判断」和「纠错」。
+知识库（`dota_assistant/kb/`）里**人写的那两层**，跟着 git 走、换机器也在；另外放一份跟着打包走的统计表 `item_vs.json`（脚本生成）。官方原文本身在 `data/kb/`（`update` 拉的，不进 git），这里只放官方数据里看不出来的「判断」和「纠错」。
 
 ## 关键文件
 
 | 文件 | 管什么 | 读写 |
 |---|---|---|
 | `rules.toml` | 玩家确认过的经验规则，一条一个 `[[rule]]`：`hero`（空 = 通用）、`item`、`text`、`source`（「玩家原话」/「实现假设」）、`date`、`evidence`（在 kb 里能查到的依据） | `kb.load_rules()`；手工编辑 |
+| `item_vs.json` | 对面阵容出装表（第 79 节研究、第 80 节接进产品）：7.41f 超凡～冠绝 17.3 万局，按「英雄id_位置」的平时购买比例 / 时间，和对面有某英雄时明显多买 / 少买的装备（v2 每行带对上时的中位购买分钟）。**不是手写的**，由 `docs/research/item-vs/scripts/c_build.py` 生成，换版本按那边 README 重抓重算 | `domain.itemvs.load()` |
 | `mistakes.toml` | AI（打法页 AI / 开发助手）说错过、查原文纠正的说法，一条一个 `[[mistake]]`：`wrong`、`right`（要能在 kb 里查到）、`hero` / `item`、`who`、`date`、`evidence`（官方原文）、可选 `has_tag` | `kb.load_mistakes()`；用命令追加 |
 
 ## 怎么用

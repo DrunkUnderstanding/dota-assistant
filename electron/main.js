@@ -15,6 +15,8 @@
 //           写几秒打（web/world.html，有框时每 20 毫秒拉一次 /api/world，镜头位置 Python 那边从英雄血条认）。
 //   小地图野点：同样透明、置顶、不抢焦点，盖在 Dota 小地图那一块（config 的 minimap_x / y / size），整个窗口一直点穿；
 //           同样的圈画在小地图上（web/minimap.html，config 的 minimap_marks，默认关）。
+//   出装竖条：同样透明、置顶、不抢焦点、一直点穿，贴 Dota 那块屏的右边（web/itembar.html，config 的 item_bar，第 80 节）；
+//           只在比赛中、助手算好这局出装时画，其余时间什么都不画。
 //   控制面板：普通窗口，关掉它 = 退出助手。
 //   队友战绩：控制面板点「队友战绩」window.open 开的普通窗口（web/mates.html），可以单独关。
 // 日志：往 stdout 写「级别 内容」一行，Python（webui._pipe_electron）收进 logs/ 下的日志文件；页面脚本报错也转过去。
@@ -44,6 +46,8 @@ let topbarRects = [];    // 它的可点区域（小条）
 let topbarGrabbing = false;
 let world = null;        // 游戏画面野点
 let minimap = null;      // 小地图野点
+let itembar = null;      // 出装竖条
+const ITEMBAR = { width: 110, top: 140, height: 700 };   // 1080 高时的逻辑像素：贴右边、从顶栏下面一点开始（右上角 Dota 的菜单按钮在 0~60）
 const MINIMAP_PAD = 24;  // 小地图野点窗口比小地图四周多出来的（1080 高时的像素）：圈和字靠边时别被切掉
 const MINIMAP_TAG = 110; // 右边再多留这么宽给字（靠右的野点字写在圈左边）
 const TOPBAR_HEIGHT = 410; // 买活 / 大招计时条窗口高（1080 高的屏幕上；Dota 顶栏头像高 40、下面 40~66 是复活倒计时，买活小条在 69~93、
@@ -243,6 +247,32 @@ function createWorld() {
   world.on('closed', () => { clearInterval(timer); world = null; });
 }
 
+// 出装竖条：贴 Dota 那块屏右边，什么都不接；页面按 scale 缩放（Dota 界面按屏幕高度等比缩放）
+function createItembar() {
+  const { bounds } = gameDisplay;
+  const scale = bounds.height / 1080;
+  const w = Math.round(ITEMBAR.width * scale);
+  const win = { x: bounds.x + bounds.width - w, y: bounds.y + Math.round(ITEMBAR.top * scale), width: w, height: Math.round(ITEMBAR.height * scale) };
+  itembar = new BrowserWindow({
+    ...win,
+    transparent: true, frame: false, resizable: false, movable: false, focusable: false,
+    skipTaskbar: true, hasShadow: false, show: false, alwaysOnTop: true,
+    backgroundColor: '#00000000',
+    webPreferences: { backgroundThrottling: false },
+  });
+  log('INFO', `出装竖条：(${win.x},${win.y}) ${win.width}x${win.height}，缩放 ${scale.toFixed(3)}`);
+  watch(itembar, '出装竖条');
+  itembar.setAlwaysOnTop(true, 'screen-saver');
+  itembar.setContentProtection(true);      // 同叠加层：不进截图
+  itembar.setIgnoreMouseEvents(true);
+  itembar.loadURL(`${SERVER}/itembar.html?scale=${scale}`);
+  itembar.once('ready-to-show', () => itembar.showInactive());
+  const timer = setInterval(() => {
+    if (itembar && !itembar.isDestroyed()) itembar.moveTop();
+  }, 3000);
+  itembar.on('closed', () => { clearInterval(timer); itembar = null; });
+}
+
 function applyTopbarMouse() {
   if (!topbar || topbar.isDestroyed()) return;
   const c = screen.getCursorScreenPoint();
@@ -405,6 +435,7 @@ app.whenReady().then(async () => {
   createTopbar();   // 买活 / 大招都关着也开：控制面板能随时打开，关着时页面什么都不画、整条点穿
   createWorld();                // 没有要圈的野点 / 认不出镜头时页面什么都不画
   createMinimap(cfg.minimap);   // 同上；config 的 minimap_marks 默认关
+  createItembar();              // 不在比赛里 / 关了 item_bar 时页面什么都不画
   createPanel();
 });
 
