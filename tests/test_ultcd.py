@@ -1,4 +1,5 @@
 """对面大招冷却：挑哪个大招、按等级取冷却、减冷却（天赋 / 神杖 / 玲珑心）、游戏文件里的写法、点一下开始 / 再点取消、改等级重算。"""
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -152,7 +153,8 @@ class RealKBTest(unittest.TestCase):
         doom_h = self.by_key("doom_bringer")
         labels = [m.label for m in ultcd.mods(doom_h, doom, self.base, {})]
         self.assertIn("20 级天赋：-10秒 末日冷却", labels)                     # 和天赋原文一致
-        self.assertIn("玲珑心：-25% 冷却", labels)
+        # 百分比跟版本走（7.41 是 25%，7.42 改成 20%），只核对有这一条、格式对
+        self.assertTrue(any(re.fullmatch(r"玲珑心：-\d+% 冷却", x) for x in labels), labels)
 
 
 class PrefetchTest(unittest.TestCase):

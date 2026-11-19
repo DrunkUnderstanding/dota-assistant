@@ -39,3 +39,11 @@ Game_LowViolence	dota_lv
 - `tests/test_uncensor.py`：临时目录里的假 Dota 目录，开 / 关来回、Dota 开着不动、Steam 补回后再挪、没有 `dota_lv`、设置窗口开关、Dota 关掉后自动重试成功、测试不碰真实目录。
 - 无头浏览器 `tools/browser_check.py` 全过；真浏览器（Playwright）点设置里的开关 → 保存：假 Dota 目录里 `dota_lv` 变成 `dota_lv_assistant_off`、`config.toml` 写进 `uncensor = true`、状态栏「已反和谐，下次开 Dota 生效」；再点关 → 改回 `dota_lv`。
 - **开发机没装 Dota，没在真游戏里看过效果**：待玩家在装了 Dota 的电脑上开开关、重开 Dota，看血 / 骷髅回来没有，以及游戏开着时会不会等关了再改。
+
+## 81. 比赛分出胜负就算结束（2026-11-19，`game/gsi.py`、`core/gsi_fields.py`）
+
+**问题**：基地爆了以后 GSI 推送可能已经带上 `map.win_team`、`map.game_state` 却还是 `GAME_IN_PROGRESS`，`in_match` 仍为真，出装竖条、野点、计时等局内显示就还挂在屏幕上。
+
+**怎么改**：`GameState` 加 `match_ended`：阶段是 `DOTA_GAMERULES_STATE_POST_GAME`（新常量 `gsi_fields.POST_GAME_STATE`），或 `map.win_team` 是天辉 / 夜魇（字符串 `radiant` / `dire`、数字 2 / 3；空、`none`、中立等都不算分出胜负）就算结束；`in_match` = 阶段在 `MATCH_STATES` 里且没结束。死亡复盘用的推送历史在结束时清空。
+
+**验证**：`tests/test_death.py`（`win_team = "dire"` 后历史清空）、`tests/test_webui.py`（`win_team = "radiant"` 后出装竖条隐藏，改回 `none` 又显示）。**没在真实对局结束时看过**。

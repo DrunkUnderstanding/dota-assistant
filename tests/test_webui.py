@@ -897,6 +897,12 @@ class CoachLiveTest(unittest.TestCase):
         self.live.gsi.state.raw["player"]["gold"] = 2400
         wait(self.live.submit(self.live.publish))
         self.assertTrue(bar()["next"]["ready"])
+        self.live.gsi.state.raw["map"]["win_team"] = "radiant"
+        wait(self.live.submit(self.live.publish))
+        self.assertEqual(bar(), {"show": False})
+        self.live.gsi.state.raw["map"]["win_team"] = "none"
+        wait(self.live.submit(self.live.publish))
+        self.assertTrue(bar()["show"])
         wait(self.live.submit(self.live.action, {"type": "set", "key": "item_bar", "value": False}))
         self.assertEqual(bar(), {"show": False})
         self.assertFalse(config.load(self.live.config_file).item_bar)

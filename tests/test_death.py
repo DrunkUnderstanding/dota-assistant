@@ -105,6 +105,10 @@ class HistoryTest(unittest.TestCase):
         h = st.history()
         self.assertEqual(h[0][0], 99 - 60)
         self.assertEqual(len(h), 61)
+        ended = push(100, 100)
+        ended["map"]["win_team"] = "dire"
+        st.update(ended, now=100)
+        self.assertEqual(st.history(), [])
         st.update({"map": {"game_state": "DOTA_GAMERULES_STATE_POST_GAME"}}, now=100)
         self.assertEqual(st.history(), [])
 

@@ -21,6 +21,8 @@ from ..core.log import HTTPServer
 
 HISTORY_SECONDS = 60         # 对局中留最近多久的推送（死亡复盘往回看 20 秒，多留点余量）
 log = logging.getLogger(__name__)
+NO_WIN_TEAM = {"", "0", "1", "4", "none", "no_team", "unknown",
+               "neutral", "neutrals", "unassigned", "dota_team_noteam", "dota_team_neutrals"}
 
 CFG_NAME = "gamestate_integration_dota_assistant.cfg"
 CFG_TEMPLATE = """"Dota Assistant"
@@ -43,6 +45,16 @@ CFG_TEMPLATE = """"Dota Assistant"
     }}
 }}
 """
+
+
+def _has_winner(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() not in NO_WIN_TEAM
+    if isinstance(value, (int, float)):
+        return int(value) in (2, 3)
+    return bool(value)
 
 
 def cfg_path(dota_dir: Path) -> Path:
@@ -125,7 +137,12 @@ class GameState:
     @property
     def in_match(self) -> bool:
         """出门（号角前）到比赛结束"""
-        return self.game_state in gsi_fields.MATCH_STATES
+        return self.game_state in gsi_fields.MATCH_STATES and not self.match_ended
+
+    @property
+    def match_ended(self) -> bool:
+        return (self.game_state == gsi_fields.POST_GAME_STATE
+                or _has_winner((self.raw.get("map") or {}).get("win_team")))
 
     @property
     def match_id(self) -> str:
