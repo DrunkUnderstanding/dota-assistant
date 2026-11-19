@@ -230,3 +230,5 @@
 | 78 | 局内卡片少字多图：图标 + 几个字，整句悬停看；出装标购买比例，胜率只写验证过的 | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
 | 79 | 对面有某个英雄时出装怎么变：22 万局统计表（购买比例合乎常识，胜率测不出） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 80 | 出装竖条（屏幕右边常驻、钱够亮起）+ 对面阵容的大数据进出装顺序（多买进顺序、少买灰掉） | [domain/NOTES-ingame](../dota_assistant/domain/NOTES-ingame.md) |
+| 81 | 比赛分出胜负（`win_team` / POST_GAME）就算结束，局内显示收起 | [game/NOTES](../dota_assistant/game/NOTES.md) |
+| 82 | 7.42 上线后每 3 小时的英雄胜率监控网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |

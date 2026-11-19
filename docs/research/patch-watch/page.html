@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7.42 英雄胜率走势</title>
+<style>
+:root{color-scheme:light;
+  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;
+  --border:rgba(11,11,11,.10);--wash:rgba(11,11,11,.04);--s1:#2a78d6;--s2:#eb6834;--up:#006300;--down:#d03b3b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--s1:#3987e5;--s2:#d95926;--up:#0ca30c;--down:#e66767}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--s1:#3987e5;--s2:#d95926;--up:#0ca30c;--down:#e66767}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;margin:0}
+.sub{margin:4px 0 0;color:var(--ink2)}
+.err{margin:6px 0 0;color:var(--down);font-weight:600}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;min-width:0}
+.movers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:640px){.movers{grid-template-columns:1fr}}
+.movers h2{font-size:14px;margin:0 0 8px;color:var(--ink2);font-weight:600}
+.mv{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.mv li{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px;align-items:center;cursor:pointer;border-radius:4px}
+.mv li:hover{background:var(--wash)}
+.mv .wr{font-variant-numeric:tabular-nums;color:var(--ink2)}
+.pt{display:inline-block;width:48px;height:27px;border-radius:3px;background-size:cover;background-position:center;background-color:var(--grid);flex:none}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;color:var(--ink2);font:inherit;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+input,select{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 9px}
+input{width:9em}
+.count{color:var(--muted);margin-left:auto}
+table.list{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.list th{font-weight:600;color:var(--muted);font-size:12px;text-align:right;padding:6px 8px;border-bottom:1px solid var(--axis);white-space:nowrap}
+.list th.l,.list td.l{text-align:left}
+.list td{padding:6px 8px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+.list tr.row{cursor:pointer}
+.list tr.row:hover td,.list tr.row:focus-visible td{background:var(--wash)}
+.list tr.row:focus-visible{outline:2px solid var(--s1);outline-offset:-2px}
+.list .no{color:var(--muted);width:2.5em}
+.hero{display:flex;gap:10px;align-items:center}
+.hero span{display:flex;flex-direction:column;line-height:1.25}
+.hero small{color:var(--muted);font-size:12px}
+.list .wr{font-weight:700;font-size:15px}
+.up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--muted)}
+.spark svg{display:block}
+td.detail{background:var(--surface);padding:12px 8px 16px;white-space:normal;text-align:left}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--ink2);font-size:12px;margin:0 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.chart{position:relative}
+.chart svg{display:block;overflow:visible}
+.chart h3{font-size:13px;margin:12px 0 4px;color:var(--ink2);font-weight:600}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:6px 9px;font-size:12px;box-shadow:0 4px 14px rgba(0,0,0,.12);white-space:nowrap;z-index:2}
+.tip .t{color:var(--muted);margin-bottom:2px}
+.tip .r{display:flex;align-items:center;gap:6px}
+.tip b{font-variant-numeric:tabular-nums}
+.tip .k{color:var(--ink2)}
+details.tbl{margin-top:10px}
+details.tbl summary{cursor:pointer;color:var(--ink2);font-size:12px}
+details.tbl table{border-collapse:collapse;margin-top:6px;font-size:12px;font-variant-numeric:tabular-nums}
+details.tbl td,details.tbl th{padding:3px 10px;border-bottom:1px solid var(--grid);text-align:right}
+.method{color:var(--ink2);font-size:13px}
+.method p{margin:0 0 6px}
+@media (max-width:640px){.list .c-dp,.list .c-n,.list .c-rk{display:none}.pt{width:32px;height:18px}.seg button{padding:5px 7px;font-size:13px}.list td,.list th{padding:6px 4px}.hero{gap:6px}.list .wr{font-size:14px}}
+/*PORTRAITS*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>7.42 英雄胜率走势</h1>
+    <p class="sub" id="sub"></p>
+    <p class="err" id="err" hidden></p>
+  </header>
+  <section class="movers" id="movers"></section>
+  <div class="filters">
+    <div class="seg" id="grp" role="group" aria-label="按段位筛选"></div>
+    <div class="seg" id="pos" role="group" aria-label="按位置筛选"></div>
+    <input id="q" type="search" placeholder="搜英雄" aria-label="搜英雄">
+    <select id="sort" aria-label="排序">
+      <option value="est">按估计胜率</option>
+      <option value="d1">这 3 小时涨得多</option>
+      <option value="-d1">这 3 小时跌得多</option>
+      <option value="dp">比上线前涨得多</option>
+      <option value="-dp">比上线前跌得多</option>
+      <option value="n">按局数</option>
+    </select>
+    <span class="count" id="count"></span>
+  </div>
+  <div class="card" id="tcard" style="padding:4px 8px;overflow-x:auto">
+    <table class="list">
+      <thead><tr><th>#</th><th class="c-rk">名次</th><th class="l">英雄</th><th class="l">走势</th><th>估计<span class="c-dp">胜率</span></th><th>较上次</th><th class="c-dp">比上线前</th><th class="c-n">局数</th></tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+  <footer class="method card">
+    <p><b>段位</b>：「传奇以上」= 传奇、万古、超凡、冠绝；「超凡以上」= 超凡、冠绝，样本约是前者的五分之一，误差更大。</p>
+    <p><b>估计胜率</b>：所选段位上线后到这个时间点的累计胜率，用上线前同段位的水平和全分段涨跌做了平滑，样本越多越接近实测。和《7.42 更新日志》里「版本解读」用的是同一个算法。</p>
+    <p><b>走势</b>：每 3 小时一个点。小折线的纵轴每个英雄都是 6 个百分点高（波动大的会更高），虚线是上线前同段位胜率。点开一行看大图：橙色点是那 3 个小时单独的实测胜率，波动大，主要看蓝线。</p>
+    <p><b>较上次</b>：和上一个点（3 小时前）比。<b>比上线前</b>：估计胜率减上线前同段位胜率。<b>局数</b>：上线后所选段位这个英雄出场的局数。位置取上个版本超凡以上占比 ≥20% 的位置。</p>
+    <p>数据来自 STRATZ 的分小时英雄胜率，以北京时间 11 月 19 日 05:00（7.42 上线）为界。上线头几天有新手效应：大改的英雄出场暴涨、胜率偏低，之后会回升。</p>
+  </footer>
+</div>
+<script>
+const D = /*DATA*/null;
+(() => {
+  const T = D.times, L = T.length, last = L - 1, prev = L - 2;
+  const POS = ["", "一", "二", "三", "四", "五"];
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"}[c]));
+  const pct = v => v == null ? "–" : (100 * v).toFixed(1) + "%";
+  const sgn = v => v == null ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(100 * v).toFixed(1);
+  const cls = (v, th = 0.0005) => v == null ? "flat" : v > th ? "up" : v < -th ? "down" : "flat";
+  const bj = t => { const d = new Date((t + 8 * 3600) * 1000), p = n => String(n).padStart(2, "0");
+    return `${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`; };
+  const hm = t => bj(t).slice(6);
+
+  const GN = {lg: "传奇以上", hi: "超凡以上"}, GMIN = {lg: 1000, hi: 300};   // 「变化最大」只看局数够的
+  let st = {pos: 0, sort: "est", q: "", open: [], g: "hi"};
+  try { Object.assign(st, JSON.parse(localStorage.getItem("pw742") || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem("pw742", JSON.stringify(st)); } catch (e) {} };
+  const GS = Object.keys(GN).filter(g => D.heroes[0]?.b?.[g]);
+  if (!GS.includes(st.g)) st.g = GS[0];
+  if (D.error) { $("err").hidden = false; $("err").textContent = D.error + "，下面还是上一次的数据。"; }
+
+  // 按所选段位把 h.b[段位] 摊平成 est / sd / n / ww / wn / pre，算每个点的名次
+  let ranks, H;
+  function build() {
+    const g = st.g, F = D.heroes.map(h => ({...h, ...h.b[g]}));
+    ranks = T.map((_, i) => {
+      const m = new Map();
+      F.filter(h => h.est[i] != null).sort((a, b) => b.est[i] - a.est[i]).forEach((h, k) => m.set(h.id, k + 1));
+      return m;
+    });
+    H = F.filter(h => h.est[last] != null).map(h => ({...h,
+      cur: h.est[last], d1: prev >= 0 && h.est[prev] != null ? h.est[last] - h.est[prev] : null,
+      dp: h.pre == null ? null : h.est[last] - h.pre, rk: ranks[last].get(h.id),
+      rkd: prev >= 0 && ranks[prev].has(h.id) ? ranks[prev].get(h.id) - ranks[last].get(h.id) : null,
+      posTxt: h.pos.length ? h.pos.map(p => POS[p]).join(" / ") + "号位" : ""}));
+    const tot = D.totals[last], hrs = (T[last] - D.cut) / 3600;
+    $("sub").textContent = `数据到北京时间 ${bj(T[last])}，上线后 ${hrs} 小时、${tot.all.toLocaleString()} 局（${GN[g]} ${tot[g].toLocaleString()} 局）。页面生成于 ${bj(D.updated)}，每 3 小时自动更新，开着的页面 20 分钟刷新一次。`;
+    // 变化最大
+    if (prev >= 0) {
+      const ok = H.filter(h => h.d1 != null && h.n[last] >= GMIN[g]);
+      const box = (title, list) => `<div class="card"><h2>${title}</h2><ul class="mv">${list.map(h =>
+        `<li data-id="${h.id}"><i class="pt p${h.id}" aria-hidden="true"></i><span>${esc(h.name)} <small class="flat">第 ${h.rk} 名</small></span><span class="wr">${pct(h.cur)}</span><b class="${cls(h.d1)}">${sgn(h.d1)}</b></li>`).join("")}</ul></div>`;
+      const by = [...ok].sort((a, b) => b.d1 - a.d1);
+      $("movers").innerHTML = box(`${GN[g]}，这 3 小时涨得最多（${hm(T[prev])} → ${hm(T[last])}）`, by.slice(0, 5)) + box("跌得最多", by.slice(-5).reverse());
+    } else $("movers").hidden = true;
+  }
+  $("movers").addEventListener("click", e => { const li = e.target.closest("li"); if (!li) return;
+    const id = +li.dataset.id; st.pos = 0; st.q = ""; if (!st.open.includes(id)) st.open.push(id); save(); sync(); draw();
+    requestAnimationFrame(() => document.querySelector(`tr.row[data-id="${id}"]`)?.scrollIntoView({block: "center", behavior: "smooth"})); });
+
+  $("grp").innerHTML = GS.map(g => `<button type="button" data-g="${g}">${GN[g]}</button>`).join("");
+  $("grp").hidden = GS.length < 2;
+  $("grp").onclick = e => { const b = e.target.closest("button"); if (!b) return; st.g = b.dataset.g; save(); build(); sync(); draw(); };
+
+  $("pos").innerHTML = ["全部", "一号位", "二号位", "三号位", "四号位", "五号位"].map((t, i) => `<button type="button" data-p="${i}">${t}</button>`).join("");
+  const sync = () => { $("pos").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.p === st.pos));
+    $("grp").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.g === st.g));
+    $("sort").value = st.sort; $("q").value = st.q; };
+  $("pos").onclick = e => { const b = e.target.closest("button"); if (!b) return; st.pos = +b.dataset.p; save(); sync(); draw(); };
+  $("sort").onchange = () => { st.sort = $("sort").value; save(); draw(); };
+  $("q").oninput = () => { st.q = $("q").value.trim(); save(); draw(); };
+
+  // 小折线：x 按时间，纵轴固定 6 个百分点高
+  function spark(h, W = matchMedia("(max-width:640px)").matches ? 72 : 120, Hh = 30) {
+    const xs = i => L === 1 ? W / 2 : 3 + (W - 6) * (T[i] - T[0]) / (T[last] - T[0]);
+    const vals = h.est.filter(v => v != null).concat(h.pre != null ? [h.pre] : []);
+    let lo = Math.min(...vals), hi = Math.max(...vals);
+    const span = Math.max(0.06, hi - lo + 0.005), mid = (lo + hi) / 2; lo = mid - span / 2; hi = mid + span / 2;
+    const ys = v => 3 + (Hh - 6) * (hi - v) / (hi - lo);
+    const pts = h.est.map((v, i) => v == null ? null : `${xs(i).toFixed(1)},${ys(v).toFixed(1)}`).filter(Boolean);
+    const pre = h.pre != null ? `<line x1="0" x2="${W}" y1="${ys(h.pre).toFixed(1)}" y2="${ys(h.pre).toFixed(1)}" stroke="var(--muted)" stroke-dasharray="3 3" stroke-width="1"/>` : "";
+    return `<svg width="${W}" height="${Hh}" viewBox="0 0 ${W} ${Hh}" aria-hidden="true">${pre}<polyline points="${pts.join(" ")}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="${xs(last).toFixed(1)}" cy="${ys(h.cur).toFixed(1)}" r="3" fill="var(--s1)" stroke="var(--surface)" stroke-width="1.5"/></svg>`;
+  }
+
+  function niceStep(span, n) { const raw = span / n, p = Math.pow(10, Math.floor(Math.log10(raw)));
+    return [1, 2, 2.5, 5, 10].map(m => m * p).find(s => s >= raw); }
+
+  // 大图：胜率（估计线 + 误差带 + 每 3 小时实测点 + 上线前虚线），下面是每 3 小时出场率
+  function detail(h, host) {
+    const W = Math.max(280, Math.min(host.clientWidth, $("tcard").clientWidth - 16) - 16), M = {l: 44, r: 92, t: 10, b: 24}, CH = 220, PH = 90;
+    const x = i => L === 1 ? M.l + (W - M.l - M.r) / 2 : M.l + (W - M.l - M.r) * (T[i] - T[0]) / (T[last] - T[0]);
+    const vals = [];
+    h.est.forEach((v, i) => { if (v != null) vals.push(v - h.sd[i], v + h.sd[i]); });
+    h.ww.forEach(v => v != null && vals.push(v)); if (h.pre != null) vals.push(h.pre);
+    const st0 = niceStep(Math.max(...vals) - Math.min(...vals) + 0.01, 5);
+    const lo = Math.floor((Math.min(...vals) - 0.003) / st0) * st0, hi = Math.ceil((Math.max(...vals) + 0.003) / st0) * st0;
+    const y = v => M.t + (CH - M.t - M.b) * (hi - v) / (hi - lo);
+    let g = "";
+    for (let v = lo; v <= hi + 1e-9; v += st0) g += `<line x1="${M.l}" x2="${W - M.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${M.l - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${(100 * v).toFixed(st0 < 0.01 ? 1 : 0)}%</text>`;
+    const every = Math.max(1, Math.ceil(L / Math.floor((W - M.l - M.r) / 70)));
+    let xt = "";
+    T.forEach((t, i) => { if ((last - i) % every === 0) xt += `<text x="${x(i)}" y="${CH - 6}" text-anchor="middle" font-size="11" fill="var(--muted)">${i === last || bj(t).slice(0, 5) !== bj(T[Math.max(0, i - every)]).slice(0, 5) || i < every ? bj(t) : hm(t)}</text>`; });
+    const ok = h.est.map((v, i) => v == null ? null : i).filter(i => i != null);
+    const band = ok.map(i => `${x(i)},${y(h.est[i] + h.sd[i])}`).concat(ok.slice().reverse().map(i => `${x(i)},${y(h.est[i] - h.sd[i])}`)).join(" ");
+    const line = ok.map(i => `${x(i)},${y(h.est[i])}`).join(" ");
+    const dots = h.ww.map((v, i) => v == null ? "" : `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>`).join("");
+    const pre = h.pre == null ? "" : `<line x1="${M.l}" x2="${W - M.r}" y1="${y(h.pre)}" y2="${y(h.pre)}" stroke="var(--ink2)" stroke-dasharray="4 4"/><text x="${W - M.r + 8}" y="${y(h.pre) + 4}" font-size="11" fill="var(--ink2)">上线前 ${pct(h.pre)}</text>`;
+    let ly = y(h.cur) + 4; if (h.pre != null && Math.abs(ly - (y(h.pre) + 4)) < 14) ly = y(h.pre) + 4 + (h.cur >= h.pre ? -14 : 14);
+    const cur = `<circle cx="${x(last)}" cy="${y(h.cur)}" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/><text x="${W - M.r + 8}" y="${ly}" font-size="12" font-weight="700" fill="var(--ink)">估计 ${pct(h.cur)}</text>`;
+    const c1 = `<svg width="${W}" height="${CH}" role="img" aria-label="${esc(h.name)}估计胜率走势"><g>${g}</g><line x1="${M.l}" x2="${W - M.r}" y1="${CH - M.b}" y2="${CH - M.b}" stroke="var(--axis)"/>${xt}<polygon points="${band}" fill="var(--s1)" opacity=".14"/>${pre}${dots}<polyline points="${line}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>${cur}<line class="cx" y1="${M.t}" y2="${CH - M.b}" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/><rect class="hit" x="${M.l - 10}" y="0" width="${W - M.l - M.r + 20}" height="${CH}" fill="transparent"/></svg>`;
+    // 出场率
+    const pmax = Math.max(...h.pk, h.prepk) * 1.15 || 0.01;
+    const py = v => 6 + (PH - 6 - 18) * (1 - v / pmax), bw = Math.max(3, Math.min(14, (W - M.l - M.r) / Math.max(L, 1) * 0.6));
+    const bars = h.pk.map((v, i) => { const top = py(v), base = PH - 18, hgt = Math.max(0, base - top), r = Math.min(3, hgt / 2, bw / 2);
+      return `<path d="M${x(i) - bw / 2},${base}V${top + r}q0,-${r} ${r},-${r}h${bw - 2 * r}q${r},0 ${r},${r}V${base}Z" fill="var(--s1)" opacity=".55"/>`; }).join("");
+    const c2 = `<svg width="${W}" height="${PH}" role="img" aria-label="${esc(h.name)}每 3 小时出场率"><text x="${M.l - 6}" y="${py(pmax / 1.15) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${(100 * pmax / 1.15).toFixed(0)}%</text><line x1="${M.l}" x2="${W - M.r}" y1="${PH - 18}" y2="${PH - 18}" stroke="var(--axis)"/>${bars}<line x1="${M.l}" x2="${W - M.r}" y1="${py(h.prepk)}" y2="${py(h.prepk)}" stroke="var(--ink2)" stroke-dasharray="4 4"/><text x="${W - M.r + 8}" y="${py(h.prepk) + 4}" font-size="11" fill="var(--ink2)">上线前 ${pct(h.prepk)}</text><text x="${W - M.r + 14}" y="${PH - 22}" font-size="11" fill="var(--ink)">最近 ${pct(h.pk[last])}</text><line class="cx" y1="0" y2="${PH - 18}" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/><rect class="hit" x="${M.l - 10}" y="0" width="${W - M.l - M.r + 20}" height="${PH}" fill="transparent"/></svg>`;
+    const key = (c, dash) => `<svg width="18" height="8" aria-hidden="true"><line x1="1" x2="17" y1="4" y2="4" stroke="${c}" stroke-width="2" ${dash ? 'stroke-dasharray="4 3"' : ""}/></svg>`;
+    const rows = T.map((t, i) => `<tr><td>${bj(t)}</td><td>${pct(h.est[i])}</td><td>±${h.sd[i] == null ? "–" : (100 * h.sd[i]).toFixed(1)}</td><td>${ranks[i].get(h.id) ?? "–"}</td><td>${pct(h.ww[i])}</td><td>${h.wn[i]}</td><td>${pct(h.pk[i])}</td></tr>`).reverse().join("");
+    host.innerHTML = `<div class="legend"><span>${key("var(--s1)")}估计胜率（浅色带是 ±1 个标准差）</span><span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="var(--s2)"/></svg>那 3 小时单独的实测（${GN[st.g]}）</span><span>${key("var(--ink2)", 1)}上线前</span></div>
+      <div class="chart c1">${c1}</div><div class="chart c2"><h3>每 3 小时出场率（全分段）</h3>${c2}</div>
+      <details class="tbl"><summary>数据表</summary><table><thead><tr><th>北京时间</th><th>估计胜率</th><th>误差</th><th>名次</th><th>3 小时实测</th><th>局数</th><th>出场率</th></tr></thead><tbody>${rows}</tbody></table></details>`;
+    const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; host.style.position = "relative"; host.appendChild(tip);
+    host.querySelectorAll(".chart").forEach(ch => {
+      const svg = ch.querySelector("svg"), hit = svg.querySelector(".hit");
+      const move = e => {
+        const r = svg.getBoundingClientRect(), px = e.clientX - r.left;
+        let i = 0; T.forEach((_, k) => { if (Math.abs(x(k) - px) < Math.abs(x(i) - px)) i = k; });
+        host.querySelectorAll(".cx").forEach(l => { l.setAttribute("x1", x(i)); l.setAttribute("x2", x(i)); l.setAttribute("visibility", "visible"); });
+        tip.innerHTML = `<div class="t">北京时间 ${bj(T[i])}${i > 0 ? `（${hm(T[i - 1])} 起）` : ""}</div>
+          <div class="r">${key("var(--s1)")}<b>${pct(h.est[i])}</b><span class="k">估计 ±${(100 * (h.sd[i] || 0)).toFixed(1)}，第 ${ranks[i].get(h.id) ?? "–"} 名</span></div>
+          <div class="r"><svg width="18" height="8" aria-hidden="true"><circle cx="9" cy="4" r="3.5" fill="var(--s2)"/></svg><b>${pct(h.ww[i])}</b><span class="k">这 3 小时实测，${h.wn[i]} 局</span></div>
+          <div class="r"><svg width="18" height="8" aria-hidden="true"></svg><b>${pct(h.pk[i])}</b><span class="k">出场率</span></div>`;
+        tip.hidden = false;
+        const hr = host.getBoundingClientRect(), left = r.left - hr.left + x(i);
+        tip.style.left = Math.min(Math.max(0, left + 12), hr.width - tip.offsetWidth) + "px";
+        if (left + 12 + tip.offsetWidth > hr.width) tip.style.left = Math.max(0, left - 12 - tip.offsetWidth) + "px";
+        tip.style.top = (r.top - hr.top + 8) + "px";
+      };
+      hit.addEventListener("pointermove", move);
+      hit.addEventListener("pointerleave", () => { tip.hidden = true; host.querySelectorAll(".cx").forEach(l => l.setAttribute("visibility", "hidden")); });
+    });
+  }
+
+  function draw() {
+    const q = st.q.toLowerCase();
+    let list = H.filter(h => (!st.pos || h.pos.includes(st.pos)) && (!q || h.name.toLowerCase().includes(q)));
+    const k = st.sort.replace("-", ""), dir = st.sort.startsWith("-") ? 1 : -1;
+    list.sort((a, b) => k === "est" ? b.cur - a.cur : k === "n" ? b.n[last] - a.n[last] : ((a[k] ?? 0) - (b[k] ?? 0)) * dir);
+    $("count").textContent = `${list.length} 个英雄，点一行看大图`;
+    $("tb").innerHTML = list.map(h => {
+      const open = st.open.includes(h.id);
+      const rk = h.rkd == null ? "" : h.rkd > 0 ? `<span class="up">▲${h.rkd}</span>` : h.rkd < 0 ? `<span class="down">▼${-h.rkd}</span>` : `<span class="flat">–</span>`;
+      return `<tr class="row" data-id="${h.id}" tabindex="0" aria-expanded="${open}"><td class="no">${h.rk}</td><td class="c-rk">${rk}</td>
+        <td class="l"><div class="hero"><i class="pt p${h.id}" aria-hidden="true"></i><span><b>${esc(h.name)}</b><small>${h.posTxt}</small></span></div></td>
+        <td class="l spark">${spark(h)}</td><td class="wr">${pct(h.cur)}</td><td class="${cls(h.d1)}">${sgn(h.d1)}</td>
+        <td class="c-dp ${cls(h.dp, 0.005)}">${sgn(h.dp)}</td><td class="c-n">${h.n[last].toLocaleString()}</td></tr>` +
+        (open ? `<tr><td colspan="8" class="detail" data-d="${h.id}"></td></tr>` : "");
+    }).join("");
+    $("tb").querySelectorAll("td.detail").forEach(td => detail(H.find(h => h.id === +td.dataset.d), td));
+  }
+  const toggle = id => { st.open = st.open.includes(id) ? st.open.filter(x => x !== id) : [...st.open, id]; save(); draw();
+    document.querySelector(`tr.row[data-id="${id}"]`)?.focus({preventScroll: true}); };
+  $("tb").addEventListener("click", e => { const tr = e.target.closest("tr.row"); if (tr) toggle(+tr.dataset.id); });
+  $("tb").addEventListener("keydown", e => { const tr = e.target.closest("tr.row"); if (tr && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(+tr.dataset.id); } });
+  let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 150); });
+  build(); sync(); draw();
+  setTimeout(() => location.reload(), 20 * 60 * 1000);
+})();
+</script>
+</body>
+</html>
