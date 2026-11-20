@@ -128,7 +128,7 @@ def compute(hist, now):
                            "prepk": round(pre["all"].get(str(hid), [0])[0] * 10 / pre_slots, 4), "b": {}}
         for g, group in GROUPS.items():
             n, v = pair(pre, group, str(hid))
-            r["b"][g] = {"est": [], "sd": [], "n": [], "ww": [], "wn": [], "pre": round(v / n, 4) if n else None}
+            r["b"][g] = {"est": [], "sd": [], "n": [], "act": [], "ww": [], "wn": [], "pre": round(v / n, 4) if n else None}
 
     post = {b: {} for b in BRACKETS}
     totals, start = [], CUT
@@ -150,7 +150,9 @@ def compute(hist, now):
                 e, x = estimate(pre, post, s, group), r["b"][g]
                 x["est"].append(round(e[0], 4) if e else None)
                 x["sd"].append(round(e[1], 4) if e else None)
-                x["n"].append(e[2] if e else 0)
+                n, v = pair(post, group, s)        # 上线后累计实测（没平滑）
+                x["n"].append(n)
+                x["act"].append(round(v / n, 4) if n else None)
                 n, v = pair(win, group, s)
                 x["wn"].append(n)
                 x["ww"].append(round(v / n, 4) if n else None)

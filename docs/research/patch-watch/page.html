@@ -49,6 +49,8 @@ table.list{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums
 .hero span{display:flex;flex-direction:column;line-height:1.25}
 .hero small{color:var(--muted);font-size:12px}
 .list .wr{font-weight:700;font-size:15px}
+.list .act{color:var(--s2);font-weight:600}
+.mv .wr small{color:var(--muted);font-size:11px;margin-right:2px}
 .up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--muted)}
 .spark svg{display:block}
 td.detail{background:var(--surface);padding:12px 8px 16px;white-space:normal;text-align:left}
@@ -86,6 +88,7 @@ details.tbl td,details.tbl th{padding:3px 10px;border-bottom:1px solid var(--gri
     <input id="q" type="search" placeholder="搜英雄" aria-label="搜英雄">
     <select id="sort" aria-label="排序">
       <option value="est">按估计胜率</option>
+      <option value="act">按实测胜率</option>
       <option value="d1">这 3 小时涨得多</option>
       <option value="-d1">这 3 小时跌得多</option>
       <option value="dp">比上线前涨得多</option>
@@ -96,15 +99,16 @@ details.tbl td,details.tbl th{padding:3px 10px;border-bottom:1px solid var(--gri
   </div>
   <div class="card" id="tcard" style="padding:4px 8px;overflow-x:auto">
     <table class="list">
-      <thead><tr><th>#</th><th class="c-rk">名次</th><th class="l">英雄</th><th class="l">走势</th><th>估计<span class="c-dp">胜率</span></th><th>较上次</th><th class="c-dp">比上线前</th><th class="c-n">局数</th></tr></thead>
+      <thead><tr><th>#</th><th class="c-rk">名次</th><th class="l">英雄</th><th class="l">走势</th><th title="平滑过的，主要看这个">估计<span class="c-dp">胜率</span></th><th title="上线后累计实际输赢，没平滑">实测<span class="c-dp">胜率</span></th><th>较上次</th><th class="c-dp">比上线前</th><th class="c-n">局数</th></tr></thead>
       <tbody id="tb"></tbody>
     </table>
   </div>
   <footer class="method card">
     <p><b>段位</b>：「传奇以上」= 传奇、万古、超凡、冠绝；「超凡以上」= 超凡、冠绝，样本约是前者的五分之一，误差更大。</p>
-    <p><b>估计胜率</b>：所选段位上线后到这个时间点的累计胜率，用上线前同段位的水平和全分段涨跌做了平滑，样本越多越接近实测。和《7.42 更新日志》里「版本解读」用的是同一个算法。</p>
-    <p><b>走势</b>：每 3 小时一个点。小折线的纵轴每个英雄都是 6 个百分点高（波动大的会更高），虚线是上线前同段位胜率。点开一行看大图：橙色点是那 3 个小时单独的实测胜率，波动大，主要看蓝线。</p>
-    <p><b>较上次</b>：和上一个点（3 小时前）比。<b>比上线前</b>：估计胜率减上线前同段位胜率。<b>局数</b>：上线后所选段位这个英雄出场的局数。位置取上个版本超凡以上占比 ≥20% 的位置。</p>
+    <p><b>实测胜率</b>（橙色）：所选段位上线后到这个时间点，这个英雄实际赢的局数 ÷ 出场局数，没做任何处理。</p>
+    <p><b>估计胜率</b>（蓝色）：在实测胜率上做了平滑——上线头一两天每个英雄只有几百局，实测胜率光抽样就会上下差好几个点，所以先拿上线前同段位的水平加全分段涨跌当起点，再按实测局数往实测靠，局数越多越接近实测。排名、涨跌按估计胜率算。和《7.42 更新日志》里「版本解读」用的是同一个算法。</p>
+    <p><b>走势</b>：每 3 小时一个点。小折线的纵轴每个英雄都是 6 个百分点高（波动大的会更高），虚线是上线前同段位胜率。点开一行看大图：蓝线估计、橙线实测（累计），空心圈是那 3 个小时单独的实测，波动大。</p>
+    <p><b>较上次</b>：和上一个点（3 小时前）比。<b>比上线前</b>：估计胜率减上线前同段位胜率。<b>局数</b>：上线后所选段位这个英雄出场的局数（实测胜率就是这些局算的）。位置取上个版本超凡以上占比 ≥20% 的位置。</p>
     <p>数据来自 STRATZ 的分小时英雄胜率，以北京时间 11 月 19 日 05:00（7.42 上线）为界。上线头几天有新手效应：大改的英雄出场暴涨、胜率偏低，之后会回升。</p>
   </footer>
 </div>
@@ -140,7 +144,7 @@ const D = /*DATA*/null;
       return m;
     });
     H = F.filter(h => h.est[last] != null).map(h => ({...h,
-      cur: h.est[last], d1: prev >= 0 && h.est[prev] != null ? h.est[last] - h.est[prev] : null,
+      cur: h.est[last], acur: h.act[last], d1: prev >= 0 && h.est[prev] != null ? h.est[last] - h.est[prev] : null,
       dp: h.pre == null ? null : h.est[last] - h.pre, rk: ranks[last].get(h.id),
       rkd: prev >= 0 && ranks[prev].has(h.id) ? ranks[prev].get(h.id) - ranks[last].get(h.id) : null,
       posTxt: h.pos.length ? h.pos.map(p => POS[p]).join(" / ") + "号位" : ""}));
@@ -150,7 +154,7 @@ const D = /*DATA*/null;
     if (prev >= 0) {
       const ok = H.filter(h => h.d1 != null && h.n[last] >= GMIN[g]);
       const box = (title, list) => `<div class="card"><h2>${title}</h2><ul class="mv">${list.map(h =>
-        `<li data-id="${h.id}"><i class="pt p${h.id}" aria-hidden="true"></i><span>${esc(h.name)} <small class="flat">第 ${h.rk} 名</small></span><span class="wr">${pct(h.cur)}</span><b class="${cls(h.d1)}">${sgn(h.d1)}</b></li>`).join("")}</ul></div>`;
+        `<li data-id="${h.id}"><i class="pt p${h.id}" aria-hidden="true"></i><span>${esc(h.name)} <small class="flat">第 ${h.rk} 名</small></span><span class="wr"><small>估计</small>${pct(h.cur)} <small>实测</small>${pct(h.acur)}</span><b class="${cls(h.d1)}">${sgn(h.d1)}</b></li>`).join("")}</ul></div>`;
       const by = [...ok].sort((a, b) => b.d1 - a.d1);
       $("movers").innerHTML = box(`${GN[g]}，这 3 小时涨得最多（${hm(T[prev])} → ${hm(T[last])}）`, by.slice(0, 5)) + box("跌得最多", by.slice(-5).reverse());
     } else $("movers").hidden = true;
@@ -192,7 +196,7 @@ const D = /*DATA*/null;
     const x = i => L === 1 ? M.l + (W - M.l - M.r) / 2 : M.l + (W - M.l - M.r) * (T[i] - T[0]) / (T[last] - T[0]);
     const vals = [];
     h.est.forEach((v, i) => { if (v != null) vals.push(v - h.sd[i], v + h.sd[i]); });
-    h.ww.forEach(v => v != null && vals.push(v)); if (h.pre != null) vals.push(h.pre);
+    h.ww.forEach(v => v != null && vals.push(v)); h.act.forEach(v => v != null && vals.push(v)); if (h.pre != null) vals.push(h.pre);
     const st0 = niceStep(Math.max(...vals) - Math.min(...vals) + 0.01, 5);
     const lo = Math.floor((Math.min(...vals) - 0.003) / st0) * st0, hi = Math.ceil((Math.max(...vals) + 0.003) / st0) * st0;
     const y = v => M.t + (CH - M.t - M.b) * (hi - v) / (hi - lo);
@@ -204,11 +208,21 @@ const D = /*DATA*/null;
     const ok = h.est.map((v, i) => v == null ? null : i).filter(i => i != null);
     const band = ok.map(i => `${x(i)},${y(h.est[i] + h.sd[i])}`).concat(ok.slice().reverse().map(i => `${x(i)},${y(h.est[i] - h.sd[i])}`)).join(" ");
     const line = ok.map(i => `${x(i)},${y(h.est[i])}`).join(" ");
-    const dots = h.ww.map((v, i) => v == null ? "" : `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>`).join("");
-    const pre = h.pre == null ? "" : `<line x1="${M.l}" x2="${W - M.r}" y1="${y(h.pre)}" y2="${y(h.pre)}" stroke="var(--ink2)" stroke-dasharray="4 4"/><text x="${W - M.r + 8}" y="${y(h.pre) + 4}" font-size="11" fill="var(--ink2)">上线前 ${pct(h.pre)}</text>`;
-    let ly = y(h.cur) + 4; if (h.pre != null && Math.abs(ly - (y(h.pre) + 4)) < 14) ly = y(h.pre) + 4 + (h.cur >= h.pre ? -14 : 14);
-    const cur = `<circle cx="${x(last)}" cy="${y(h.cur)}" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/><text x="${W - M.r + 8}" y="${ly}" font-size="12" font-weight="700" fill="var(--ink)">估计 ${pct(h.cur)}</text>`;
-    const c1 = `<svg width="${W}" height="${CH}" role="img" aria-label="${esc(h.name)}估计胜率走势"><g>${g}</g><line x1="${M.l}" x2="${W - M.r}" y1="${CH - M.b}" y2="${CH - M.b}" stroke="var(--axis)"/>${xt}<polygon points="${band}" fill="var(--s1)" opacity=".14"/>${pre}${dots}<polyline points="${line}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>${cur}<line class="cx" y1="${M.t}" y2="${CH - M.b}" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/><rect class="hit" x="${M.l - 10}" y="0" width="${W - M.l - M.r + 20}" height="${CH}" fill="transparent"/></svg>`;
+    const dots = h.ww.map((v, i) => v == null ? "" : `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(--surface)" stroke="var(--s2)" stroke-width="1.5" opacity=".8"/>`).join("");
+    const okA = h.act.map((v, i) => v == null ? null : i).filter(i => i != null);
+    const aline = `<polyline points="${okA.map(i => `${x(i)},${y(h.act[i])}`).join(" ")}" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linejoin="round"/>` +
+      (h.act[last] != null ? `<circle cx="${x(last)}" cy="${y(h.act[last])}" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>` : "");
+    const pre = h.pre == null ? "" : `<line x1="${M.l}" x2="${W - M.r}" y1="${y(h.pre)}" y2="${y(h.pre)}" stroke="var(--ink2)" stroke-dasharray="4 4"/>`;
+    const labs = [{v: h.cur, t: `估计 ${pct(h.cur)}`, c: "var(--s1)", w: 700}];
+    if (h.act[last] != null) labs.push({v: h.act[last], t: `实测 ${pct(h.act[last])}`, c: "var(--s2)", w: 700});
+    if (h.pre != null) labs.push({v: h.pre, t: `上线前 ${pct(h.pre)}`, c: "var(--ink2)", w: 400});
+    labs.forEach(a => a.y = y(a.v) + 4); labs.sort((a, b) => a.y - b.y);
+    for (let k = 1; k < labs.length; k++) labs[k].y = Math.max(labs[k].y, labs[k - 1].y + 14);
+    const over = labs[labs.length - 1].y - (CH - M.b);
+    if (over > 0) labs.forEach(a => a.y -= over);
+    const cur = `<circle cx="${x(last)}" cy="${y(h.cur)}" r="4.5" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>` +
+      labs.map(a => `<text x="${W - M.r + 8}" y="${a.y}" font-size="12" font-weight="${a.w}" fill="${a.c}">${a.t}</text>`).join("");
+    const c1 = `<svg width="${W}" height="${CH}" role="img" aria-label="${esc(h.name)}估计胜率走势"><g>${g}</g><line x1="${M.l}" x2="${W - M.r}" y1="${CH - M.b}" y2="${CH - M.b}" stroke="var(--axis)"/>${xt}<polygon points="${band}" fill="var(--s1)" opacity=".14"/>${pre}${dots}${aline}<polyline points="${line}" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linejoin="round"/>${cur}<line class="cx" y1="${M.t}" y2="${CH - M.b}" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/><rect class="hit" x="${M.l - 10}" y="0" width="${W - M.l - M.r + 20}" height="${CH}" fill="transparent"/></svg>`;
     // 出场率
     const pmax = Math.max(...h.pk, h.prepk) * 1.15 || 0.01;
     const py = v => 6 + (PH - 6 - 18) * (1 - v / pmax), bw = Math.max(3, Math.min(14, (W - M.l - M.r) / Math.max(L, 1) * 0.6));
@@ -216,10 +230,10 @@ const D = /*DATA*/null;
       return `<path d="M${x(i) - bw / 2},${base}V${top + r}q0,-${r} ${r},-${r}h${bw - 2 * r}q${r},0 ${r},${r}V${base}Z" fill="var(--s1)" opacity=".55"/>`; }).join("");
     const c2 = `<svg width="${W}" height="${PH}" role="img" aria-label="${esc(h.name)}每 3 小时出场率"><text x="${M.l - 6}" y="${py(pmax / 1.15) + 4}" text-anchor="end" font-size="11" fill="var(--muted)">${(100 * pmax / 1.15).toFixed(0)}%</text><line x1="${M.l}" x2="${W - M.r}" y1="${PH - 18}" y2="${PH - 18}" stroke="var(--axis)"/>${bars}<line x1="${M.l}" x2="${W - M.r}" y1="${py(h.prepk)}" y2="${py(h.prepk)}" stroke="var(--ink2)" stroke-dasharray="4 4"/><text x="${W - M.r + 8}" y="${py(h.prepk) + 4}" font-size="11" fill="var(--ink2)">上线前 ${pct(h.prepk)}</text><text x="${W - M.r + 14}" y="${PH - 22}" font-size="11" fill="var(--ink)">最近 ${pct(h.pk[last])}</text><line class="cx" y1="0" y2="${PH - 18}" stroke="var(--ink2)" stroke-width="1" visibility="hidden"/><rect class="hit" x="${M.l - 10}" y="0" width="${W - M.l - M.r + 20}" height="${PH}" fill="transparent"/></svg>`;
     const key = (c, dash) => `<svg width="18" height="8" aria-hidden="true"><line x1="1" x2="17" y1="4" y2="4" stroke="${c}" stroke-width="2" ${dash ? 'stroke-dasharray="4 3"' : ""}/></svg>`;
-    const rows = T.map((t, i) => `<tr><td>${bj(t)}</td><td>${pct(h.est[i])}</td><td>±${h.sd[i] == null ? "–" : (100 * h.sd[i]).toFixed(1)}</td><td>${ranks[i].get(h.id) ?? "–"}</td><td>${pct(h.ww[i])}</td><td>${h.wn[i]}</td><td>${pct(h.pk[i])}</td></tr>`).reverse().join("");
-    host.innerHTML = `<div class="legend"><span>${key("var(--s1)")}估计胜率（浅色带是 ±1 个标准差）</span><span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="var(--s2)"/></svg>那 3 小时单独的实测（${GN[st.g]}）</span><span>${key("var(--ink2)", 1)}上线前</span></div>
+    const rows = T.map((t, i) => `<tr><td>${bj(t)}</td><td>${pct(h.est[i])}</td><td>±${h.sd[i] == null ? "–" : (100 * h.sd[i]).toFixed(1)}</td><td>${ranks[i].get(h.id) ?? "–"}</td><td>${pct(h.act[i])}</td><td>${h.n[i]}</td><td>${pct(h.ww[i])}</td><td>${h.wn[i]}</td><td>${pct(h.pk[i])}</td></tr>`).reverse().join("");
+    host.innerHTML = `<div class="legend"><span>${key("var(--s1)")}估计胜率（浅色带是 ±1 个标准差）</span><span>${key("var(--s2)")}实测胜率（上线后累计，${GN[st.g]}）</span><span><svg width="10" height="10" aria-hidden="true"><circle cx="5" cy="5" r="3" fill="none" stroke="var(--s2)" stroke-width="1.5"/></svg>那 3 小时单独的实测</span><span>${key("var(--ink2)", 1)}上线前</span></div>
       <div class="chart c1">${c1}</div><div class="chart c2"><h3>每 3 小时出场率（全分段）</h3>${c2}</div>
-      <details class="tbl"><summary>数据表</summary><table><thead><tr><th>北京时间</th><th>估计胜率</th><th>误差</th><th>名次</th><th>3 小时实测</th><th>局数</th><th>出场率</th></tr></thead><tbody>${rows}</tbody></table></details>`;
+      <details class="tbl"><summary>数据表</summary><table><thead><tr><th>北京时间</th><th>估计胜率</th><th>误差</th><th>名次</th><th>累计实测</th><th>累计局数</th><th>3 小时实测</th><th>局数</th><th>出场率</th></tr></thead><tbody>${rows}</tbody></table></details>`;
     const tip = document.createElement("div"); tip.className = "tip"; tip.hidden = true; host.style.position = "relative"; host.appendChild(tip);
     host.querySelectorAll(".chart").forEach(ch => {
       const svg = ch.querySelector("svg"), hit = svg.querySelector(".hit");
@@ -229,7 +243,8 @@ const D = /*DATA*/null;
         host.querySelectorAll(".cx").forEach(l => { l.setAttribute("x1", x(i)); l.setAttribute("x2", x(i)); l.setAttribute("visibility", "visible"); });
         tip.innerHTML = `<div class="t">北京时间 ${bj(T[i])}${i > 0 ? `（${hm(T[i - 1])} 起）` : ""}</div>
           <div class="r">${key("var(--s1)")}<b>${pct(h.est[i])}</b><span class="k">估计 ±${(100 * (h.sd[i] || 0)).toFixed(1)}，第 ${ranks[i].get(h.id) ?? "–"} 名</span></div>
-          <div class="r"><svg width="18" height="8" aria-hidden="true"><circle cx="9" cy="4" r="3.5" fill="var(--s2)"/></svg><b>${pct(h.ww[i])}</b><span class="k">这 3 小时实测，${h.wn[i]} 局</span></div>
+          <div class="r">${key("var(--s2)")}<b>${pct(h.act[i])}</b><span class="k">实测（上线后累计），${h.n[i]} 局</span></div>
+          <div class="r"><svg width="18" height="8" aria-hidden="true"><circle cx="9" cy="4" r="3" fill="none" stroke="var(--s2)" stroke-width="1.5"/></svg><b>${pct(h.ww[i])}</b><span class="k">这 3 小时单独实测，${h.wn[i]} 局</span></div>
           <div class="r"><svg width="18" height="8" aria-hidden="true"></svg><b>${pct(h.pk[i])}</b><span class="k">出场率</span></div>`;
         tip.hidden = false;
         const hr = host.getBoundingClientRect(), left = r.left - hr.left + x(i);
@@ -246,16 +261,16 @@ const D = /*DATA*/null;
     const q = st.q.toLowerCase();
     let list = H.filter(h => (!st.pos || h.pos.includes(st.pos)) && (!q || h.name.toLowerCase().includes(q)));
     const k = st.sort.replace("-", ""), dir = st.sort.startsWith("-") ? 1 : -1;
-    list.sort((a, b) => k === "est" ? b.cur - a.cur : k === "n" ? b.n[last] - a.n[last] : ((a[k] ?? 0) - (b[k] ?? 0)) * dir);
+    list.sort((a, b) => k === "est" ? b.cur - a.cur : k === "act" ? (b.acur ?? 0) - (a.acur ?? 0) : k === "n" ? b.n[last] - a.n[last] : ((a[k] ?? 0) - (b[k] ?? 0)) * dir);
     $("count").textContent = `${list.length} 个英雄，点一行看大图`;
     $("tb").innerHTML = list.map(h => {
       const open = st.open.includes(h.id);
       const rk = h.rkd == null ? "" : h.rkd > 0 ? `<span class="up">▲${h.rkd}</span>` : h.rkd < 0 ? `<span class="down">▼${-h.rkd}</span>` : `<span class="flat">–</span>`;
       return `<tr class="row" data-id="${h.id}" tabindex="0" aria-expanded="${open}"><td class="no">${h.rk}</td><td class="c-rk">${rk}</td>
         <td class="l"><div class="hero"><i class="pt p${h.id}" aria-hidden="true"></i><span><b>${esc(h.name)}</b><small>${h.posTxt}</small></span></div></td>
-        <td class="l spark">${spark(h)}</td><td class="wr">${pct(h.cur)}</td><td class="${cls(h.d1)}">${sgn(h.d1)}</td>
+        <td class="l spark">${spark(h)}</td><td class="wr">${pct(h.cur)}</td><td class="act">${pct(h.acur)}</td><td class="${cls(h.d1)}">${sgn(h.d1)}</td>
         <td class="c-dp ${cls(h.dp, 0.005)}">${sgn(h.dp)}</td><td class="c-n">${h.n[last].toLocaleString()}</td></tr>` +
-        (open ? `<tr><td colspan="8" class="detail" data-d="${h.id}"></td></tr>` : "");
+        (open ? `<tr><td colspan="9" class="detail" data-d="${h.id}"></td></tr>` : "");
     }).join("");
     $("tb").querySelectorAll("td.detail").forEach(td => detail(H.find(h => h.id === +td.dataset.d), td));
   }
