@@ -128,13 +128,17 @@ def fetch_item_icons(log=http._say) -> None:
     todo = [(ITEM_ICON_DIR / f"{k}.png", v["img"].split("?")[0]) for k, v in items_const().items()
             if v.get("img") and not k.startswith("recipe_") and not (ITEM_ICON_DIR / f"{k}.png").exists()]
 
-    def get(job: tuple[Path, str]) -> None:
+    def get(job: tuple[Path, str]) -> str | None:
         r = http._session.get(CDN + job[1], timeout=60)
+        if r.status_code == 404:          # 新版本刚出的装备 CDN 上可能还没图（7.42 的 stone_of_recall），跳过，下次 update 再试
+            return job[0].stem
         r.raise_for_status()
         job[0].write_bytes(r.content)
+        return None
     with ThreadPoolExecutor(8) as pool:
-        list(pool.map(get, todo))
-    log(f"  装备图标：新下载 {len(todo)} 张，共 {len(list(ITEM_ICON_DIR.glob('*.png')))} 张")
+        missing = [k for k in pool.map(get, todo) if k]
+    log(f"  装备图标：新下载 {len(todo) - len(missing)} 张，共 {len(list(ITEM_ICON_DIR.glob('*.png')))} 张"
+        + (f"（CDN 上还没有：{'、'.join(missing)}）" if missing else ""))
 
 
 def load_heroes() -> HeroDB:

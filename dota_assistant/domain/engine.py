@@ -245,6 +245,7 @@ class Engine:
         self.db = db
         self.positions = positions
         self.matches = stats["matches"]
+        self.patch = stats.get("patch") if stats.get("since") else None   # 有值 = 新版本上线不到 days 天，只统计了上线以后的局
         self._vs = {(a, b): (g, w) for a, b, g, w in stats["vs"]}
         self._syn = {(a, b): (g, w) for a, b, g, w in stats["syn"]}
 

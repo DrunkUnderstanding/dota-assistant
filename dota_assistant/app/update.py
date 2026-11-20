@@ -95,9 +95,13 @@ def update(cfg: Config, log=http._say) -> None:
     from .. import kb
     kb.update([h["id"] for h in heroes], log)
     fetch_icons(log)                       # 要知识库挑大招，放在它后面
+    # 玩家 2026-11-19 定：版本更新以后的胜率只用更新以后的数据（克制 / 配合、分位置、对线都按上线时间切）
+    patch = stats_mod.patch_start(log)
+    if patch:
+        log(f"当前版本 {patch[0]}，{time.strftime('%Y-%m-%d %H:%M', time.localtime(patch[1]))} 上线")
     if cfg.stratz_token:
         log("拉取英雄分位置数据（STRATZ）…")
-        pos = stats_mod.fetch_positions(cfg)
+        pos = stats_mod.fetch_positions(cfg, patch, log)
         if pos["heroes"]:
             stats_mod.positions_path(cfg).write_text(json.dumps(pos), encoding="utf-8")
             log(f"  {len(pos['heroes'])} 个英雄")
@@ -105,11 +109,14 @@ def update(cfg: Config, log=http._say) -> None:
             log("  STRATZ 返回了空数据，保留原来的分位置数据")
         log("拉取对线胜负（STRATZ，选人卡片上的「对线」）…")
         try:
-            lanes = stats_mod.fetch_lanes(cfg, [h["id"] for h in heroes], log)
+            lanes = stats_mod.fetch_lanes(cfg, [h["id"] for h in heroes], log, patch)
         except http.NETWORK_ERRORS as e:          # 对线只是附加显示，没拉到不影响推荐
             log(f"  没拉到（{e}），{'沿用上次的' if stats_mod.lanes_path(cfg).exists() else '选人卡片先不显示对线'}")
         else:
-            if any(lanes["positions"].values()):
+            if lanes is None:                     # 版本是这周中间上的，STRATZ 对线只能按周取，没有全是新版本的那一周
+                log(f"  {patch[0]} 是这周中间上的，对线数据要等下周四（UTC）才有全是新版本的，选人卡片先不显示对线")
+                stats_mod.lanes_path(cfg).unlink(missing_ok=True)   # 旧版本的不留着凑
+            elif any(lanes["positions"].values()):
                 stats_mod.lanes_path(cfg).write_text(json.dumps(lanes), encoding="utf-8")
             else:
                 log("  STRATZ 返回了空数据，保留原来的对线数据")
@@ -124,6 +131,6 @@ def update(cfg: Config, log=http._say) -> None:
             log(f"  {len(pos['heroes'])} 个英雄")
     player.update_player(cfg, log)
     log(f"拉取最近 {cfg.days} 天天梯对局的克制 / 配合数据 …")
-    stats = stats_mod.fetch_stats(cfg, log)
+    stats = stats_mod.fetch_stats(cfg, log, patch)
     stats_mod.stats_path(cfg).write_text(json.dumps(stats), encoding="utf-8")
     log(f"完成：{stats['matches']} 局 → {stats_mod.stats_path(cfg).name}")

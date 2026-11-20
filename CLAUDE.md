@@ -15,6 +15,9 @@ Dota 2 选人助手（自用）。**接手先读 [docs/HANDOFF.md](docs/HANDOFF.
 - 改完跑 `python -m unittest`；动了推荐逻辑，再用 `python -m dota_assistant suggest ...` 看几组结果是否符合常识。
 - 其余门禁（2026-10-28 工程化重构加的，改完一起跑）：编译也带上 `tools`（`python -X utf8 -m compileall -q dota_assistant tests packaging tools`）；`ruff check dota_assistant tests tools packaging`（没装先 `pip install ruff`；只查未使用 import / 未定义名字 / 语法类，**不要跑 `ruff format`、不要大面积 `--fix`**）；`python tools/golden/run.py check`（行为快照逐字节比对，约 25 秒；行为本来就该变时先看 diff 确认差异都是该有的，再 `update-snapshot`，用法见 `tools/golden/README.md`）；`python tools/check_isolation.py`（单测不碰 `data/` `shots/` `logs/` 等真实目录）。`tests/test_smoke.py`、`test_moves.py`、`test_layers.py`、`test_patch_targets.py` 含在 unittest 里。
 
+### 数据
+- **版本更新以后的胜率只用更新以后的数据**（玩家 2026-11-19 定）：克制 / 配合、分位置、对线、研究里的胜率都按当前版本上线时间切，不拿旧版本的局凑；上线时间怎么取、STRATZ 按周怎么挑见 `sources/NOTES.md` 第 83 节。
+
 ### 安全与隐私
 - 安全底线：只读屏幕截图 + Valve 官方 GSI；不读游戏内存、不注入、不模拟键鼠、不显示玩家本来看不到的信息。唯一改游戏文件的例外是玩家自己打开的反和谐开关：只把低暴力资源 `game\dota_lv` 改名挪开（不删、不改内容，见 `game/NOTES.md` 第 64 节）。
 - `config.toml` 里有个人 STRATZ token，不进 git、不要贴到任何外部服务。

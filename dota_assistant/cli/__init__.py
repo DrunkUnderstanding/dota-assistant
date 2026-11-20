@@ -72,7 +72,8 @@ def cmd_suggest(cfg: config.Config, args) -> int:
     bracket = (f"{player.MEDALS[cfg.rank_min]}~{player.MEDALS[cfg.rank_max]}"
                if cfg.rank_min and cfg.rank_max else "全段位")
     who = f" | {a.me['name']}（{player.rank_name(a.me['rank_tier'])}）" if a.me else ""
-    print(f"数据：最近 {cfg.days} 天 {a.engine.matches} 局天梯（{bracket}）{who}")
+    window = f"{a.engine.patch} 上线以来" if a.engine.patch else f"最近 {cfg.days} 天"
+    print(f"数据：{window} {a.engine.matches} 局天梯（{bracket}）{who}")
     for kind, text in adv.render_lines(a.advise(adv.Draft(allies, enemies, bans, me), pos), args.side):
         if kind == "title":
             continue

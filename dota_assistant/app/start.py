@@ -4,7 +4,7 @@
   1. 没有 config.toml → 从 config.example.toml 生成；好友代码、token、AI 来源在控制面板「设置」里填（第一次会自动弹出）
   2. 没装 Electron 界面 → 有 Node.js 就自动 npm install；没有就提示去装（打包版自带，不用装）
   3. 找到 Dota 安装目录 → 自动写 GSI 配置（第一次会提醒加启动项 -gamestateintegration）
-  4. 数据过期 → 自动更新（全量 3 天一次，个人数据半天一次）
+  4. 数据过期 → 自动更新（全量 3 天一次；出了新版本马上更新，上线头 days 天一天一次；个人数据半天一次）
   5. 启动助手
 """
 from __future__ import annotations
@@ -23,6 +23,7 @@ from ..sources import assets, player
 from ..sources import stats as stats_mod
 
 FULL_UPDATE_DAYS = 3
+PATCH_EARLY_UPDATE_HOURS = 24   # 新版本上线不满 days 天：数据只有上线以后的局，一天一更
 PLAYER_UPDATE_HOURS = 12
 FIRST_RUN_MARK = DATA_DIR / ".gsi_hint_shown"
 log = logging.getLogger(__name__)
@@ -106,11 +107,32 @@ def _age_hours(p: Path) -> float:
     return (time.time() - p.stat().st_mtime) / 3600 if p.exists() else float("inf")
 
 
+def full_update_reason(cfg: config.Config, patch_start=stats_mod.patch_start) -> str | None:
+    """要不要全量更新、为什么（None = 不用）。玩家 2026-11-19 定推荐只用当前版本的数据：
+    除了 3 天一次，克制数据是新版本上线前拉的就马上更新；上线不满 days 天（只统计了上线以后的局，局数涨得快）一天一更"""
+    stats = stats_mod.stats_path(cfg)
+    if not stats.exists() or not stats.with_name("heroes.json").exists():    # 都在 data/ 下
+        return "第一次用，下载数据"
+    if _age_hours(stats) > FULL_UPDATE_DAYS * 24:
+        return "数据 3 天一更"
+    try:
+        s = json.loads(stats.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return "克制数据文件读不了，重新下载"
+    if s.get("since") and _age_hours(stats) > PATCH_EARLY_UPDATE_HOURS:
+        return f"{s.get('patch')} 刚上线，数据一天一更"
+    patch = patch_start(log=lambda m: log.info(m.strip()))   # 联网问一下当前版本，拉不到就不按版本判断
+    if patch and s.get("fetched_at", stats.stat().st_mtime) < patch[1]:
+        return f"{patch[0]} 上线了，换成新版本的数据"
+    return None
+
+
 def ensure_data(cfg: config.Config) -> None:
     stats = stats_mod.stats_path(cfg)
     try:
-        if _age_hours(stats) > FULL_UPDATE_DAYS * 24 or not (DATA_DIR / "heroes.json").exists():
-            _say("更新数据（3 天一次，约 5 分钟）…")
+        reason = full_update_reason(cfg)
+        if reason:
+            _say(f"更新数据（{reason}，约 5 分钟）…")
             update.update(cfg)
         elif ((cfg.account_id and _age_hours(player.PLAYER_FILE) > PLAYER_UPDATE_HOURS)
               or player.needs_update(cfg)):

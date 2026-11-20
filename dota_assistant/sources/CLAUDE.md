@@ -31,6 +31,7 @@
 
 ## 对应测试
 
+- `tests/test_patch_cut.py`：按版本上线时间切数据（假接口）。
 - `tests/test_nokey.py`：没 STRATZ token 时用 OpenDota 凑分位置数据（patch `sources.stats.DATA_DIR`，见 `test_patch_targets.IMPORTED_OK`）。
 - `tests/test_familiar.py`：生涯局数 / 双排队友（patch `sources.http`、`sources.player`）。
 - `tests/test_mates.py`、`tests/test_lanestate.py`：假接口替换 `http`。
@@ -43,6 +44,7 @@
 - STRATZ 请求要带 `Authorization: Bearer <token>` 和 `User-Agent: STRATZ_API`，不带 UA 会被拒（HANDOFF 第 9 节「常用命令」末尾）；行为快照会核对这两个请求头没丢（`tools/golden/README.md`「请求头核对」）。
 - STRATZ 个人对局接口会整体超时，`fetch_player` 自动退回 OpenDota（这次不带位置）；OpenDota 免费额度约每分钟 60 次，429 自动退避（HANDOFF 第 8 节）。
 - 没 token 也要能用：分位置改用 OpenDota 分路凑（HANDOFF 第 35 节）。
+- **版本更新以后的胜率只用更新以后的数据**（玩家 2026-11-19 定）：`patch_start` 取上线时间，`fetch_stats` 按 `start_time` 切，分位置 / 对线用 `stratz_week` 挑全是新版本的那一周，这周中间上的分位置按天 + 按小时凑、对线先不给（第 83 节，`tests/test_patch_cut.py`）。
 - token 不能出现在日志 / 报错里。
 
 ## 设计记录（原「相关 HANDOFF 节」）
