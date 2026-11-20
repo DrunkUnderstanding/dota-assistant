@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7.42 强势英雄出装</title>
+<style>
+:root{color-scheme:light;
+  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;
+  --border:rgba(11,11,11,.10);--wash:rgba(11,11,11,.04);--accent:#2a78d6;--bar:#2a78d6;--up:#006300;--down:#d03b3b;--gold:#a87700}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--accent:#3987e5;--bar:#3987e5;--up:#0ca30c;--down:#e66767;--gold:#e0b341}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--accent:#3987e5;--bar:#3987e5;--up:#0ca30c;--down:#e66767;--gold:#e0b341}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;margin:0}
+.sub{margin:4px 0 0;color:var(--ink2)}
+.how{margin:8px 0 0;padding-left:18px;color:var(--ink2)}
+.how li{margin:2px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;min-width:0}
+.index{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px}
+.index a{display:flex;gap:8px;align-items:center;color:inherit;text-decoration:none;padding:4px;border-radius:6px}
+.index a:hover{background:var(--wash)}
+.index .rk{color:var(--muted);font-variant-numeric:tabular-nums;width:1.6em;text-align:right;flex:none}
+.index .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.index .wr{font-variant-numeric:tabular-nums;color:var(--ink2)}
+.pt{display:inline-block;width:48px;height:27px;border-radius:3px;background-size:cover;background-position:center;background-color:var(--grid);flex:none}
+.pt.big{width:96px;height:54px;border-radius:5px}
+.hero{scroll-margin-top:12px}
+.hh{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.hh h2{margin:0;font-size:18px}
+.hh .rank{color:var(--muted);font-weight:600;margin-right:4px}
+.hh .meta{color:var(--ink2);font-variant-numeric:tabular-nums}
+.hh .meta b{color:var(--ink)}
+.up{color:var(--up)}.down{color:var(--down)}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--surface);margin-top:10px}
+.seg button{border:0;background:none;color:var(--ink2);font:inherit;padding:5px 11px;cursor:pointer;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+.seg button .n{opacity:.7;font-size:12px;margin-left:4px}
+.rows{display:grid;grid-template-columns:76px minmax(0,1fr);gap:10px 12px;margin-top:12px;align-items:start}
+.lab{color:var(--muted);font-size:13px;padding-top:6px}
+.line{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-width:0}
+.it{display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border:1px solid var(--border);border-radius:6px;background:var(--page);min-width:0}
+.ic{display:inline-block;width:33px;height:24px;border-radius:3px;background-size:cover;background-position:center;background-color:var(--grid);flex:none;position:relative}
+.ic .x{position:absolute;right:-4px;bottom:-5px;font-size:11px;font-weight:700;background:var(--ink);color:var(--surface);border-radius:3px;padding:0 3px;line-height:14px}
+.it .t{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+.it .t .a{font-size:13px;white-space:nowrap}
+.it .t .b{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.share{display:inline-block;height:3px;border-radius:2px;background:var(--bar);vertical-align:middle;margin-left:4px}
+.arrow{color:var(--muted)}
+.it.mid{border-style:dashed;opacity:.85}
+.startset{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.startset .ics{display:flex;gap:6px;flex-wrap:wrap;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--page)}
+.startset .pc{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.nth{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.nth .col{display:flex;flex-direction:column;gap:4px;min-width:0}
+.nth .h{font-size:12px;color:var(--muted)}
+.empty{color:var(--muted)}
+.foot{color:var(--ink2);font-size:13px}
+.paths{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+.paths .base{font-size:12px;color:var(--muted)}
+.path{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--page)}
+.path.best{border-color:var(--up);box-shadow:inset 3px 0 0 var(--up)}
+.path .chain{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0}
+.path .chain .nm{font-size:13px;margin-right:2px}
+.path .num{display:flex;gap:12px;align-items:baseline;font-variant-numeric:tabular-nums;white-space:nowrap}
+.path .wr{font-size:16px;font-weight:700}
+.path .ci{font-size:12px;color:var(--muted)}
+.path .who{grid-column:1 / -1;font-size:12px;color:var(--ink2)}
+.tag{font-size:11px;font-weight:600;color:var(--up);border:1px solid var(--up);border-radius:3px;padding:0 4px;margin-left:6px}
+.adj{font-weight:600}.adj.pos{color:var(--up)}.adj.neg{color:var(--down)}.adj.flat{color:var(--muted);font-weight:400}
+.foot p{margin:4px 0}
+@media (max-width:640px){
+  .path{grid-template-columns:1fr}
+  .path .num{flex-wrap:wrap}
+  .rows{grid-template-columns:1fr;gap:4px}
+  .lab{padding-top:8px}
+  .nth{grid-template-columns:1fr}
+  .pt.big{width:64px;height:36px}
+}
+/*ICONS*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="ttl">7.42 胜率前 30 英雄 · 出装路线和胜率</h1>
+    <p class="sub" id="sub"></p>
+    <ul class="how">
+      <li><b>胜率排名</b>：超凡以上的估计胜率（上线前胜率作先验，用上线后实测更新，和「英雄胜率走势」页同一个算法）。</li>
+      <li><b>出装</b>：7.42 上线后超凡～冠绝天梯对局里，这个英雄在这个位置的人<b>实际怎么出</b>：百分比 = 买了这件的人占比，「分」= 买这件的中位时间。</li>
+      <li><b>路线胜率</b>：路线 = 按购买顺序的前两件大件（大多数人前两件都一样的英雄，按前三件分），只在做完这几件的人里比。<b>胜率</b> = 走这条路线的人赢的比例（± 是 95% 误差范围）；做完大件的人多半在领先、本来就赢得多，所以同时看<b>同局势</b>：拿做完那一分钟两队经济差一样的局比，再和这个英雄别的出法比，高几个点 / 低几个点——这一列扣掉了「领先的人本来就赢」和英雄本身强弱，更接近路线本身的好坏。绿色 / 红色 = 差别超出误差范围，灰色 = 还分不出来。</li>
+      <li><b>核心路线</b>按中位购买时间排，只列 ≥30% 的人都买的鞋和大件（≥1800 金）；虚线框是之后会合进下一件的过渡件。前三件大件 = 每个人买的第 1 / 2 / 3 件大件（不算鞋）各是什么。</li>
+    </ul>
+  </header>
+  <nav class="card index" id="index"></nav>
+  <main id="heroes" style="display:flex;flex-direction:column;gap:16px"></main>
+  <footer class="card foot" id="foot"></footer>
+</div>
+<script>
+const DATA = /*DATA*/null;
+const N = DATA.names, POS = {1: "1号位", 2: "2号位", 3: "3号位", 4: "4号位", 5: "5号位"};
+const pct = v => Math.round(v * 100) + "%";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const ic = (k, x) => `<span class="ic i-${esc(k)}">${x && x > 1 ? `<span class="x">${x}</span>` : ""}</span>`;
+function item(k, sub, share, cls) {
+  const bar = share != null ? `<span class="share" style="width:${Math.max(2, Math.round(share * 40))}px"></span>` : "";
+  return `<span class="it ${cls || ""}">${ic(k)}<span class="t"><span class="a">${esc(N[k] || k)}</span><span class="b">${sub}${bar}</span></span></span>`;
+}
+const fmtTime = s => new Date(s * 1000).toLocaleString("zh-CN", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
+
+document.getElementById("ttl").textContent = `7.42 胜率前 ${DATA.heroes.length} 英雄 · 出装路线和胜率`;
+document.getElementById("sub").textContent =
+  `7.42 上线（${fmtTime(DATA.cut)}）后的超凡～冠绝天梯全英雄选择 ${DATA.matches.toLocaleString()} 局；胜率截至 ${fmtTime(DATA.asof)}，出装整理于 ${fmtTime(DATA.made)}。`;
+
+document.getElementById("index").innerHTML = DATA.heroes.map(h =>
+  `<a href="#h${h.id}"><span class="rk">${h.rank}</span><span class="pt p-${h.id}"></span><span class="nm">${esc(h.name)}</span><span class="wr">${(h.est * 100).toFixed(1)}%</span></a>`).join("");
+
+const wr1 = v => v == null ? "—" : (v * 100).toFixed(1) + "%";
+function adj(x) {
+  const v = x.adj * 100, sig = Math.abs(x.adj) >= x.ci;
+  const cls = !sig ? "flat" : v > 0 ? "pos" : "neg";
+  return `<span class="adj ${cls}" title="同局势比">${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}</span>`;
+}
+function pathsHtml(b) {
+  if (!b.paths.length) return `<span class="empty">${b.path_base ? `出法太分散，没有哪条路线有 40 人以上走（做完前 ${b.depth} 件大件的 ${b.path_base.n} 人，平均胜率 ${wr1(b.path_base.win)}）` : "做完两件大件的人太少，算不了"}</span>`;
+  const best = b.paths.filter(x => x.adj >= x.ci).sort((a, c) => c.adj - a.adj)[0];
+  const rows = b.paths.map(x => {
+    const chain = x.k.map(k => `${ic(k)}<span class="nm">${esc(N[k] || k)}</span>`).join('<span class="arrow">→</span>');
+    return `<div class="path${x === best ? " best" : ""}"><div class="chain">${chain}${x === best ? '<span class="tag">同局势最高</span>' : ""}</div>
+      <div class="num"><span><span class="wr">${wr1(x.win)}</span> <span class="ci">±${(x.ci * 100).toFixed(0)}</span></span><span>同局势 ${adj(x)}</span></div>
+      <div class="who">${x.n} 人走这条（做完的人里 ${pct(x.of)}）· 中位 ${x.min.toFixed(0)} 分做完</div></div>`;
+  }).join("");
+  return `<div class="paths"><span class="base">做完前 ${b.depth} 件大件的 ${b.path_base.n} 人，平均胜率 ${wr1(b.path_base.win)}；按走的人数排</span>${rows}</div>`;
+}
+function buildHtml(b) {
+  const rows = [];
+  const starts = b.start.map(s => `<span class="startset"><span class="ics">${s.items.map(([k, c]) => `<span title="${esc(N[k] || k)}">${ic(k, c)}</span>`).join("")}</span><span class="pc">${pct(s.share)} 的人这么出门</span></span>`).join("");
+  rows.push(["出门装", starts || '<span class="empty">没有统计到</span>']);
+  rows.push(["对线期", b.early.length ? b.early.map(v => item(v.k, `${v.min.toFixed(0)}分 · ${pct(v.share)}`, v.share)).join("") : '<span class="empty">没有多数人都买的小件</span>']);
+  rows.push(["鞋", b.boots.length ? b.boots.filter(x => x.share >= 0.05).map(x => item(x.k, `${pct(x.share)} · 胜 ${wr1(x.win)} ${adj(x)}`, x.share)).join("") : '<span class="empty">—</span>']);
+  const route = b.route.map(v => item(v.k, `${v.min.toFixed(0)}分 · ${pct(v.share)}${v.into ? ` · 后合成${esc(N[v.into] || v.into)}` : ""}`, v.share, v.into ? "mid" : "")).join('<span class="arrow">→</span>');
+  rows.push(["核心路线", route || '<span class="empty">没有 30% 以上的人都买的大件</span>']);
+  rows.push(["路线胜率", pathsHtml(b)]);
+  const nth = b.nth.map((col, i) => {
+    const xs = col.items.filter(x => x.share >= 0.03);
+    const base = col.base ? `<span class="h">第 ${i + 1} 件大件 · 平均胜 ${wr1(col.base.win)}</span>` : `<span class="h">第 ${i + 1} 件大件</span>`;
+    return `<div class="col">${base}${xs.length ? xs.map(x => item(x.k, `${pct(x.share)} · 胜 ${wr1(x.win)} ${adj(x)}`, x.share)).join("") : '<span class="empty">—</span>'}</div>`;
+  }).join("");
+  rows.push(["前三件大件", `<div class="nth">${nth}</div>`]);
+  rows.push(["看情况", b.situ.length ? b.situ.map(v => item(v.k, `${v.min.toFixed(0)}分 · ${pct(v.share)}`, v.share)).join("") : '<span class="empty">—</span>']);
+  return `<div class="rows">${rows.map(([l, c]) => `<div class="lab">${l}</div><div class="line">${c}</div>`).join("")}</div>`;
+}
+
+const main = document.getElementById("heroes");
+main.innerHTML = DATA.heroes.map(h => {
+  const d = h.pre != null ? h.est - h.pre : null;
+  const delta = d == null ? "" : ` <span class="${d >= 0 ? "up" : "down"}">${d >= 0 ? "+" : "−"}${Math.abs(d * 100).toFixed(1)}</span>`;
+  const tabs = h.builds.length > 1 ? `<div class="seg" role="group">${h.builds.map((b, i) =>
+    `<button data-i="${i}" aria-pressed="${i === 0}">${POS[b.pos]}<span class="n">${b.n} 人次</span></button>`).join("")}</div>` : "";
+  const one = h.builds.length === 1 ? `<span class="meta">${POS[h.builds[0].pos]} · ${h.builds[0].n} 人次</span>` : "";
+  return `<section class="card hero" id="h${h.id}">
+    <div class="hh"><span class="pt big p-${h.id}"></span>
+      <div><h2><span class="rank">#${h.rank}</span>${esc(h.name)}</h2>
+      <div class="meta">超凡以上估计胜率 <b>${(h.est * 100).toFixed(1)}%</b>（上线前 ${h.pre != null ? (h.pre * 100).toFixed(1) + "%" : "—"}${delta}）· 上线后 ${h.n.toLocaleString()} 局</div></div>
+      ${one}</div>
+    ${tabs}
+    <div class="body">${h.builds.length ? buildHtml(h.builds[0]) : '<p class="empty">样本不够</p>'}</div>
+  </section>`;
+}).join("");
+
+main.addEventListener("click", e => {
+  const btn = e.target.closest(".seg button");
+  if (!btn) return;
+  const sec = btn.closest(".hero"), h = DATA.heroes.find(x => "h" + x.id === sec.id);
+  sec.querySelectorAll(".seg button").forEach(b => b.setAttribute("aria-pressed", b === btn));
+  sec.querySelector(".body").innerHTML = buildHtml(h.builds[+btn.dataset.i]);
+});
+
+document.getElementById("foot").innerHTML = `
+  <p>数据：OpenDota 取对局编号（平均段位超凡～冠绝、天梯全英雄选择、≥15 分钟），STRATZ 取每个人的购买记录和位置。每个英雄抽最多约 3000 局，位置样本 ≥80 人次且占这个英雄 ≥15% 才列出。</p>
+  <p>版本刚上线一两天，样本还小（一个位置几百到两三千人次），比例差几个点不用当真；玩家也还在摸索新装备，过一周再看会更稳。</p>
+  <p>胜率只能说明「走这条路线的人赢得多」，不完全等于「这么出更容易赢」：落后的人会改出保命装（例如黑皇杖提前），领先的人会出更贪的装，「同局势」只扣掉了时间这一项。路线胜率至少 40 人、单件至少 30 人才列。</p>
+  <p>每件装备只算第一次购买；买了 90 秒内就合进成品的零件（例如攒零件做鱼叉时的魔龙枪）不单独算一步。</p>`;
+</script>
+</body>
+</html>

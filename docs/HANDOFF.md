@@ -233,3 +233,4 @@
 | 81 | 比赛分出胜负（`win_team` / POST_GAME）就算结束，局内显示收起 | [game/NOTES](../dota_assistant/game/NOTES.md) |
 | 82 | 7.42 上线后每 3 小时的英雄胜率监控网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 83 | 版本更新以后的胜率只用更新以后的数据（克制 / 配合按 start_time 切，STRATZ 挑全是新版本的那一周） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
+| 84 | 7.42 胜率前 30 英雄的出装路线 + 每条路线的胜率网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
