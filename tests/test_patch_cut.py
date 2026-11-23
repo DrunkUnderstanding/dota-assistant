@@ -82,6 +82,25 @@ class FetchStatsTest(unittest.TestCase):
         self.assertTrue(chunks)
         self.assertTrue(all(f"start_time >= {P742[1]}" in q for q in chunks))
 
+    def test_min_query_timeout_falls_back_to_estimate(self):
+        """explorer 查上线后第一局超时（2026-11-20 实测）：不让整次更新失败，按上线时长估算起点，分块照样按 start_time 切"""
+        sqls = []
+
+        def sql(q):
+            sqls.append(q)
+            if "min(match_id)" in q:
+                raise http.APIError("OpenDota explorer 出错：Error: Query read timeout")
+            return []
+        now = CUR + 26 * 3600
+        with mock.patch.object(http, "_get", return_value=[{"match_id": 9_097_453_426}]), \
+                mock.patch.object(http, "_sql", sql), mock.patch.object(stats.time, "time", return_value=now):
+            out = stats.fetch_stats(CFG, log=lambda m: None, patch=P742)
+        ago = (now - P742[1]) / 86400
+        self.assertEqual(out["since"], P742[1])
+        self.assertEqual(out["lo_id"], 9_097_453_426 - int((ago + 1) * stats.IDS_PER_DAY) - 1)
+        chunks = [q for q in sqls if "min(match_id)" not in q]
+        self.assertTrue(chunks and all(f"start_time >= {P742[1]}" in q for q in chunks))
+
     def test_old_patch_unchanged(self):
         out, sqls = self.run_fetch(("7.41f", 1789455600), now=CUR)
         self.assertIsNone(out["since"])
