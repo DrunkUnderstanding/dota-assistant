@@ -234,3 +234,4 @@
 | 82 | 7.42 上线后每 3 小时的英雄胜率监控网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 83 | 版本更新以后的胜率只用更新以后的数据（克制 / 配合按 start_time 切，STRATZ 挑全是新版本的那一周） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
 | 84 | 7.42 胜率前 30 英雄的出装路线 + 每条路线的胜率网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
+| 85 | 7.42 的 1 / 2 / 3 号位打法：实际对局里什么行为和输赢有关、和 7.41f 比变了什么（研究脚本 + 网页） | [research/NOTES](../dota_assistant/research/NOTES.md) |
