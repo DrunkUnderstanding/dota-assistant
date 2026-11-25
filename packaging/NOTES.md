@@ -56,3 +56,11 @@
 - 验证：开发机上解压目录里双击跑 `start`：生成 config.toml、GSI 服务、Electron 两个窗口、识别和推荐都起来了；用接口点了一次保存设置，config.toml 写对、日志里没有 key。
   当时开发版助手也开着，所以热键注册失败、Electron 缓存目录被占（报 Unable to move the cache），都是两份同时开导致的。
 - 注意：没有 config.toml 时直接跑命令行子命令（如 `suggest`），Config 默认值是段位 0-0、7 天，和打包带的数据文件（7-8、14 天）对不上会报找不到数据；走 `start` 会先生成 config.toml，没问题。
+
+## 88. 打包不再带上 data/ 里的研究 / 预览产物（2026-11-25）
+
+**现象**：11-25 打 v2026.11.25 时 zip 从 390 MB 涨到 1.09 GB。查产物：`data/` 1263 MB，其中 `data/research/` 1120 MB（第 84 / 85 节的网页和抓取数据）、`data/tmp_es/` 98 MB（临时脚本和中间结果），`build.resources` 把整个 `data/` 拷过去，`DATA_SKIP` 只挡了个人数据和回测缓存。
+
+**改法**：`DATA_SKIP` 加 `research` `tmp_es` `mockups` `ai_backtest.jsonl` `patch_watch`。这几样产品代码都不读（`grep` 过 `dota_assistant/`，只有 `research/` 包里的脚本自己读写 `data/research`，研究在开发机上跑）；`data/research/item-vs/item_vs.json` 也不是运行时那份（运行时读 `knowledge/item_vs.json`）。
+
+**验证**：重打一次，`data/` 从 1263 MB 降到约 45 MB。

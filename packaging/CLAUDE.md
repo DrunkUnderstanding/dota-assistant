@@ -26,7 +26,7 @@
 
 ## 注意事项 / 坑
 
-- **不打进去的**：`config.toml`（个人 token / key）、`logs/`、`shots/`，以及 `data/` 里的个人数据（`DATA_SKIP`：`player.json` `overlay.json` `.gsi_hint_shown` `lane_log.jsonl` `mates.json` `matches/` `benchmarks/`）和开发用的回测数据（`bench` `backtest_matches.json`）。新增个人数据文件要加进 `DATA_SKIP`。
+- **不打进去的**：`config.toml`（个人 token / key）、`logs/`、`shots/`，以及 `data/` 里的个人数据（`DATA_SKIP`：`player.json` `overlay.json` `.gsi_hint_shown` `lane_log.jsonl` `mates.json` `matches/` `benchmarks/`）和开发用的回测数据（`bench` `backtest_matches.json`）、只在本机跑的研究 / 预览产物（`research/` `tmp_es/` `mockups/` `ai_backtest.jsonl` `patch_watch/`，`research/` 一个人就 1.1 GB）。新增个人数据 / 开发产物要加进 `DATA_SKIP`。
 - **`check_secrets()` 会扫一遍产物**，本机 `config.toml` 里的 `stratz_token` / `ai_api_key` 出现在任何文本文件里就停止；产物里有 `config.toml` 也停止。
 - `web/` `knowledge/` 是整个目录复制，目录里的所有文件都会进包。
 - 打包版的运行目录是 exe 所在目录（`core/config.py` 的 `FROZEN`）；更新助手时由新包的 exe 替换文件，按 `VERSION.txt` 判新旧（`app/upgrade.py`，HANDOFF 第 41 节）。GitHub Release 的 tag 形如 `v2026.10.29`，同一天再发一版是 `v2026.10.29.2`（HANDOFF 第 41 节末的真实发布记录）。

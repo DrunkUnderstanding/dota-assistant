@@ -35,7 +35,8 @@ KEEP_LOCALES = {"zh-CN.pak", "en-US.pak"}                 # 其余 50 多种语�
 DATA_SKIP = {"player.json", "overlay.json", ".gsi_hint_shown", "lane_log.jsonl",   # 个人数据（里面有 Steam ID / 名字）
              "mates.json", "matches",                                                # 队友战绩：查过的人、看过的整局
              "benchmarks",                                                           # 队友战绩的英雄分位缓存，用到再拉
-             "bench", "backtest_matches.json"}                                       # 开发用的回测数据
+             "bench", "backtest_matches.json",                                       # 开发用的回测数据
+             "research", "tmp_es", "mockups", "ai_backtest.jsonl", "patch_watch"}    # 只在本机跑的研究 / 预览产物（research 一个人就 1.1GB）
 SECRET_KEYS = ("stratz_token", "ai_api_key")
 
 
