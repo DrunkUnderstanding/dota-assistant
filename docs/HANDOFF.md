@@ -57,7 +57,7 @@
 
 | 功能 | 状态 | 还差什么 | 记录 |
 |---|---|---|---|
-| 知识库（7.41f：127 英雄、257 件物品） | ✅ | — | [kb](../dota_assistant/kb/NOTES.md) |
+| 知识库（7.42a：127 英雄、261 件物品） | ✅ | 每次启动对一下 Valve 当前版本，字母小版本也马上换（第 86 节） | [kb](../dota_assistant/kb/NOTES.md) |
 | 设置窗口 + AI 来源可选 | 🟡 | Anthropic API / OpenAI 兼容接口没真实调过 | [ai](../dota_assistant/ai/NOTES.md) |
 | 免安装打包 | 🟡 | 没在没装 Python / Node 的干净电脑上试过 | [packaging](../packaging/NOTES.md) |
 | 不填 key 也能用 | ✅ | — | [app](../dota_assistant/app/NOTES.md) |
@@ -235,3 +235,4 @@
 | 83 | 版本更新以后的胜率只用更新以后的数据（克制 / 配合按 start_time 切，STRATZ 挑全是新版本的那一周） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
 | 84 | 7.42 胜率前 30 英雄的出装路线 + 每条路线的胜率网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 85 | 7.42 的 1 / 2 / 3 号位打法：实际对局里什么行为和输赢有关、和 7.41f 比变了什么（研究脚本 + 网页） | [research/NOTES](../dota_assistant/research/NOTES.md) |
+| 86 | 字母小版本（7.42a）不切胜率数据；知识库每次启动对版本、字母小版本也马上换（含打包版 / 其他电脑） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |

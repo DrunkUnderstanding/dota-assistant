@@ -10,7 +10,7 @@
 
 ## 四层内容
 
-1. **官方原文**：`data/kb/kb.json`，`update` 时看版本号（`patchnoteslist` 最新一项），变了才重拉；说明里的 `%占位符%` 换成各级数值。
+1. **官方原文**：`data/kb/kb.json`，`update` 时看版本号（`patchnoteslist` 最新一项，含字母小版本），变了才重拉；每次启动 `app/start.ensure_kb` 也对一次（第 86 节）；说明里的 `%占位符%` 换成各级数值。
 2. **机制标签**：`TAGS` 里按官方措辞的关键词 + 排除词从原文抽（不是人工标注），每个标签附命中的原句。
 3. **玩家规则**：`knowledge/rules.toml`（`Rule`、`load_rules`）。
 4. **常见误判**：`knowledge/mistakes.toml`（`Mistake`、`load_mistakes`、`add_mistake`）；`kb hero / item` 输出末尾显示，打法页 AI 把相关的放进资料。
@@ -26,6 +26,7 @@
 
 - `KnowledgeBase.load()`：没有 `data/kb/kb.json` 返回 `None`（调用方要处理「还没 update」）。
 - `kb.update(hero_ids, log=..., force=False)`：`kb update` 时顺带调 `cd_ops.update_ops`。
+- `kb.current_patch()`（联网，Valve 最新版本号）/ `kb.local_patch()`（本机知识库版本，没有返回 `None`）：`app/start.ensure_kb` 比这两个。
 - CLI：`kb hero <英雄>`、`kb item <物品>`、`kb find <关键词或正则>`、`kb update [--force]`、`kb mistake [--wrong … --right … --hero … --item … --who … --evidence … --has-tag …]`（不带 `--wrong` 就列出全部）。
 - `cd_ops.pick` / `cd_ops.cooldowns` 给 `domain/ultcd.py`；那边写成 `from ..kb import cd_ops as kbcd`。
 

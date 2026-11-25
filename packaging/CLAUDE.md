@@ -10,7 +10,7 @@
 
 | 文件 | 管什么 |
 |---|---|
-| `build.py` | 打包：`prefetch()` 先补全死数据（头像、装备常量 / 图标、顶栏图标，要联网）→ `pyinstaller()`（`--onedir --console`，`--collect-submodules dota_assistant`、`--hidden-import anthropic`）→ `electron()`（复制 Electron 本体到 `ui/`，只留 zh-CN / en-US 语言包，`main.js` `preload.js` `package.json` 放进 `ui/resources/app/`）→ `resources()`（`web/` `knowledge/` `data/`、`config.example.toml` `README.md` `calibration.json`，写 `VERSION.txt`）→ `check_secrets()` → `make_zip()` |
+| `build.py` | 打包：`prefetch()` 先把知识库跟上当前版本（`kb.update`，版本没变不重拉），再补全死数据（头像、装备常量 / 图标、顶栏图标，要联网）→ `pyinstaller()`（`--onedir --console`，`--collect-submodules dota_assistant`、`--hidden-import anthropic`）→ `electron()`（复制 Electron 本体到 `ui/`，只留 zh-CN / en-US 语言包，`main.js` `preload.js` `package.json` 放进 `ui/resources/app/`）→ `resources()`（`web/` `knowledge/` `data/`、`config.example.toml` `README.md` `calibration.json`，写 `VERSION.txt`）→ `check_secrets()` → `make_zip()` |
 | `launcher.py` | 打包版 exe 入口：不带参数 = `start`（一键启动），带参数和 `python -m dota_assistant` 一样（调 `dota_assistant.cli.main`）；双击出错时等回车再关窗口 |
 
 ## 产物

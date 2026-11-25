@@ -21,28 +21,36 @@ VALVE_PATCHES = "https://www.dota2.com/datafeed/patchnoteslist"
 
 
 def patch_start(log=http._say) -> tuple[str, int] | None:
-    """(版本号, 上线时间 unix 秒)，两个来源取晚的那个：
+    """(大版本号, 大版本上线时间 unix 秒)。**字母小版本不算新版本**（玩家 2026-11-25 定：7.42a 这种小平衡补丁不切数据，
+    胜率从 7.42 上线一直算下去），两个来源取晚的那个：
     - OpenDota `constants/patch`：只有大版本（7.42），时间是真正上线的时刻（7.42 是 11-18 21:28 UTC，和 STRATZ 分小时出场率翻倍对得上）；
-    - Valve datafeed 更新日志：带字母小版本（7.41f），但时间只到当天（7.42 写的 08:00 UTC，比真上线早 13 小时）。
-    小版本取 Valve 那个时间会多算进当天上线前几个小时的局，可以接受。两个都拉不到返回 None（不按版本切，照旧按天数）"""
+    - Valve datafeed 更新日志：带字母小版本（7.42a），取最新大版本的第一项（不带字母的 7.42），时间只到当天（7.42 写的 08:00 UTC，比真上线早 13 小时）。
+    OpenDota 还没收录新大版本时就用 Valve 的时间，会多算进当天上线前几个小时的局，可以接受。
+    两个都拉不到返回 None（不按版本切，照旧按天数）。知识库要跟到字母小版本，那边自己看（kb.current_patch）"""
     found: list[tuple[int, str]] = []
     try:
         od = http._get(f"{http.OPENDOTA}/constants/patch")
         last = max(od, key=lambda p: p["date"])
-        found.append((int(_iso_ts(last["date"])), str(last["name"])))
+        found.append((int(_iso_ts(last["date"])), major(str(last["name"]))))
     except (*http.NETWORK_ERRORS, KeyError, ValueError, TypeError) as e:
         log(f"  OpenDota 版本表没拉到（{e}）")
     try:
         vp = http._get(VALVE_PATCHES, language="schinese")["patches"]
-        last = max(vp, key=lambda p: p["patch_timestamp"])
-        found.append((int(last["patch_timestamp"]), str(last["patch_number"])))
+        cur = major(str(max(vp, key=lambda p: p["patch_timestamp"])["patch_number"]))
+        first = min((p for p in vp if major(str(p["patch_number"])) == cur), key=lambda p: p["patch_timestamp"])
+        found.append((int(first["patch_timestamp"]), cur))
     except (*http.NETWORK_ERRORS, KeyError, ValueError, TypeError) as e:
         log(f"  Valve 更新日志没拉到（{e}）")
     if not found:
         return None
     ts, _ = max(found)
-    name = max((n for _, n in found), key=_patch_key)    # 版本号取细的那个（7.41f 比 7.41 细）
+    name = max((n for _, n in found), key=_patch_key)    # OpenDota 还没收录新大版本时取 Valve 的（7.43 比 7.42 新）
     return name, ts
+
+
+def major(name: str) -> str:
+    """'7.42a' → '7.42'（字母小版本归到大版本）"""
+    return name.rstrip("abcdefghijklmnopqrstuvwxyz")
 
 
 def _iso_ts(s: str) -> float:
@@ -52,7 +60,7 @@ def _iso_ts(s: str) -> float:
 
 def _patch_key(name: str) -> tuple:
     """'7.41f' → (7, 41, 'f')，比大小用"""
-    head = name.rstrip("abcdefghijklmnopqrstuvwxyz")
+    head = major(name)
     nums = tuple(int(x) for x in head.split(".") if x.isdigit())
     return nums, name[len(head):]
 

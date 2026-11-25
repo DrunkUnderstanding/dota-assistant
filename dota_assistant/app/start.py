@@ -4,7 +4,8 @@
   1. 没有 config.toml → 从 config.example.toml 生成；好友代码、token、AI 来源在控制面板「设置」里填（第一次会自动弹出）
   2. 没装 Electron 界面 → 有 Node.js 就自动 npm install；没有就提示去装（打包版自带，不用装）
   3. 找到 Dota 安装目录 → 自动写 GSI 配置（第一次会提醒加启动项 -gamestateintegration）
-  4. 数据过期 → 自动更新（全量 3 天一次；出了新版本马上更新，上线头 days 天一天一次；个人数据半天一次）
+  4. 数据过期 → 自动更新（全量 3 天一次；出了新大版本马上更新，上线头 days 天一天一次；个人数据半天一次）；
+     知识库每次启动看一眼，字母小版本（7.42a）也马上换
   5. 启动助手
 """
 from __future__ import annotations
@@ -127,16 +128,37 @@ def full_update_reason(cfg: config.Config, patch_start=stats_mod.patch_start) ->
     return None
 
 
+def ensure_kb(current_patch=None) -> bool:
+    """知识库跟上 Valve 当前版本，**含字母小版本**：玩家 2026-11-25 定 7.42a 这种小版本不切胜率数据（full_update_reason
+    不会因为它全量更新），但技能 / 物品数值变了，知识库（机制说明、AI 打法资料、大招冷却）得马上换。
+    每台电脑启动时各自查一次（打包版自带的、游戏电脑上的都靠这个跟上），一个请求；返回是否更新了"""
+    from .. import kb
+    cur = (current_patch or kb.current_patch)()
+    old = kb.local_patch()
+    if old == cur:
+        return False
+    _say(f"知识库更新到 {cur}{f'（本机是 {old}）' if old else ''}，约 1~2 分钟 …")
+    kb.update([h.id for h in assets.load_heroes()], log=lambda m: log.info(m.strip()), force=True)
+    update.fetch_icons(log=lambda m: log.info(m.strip()))     # 对面大招图标跟着知识库挑
+    return True
+
+
 def ensure_data(cfg: config.Config) -> None:
     stats = stats_mod.stats_path(cfg)
     try:
         reason = full_update_reason(cfg)
         if reason:
             _say(f"更新数据（{reason}，约 5 分钟）…")
-            update.update(cfg)
-        elif ((cfg.account_id and _age_hours(player.PLAYER_FILE) > PLAYER_UPDATE_HOURS)
-              or player.needs_update(cfg)):
-            player.update_player(cfg)
+            update.update(cfg)                   # 里面已经带知识库
+        else:
+            try:
+                ensure_kb()
+            except Exception as e:               # 知识库没跟上不影响选人推荐，用旧的照样开
+                log.info("知识库更新失败的详细信息", exc_info=True)
+                print(f"知识库没更新上（{e}），先用旧的。")
+            if ((cfg.account_id and _age_hours(player.PLAYER_FILE) > PLAYER_UPDATE_HOURS)
+                    or player.needs_update(cfg)):
+                player.update_player(cfg)
         if not assets.ITEM_ICON_DIR.exists():      # 装备图标是 2026-10-26 加的：老数据不用等全量更新
             assets.fetch_item_icons()
         if not assets.ICONS_DONE.exists():         # 顶栏图标 2026-10-27 起预下：老数据第一次启动补一遍

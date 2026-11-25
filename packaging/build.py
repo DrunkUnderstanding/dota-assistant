@@ -64,6 +64,8 @@ def prefetch() -> None:
     from dota_assistant.sources import assets
     if kb.KnowledgeBase.load() is None or not (DATA_DIR / "heroes.json").exists():
         sys.exit("还没有英雄表 / 知识库：先运行 python -m dota_assistant update")
+    say("== 知识库跟上当前版本（含字母小版本）…")
+    kb.update([h.id for h in assets.load_heroes()], say)    # 版本没变不重拉；打包版自带的知识库别比 Valve 旧
     assets.fetch_portraits(say)
     assets.fetch_items_const(say)
     assets.fetch_item_icons(say)

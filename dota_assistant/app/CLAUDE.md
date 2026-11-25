@@ -14,7 +14,7 @@
 |---|---|
 | `live/` | 实时主控 `Live`（类本体 + 六个 mixin + consts），见 [live/CLAUDE.md](live/CLAUDE.md) |
 | `webui.py` | 本机 HTTP 服务 `WebServer`（只听 127.0.0.1 随机端口）+ 启动 Electron（`find_electron` / `electron_command`），Electron 输出转进日志（`_pipe_electron`）；`overlay_config`；`serve` / `run` |
-| `start.py` | 一键启动（双击「启动助手.bat」→ `start` 命令）：清 `_update/` → 补 `config.toml` → 装 Electron → 写 GSI 配置 → 导出网格头像 → 数据过期就更新 → 启动；`no_key_note` 提示缺 token / AI |
+| `start.py` | 一键启动（双击「启动助手.bat」→ `start` 命令）：清 `_update/` → 补 `config.toml` → 装 Electron → 写 GSI 配置 → 导出网格头像 → 数据过期就更新（不用全量更新时 `ensure_kb` 单独对知识库版本）→ 启动；`no_key_note` 提示缺 token / AI |
 | `demo.py` | 演示：按真实对局（`DEMO_MATCH` 9054096051）逐个选人，再当「假 Dota」把录像按 GSI 格式推给本地端口（`gsi_frames` / `run`） |
 | `update.py` | 全量更新数据（`update` 命令 / 启动时过期）：英雄表、头像、装备、知识库、顶栏图标、分位置数据、个人数据、克制矩阵按顺序拉一遍；`fetch_icons`；没 token 时 `fetch_positions_opendota` / `positions_from_lane_roles` 用 OpenDota 分路凑分位置数据 |
 | `upgrade.py` | 更新助手本身（数据更新是 `update.py`）：打包版看 GitHub Release、下 zip、核对 sha256、交给新包的 exe `upgrade --finish` 替换文件再重启；源码版 `git pull --ff-only` 再重启；`Updater` 给控制面板用 |
@@ -52,7 +52,7 @@
 - 随机端口要避开 Chromium 拒绝的端口（`UNSAFE_PORTS`，2026-10-27 实测分到过 6669 打不开界面）。
 - 没装 Electron 时 `run --browser` 只是预览，叠加层盖不到游戏上；旧版 Qt 界面已删除，不要再加回来当兜底（HANDOFF 第 12 节）。
 - npm 装完有时没下载 Electron 本体，`start.py` 会补跑 `node node_modules/electron/install.js`（HANDOFF 第 12 节）。
-- 更新频率：全量 `FULL_UPDATE_DAYS = 3` 天；克制数据是当前版本上线前拉的马上全量更新、新版本上线不满 `days` 天时 `PATCH_EARLY_UPDATE_HOURS = 24` 小时一更（`full_update_reason`，玩家 2026-11-19 定推荐只用当前版本数据，`sources/NOTES.md` 第 83 节）；个人数据 `PLAYER_UPDATE_HOURS = 12` 小时，没网用旧数据；GSI 启动项提醒只显示一次（`data/.gsi_hint_shown`，HANDOFF 第 13 节）。
+- 更新频率：全量 `FULL_UPDATE_DAYS = 3` 天；克制数据是当前版本上线前拉的马上全量更新、新版本上线不满 `days` 天时 `PATCH_EARLY_UPDATE_HOURS = 24` 小时一更（`full_update_reason`，玩家 2026-11-19 定推荐只用当前版本数据，`sources/NOTES.md` 第 83 节）；知识库每次启动对一下 Valve 当前版本（`ensure_kb`，含字母小版本，对不上就重拉知识库 + 大招图标，第 86 节）；个人数据 `PLAYER_UPDATE_HOURS = 12` 小时，没网用旧数据；GSI 启动项提醒只显示一次（`data/.gsi_hint_shown`，HANDOFF 第 13 节）。
 - 改了 `启动助手.bat` 要用 cmd 真跑一遍（根 CLAUDE.md 规则），`.bat` 必须 CRLF。
 
 ## 设计记录（原「相关 HANDOFF 节」）

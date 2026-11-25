@@ -159,12 +159,20 @@ def fetch(hero_ids: list[int], log=_say, workers: int = 8) -> dict:
     return {"patch": patch, "fetched_at": int(time.time()), "heroes": heroes, "items": items}
 
 
+def local_patch() -> str | None:
+    """本机知识库是哪个版本（没有 / 读不了返回 None）"""
+    try:
+        return json.loads((KB_DIR / "kb.json").read_text(encoding="utf-8")).get("patch")
+    except (OSError, ValueError):
+        return None
+
+
 def update(hero_ids: list[int], log=_say, force: bool = False) -> bool:
-    """版本号没变就不重拉。返回是否更新了。"""
+    """版本号（含字母小版本）没变就不重拉。返回是否更新了。"""
     KB_DIR.mkdir(parents=True, exist_ok=True)
     meta = KB_DIR / "kb.json"
     if not force and meta.exists():
-        old = json.loads(meta.read_text(encoding="utf-8")).get("patch")
+        old = local_patch()
         if old == current_patch():
             log(f"  知识库已是最新版本 {old}")
             _update_cd_ops(log)

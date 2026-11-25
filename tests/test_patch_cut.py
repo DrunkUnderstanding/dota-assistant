@@ -32,15 +32,29 @@ class PatchStartTest(unittest.TestCase):
         with mock.patch.object(http, "_get", self.fake_get(self.OD, valve)):
             self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42", 1795037287))
 
-    def test_letter_patch_from_valve(self):
-        valve = [{"patch_number": "7.42", "patch_timestamp": 1794988800},
-                 {"patch_number": "7.42a", "patch_timestamp": 1796000000}]  # OpenDota 只有大版本，小版本看 Valve
+    def test_letter_patch_not_new_version(self):
+        """玩家 2026-11-25 定：字母小版本不切数据，还按 7.42 真上线的时刻算"""
+        valve = [{"patch_number": "7.41f", "patch_timestamp": 1789455600},
+                 {"patch_number": "7.42", "patch_timestamp": 1794988800},
+                 {"patch_number": "7.42a", "patch_timestamp": 1795507200},
+                 {"patch_number": "7.42b", "patch_timestamp": 1796000000}]
         with mock.patch.object(http, "_get", self.fake_get(self.OD, valve)):
-            self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42a", 1796000000))
+            self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42", 1795037287))
+        down = http.APIError("x")                       # OpenDota 拉不到：取 Valve 那边 7.42 第一项
+        with mock.patch.object(http, "_get", self.fake_get(down, valve)):
+            self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42", 1794988800))
+
+    def test_new_major_before_opendota(self):
+        valve = [{"patch_number": "7.42b", "patch_timestamp": 1796000000},
+                 {"patch_number": "7.43", "patch_timestamp": 1797000000}]   # OpenDota 还没收录 7.43
+        with mock.patch.object(http, "_get", self.fake_get(self.OD, valve)):
+            self.assertEqual(stats.patch_start(log=lambda m: None), ("7.43", 1797000000))
 
     def test_one_source_down(self):
         down = http.APIError("x")
         with mock.patch.object(http, "_get", self.fake_get(down, [{"patch_number": "7.42", "patch_timestamp": 5}])):
+            self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42", 5))
+        with mock.patch.object(http, "_get", self.fake_get(down, [{"patch_number": "7.42a", "patch_timestamp": 5}])):
             self.assertEqual(stats.patch_start(log=lambda m: None), ("7.42", 5))
         with mock.patch.object(http, "_get", self.fake_get(down, down)):
             self.assertIsNone(stats.patch_start(log=lambda m: None))
@@ -171,7 +185,7 @@ class StartupUpdateTest(unittest.TestCase):
 
     def test_new_patch_after_fetch(self):
         now = self.write(5)
-        self.assertIn("7.42a 上线了", self.reason(("7.42a", int(now - 3600))))
+        self.assertIn("7.43 上线了", self.reason(("7.43", int(now - 3600))))
 
     def test_early_patch_daily(self):
         now = self.write(25, patch="7.42", since=1)
@@ -186,3 +200,32 @@ class StartupUpdateTest(unittest.TestCase):
     def test_three_days(self):
         self.write(73)
         self.assertIn("3 天", self.reason(None))
+
+
+class EnsureKbTest(unittest.TestCase):
+    """知识库跟到字母小版本（玩家 2026-11-25 定：小版本不切胜率数据，但知识库要换）：每次启动问一下 Valve 当前版本"""
+
+    def run_ensure(self, local, current):
+        from dota_assistant import kb
+        from dota_assistant.app import start, update
+        from dota_assistant.core.heroes import Hero, HeroDB
+        calls = []
+        heroes = HeroDB([Hero(1, "antimage", "敌法师", "Anti-Mage", (), "agi")])
+        with mock.patch.object(kb, "local_patch", return_value=local), \
+                mock.patch.object(kb, "update", lambda ids, log=None, force=False: calls.append(("kb", ids, force))), \
+                mock.patch.object(update, "fetch_icons", lambda log=None: calls.append(("icons",))), \
+                mock.patch("dota_assistant.sources.assets.load_heroes", return_value=heroes), \
+                mock.patch("builtins.print"):
+            changed = start.ensure_kb(current_patch=lambda: current)
+        return changed, calls
+
+    def test_same_patch_no_fetch(self):
+        self.assertEqual(self.run_ensure("7.42a", "7.42a"), (False, []))
+
+    def test_letter_patch_refetches(self):
+        changed, calls = self.run_ensure("7.42", "7.42a")
+        self.assertTrue(changed)
+        self.assertEqual(calls, [("kb", [1], True), ("icons",)])
+
+    def test_no_local_kb(self):
+        self.assertTrue(self.run_ensure(None, "7.42a")[0])
