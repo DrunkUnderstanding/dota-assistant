@@ -31,7 +31,7 @@
 
 | 功能 | 状态 | 还差什么 | 记录 |
 |---|---|---|---|
-| 数据层（OpenDota 克制 / 配合、STRATZ 分位置、个人数据、头像） | ✅ | 11-20 起只用当前版本上线以后的数据，出新版本启动时马上更新（第 83 节）；出装竖条的 `item_vs.json` 还是 7.41f 的 | [sources](../dota_assistant/sources/NOTES.md) |
+| 数据层（OpenDota 克制 / 配合、STRATZ 分位置、个人数据、头像） | ✅ | 11-20 起只用当前版本上线以后的数据，出新版本启动时马上更新（第 83 节）；11-21 修查上线后第一局超时时整次更新失败、一直用旧数据（第 86 节）；出装竖条的 `item_vs.json` 还是 7.41f 的 | [sources](../dota_assistant/sources/NOTES.md) |
 | 打分引擎 + 推荐四小组（熟练 / 不熟练 × 胜率最高 / 克制最强） | ✅ 回测过 | 四小组、熟练度分组没实战看过；11-08 加「被强克不推荐 / 强克核心排前面」（第 67 节）；11-09 加克制等级 S~F、配合权重改 0.5、卡片「对线」（第 73、74 节），都没实战 | [domain](../dota_assistant/domain/NOTES.md) |
 | 屏幕识别（校准、模板、学习模板、去噪点、防误记） | 🟡 | 「全是风行者」「齐天大圣垃圾模板」修完，下一局天梯看日志 | [vision](../dota_assistant/vision/NOTES.md)、[app/live](../dota_assistant/app/live/NOTES.md) |
 | 禁用识别（选人网格红斜线） | 🟡 | 11-06 / 11-07 天梯里认错格、漏报黑鸟（旧图排列过期；鼠标停在英雄上的放大卡片盖住格子），改成边用边核对、跳过被盖住的格子 + 自动截图，下一局看 `shots/grid/`（第 65、66 节） | [vision](../dota_assistant/vision/NOTES.md) |
@@ -57,7 +57,7 @@
 
 | 功能 | 状态 | 还差什么 | 记录 |
 |---|---|---|---|
-| 知识库（7.42a：127 英雄、261 件物品） | ✅ | 每次启动对一下 Valve 当前版本，字母小版本也马上换（第 86 节） | [kb](../dota_assistant/kb/NOTES.md) |
+| 知识库（7.42a：127 英雄、261 件物品） | ✅ | 每次启动对一下 Valve 当前版本，字母小版本也马上换（第 87 节） | [kb](../dota_assistant/kb/NOTES.md) |
 | 设置窗口 + AI 来源可选 | 🟡 | Anthropic API / OpenAI 兼容接口没真实调过 | [ai](../dota_assistant/ai/NOTES.md) |
 | 免安装打包 | 🟡 | 没在没装 Python / Node 的干净电脑上试过 | [packaging](../packaging/NOTES.md) |
 | 不填 key 也能用 | ✅ | — | [app](../dota_assistant/app/NOTES.md) |
@@ -235,4 +235,5 @@
 | 83 | 版本更新以后的胜率只用更新以后的数据（克制 / 配合按 start_time 切，STRATZ 挑全是新版本的那一周） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
 | 84 | 7.42 胜率前 30 英雄的出装路线 + 每条路线的胜率网页（研究脚本） | [research/NOTES](../dota_assistant/research/NOTES.md) |
 | 85 | 7.42 的 1 / 2 / 3 号位打法：实际对局里什么行为和输赢有关、和 7.41f 比变了什么（研究脚本 + 网页） | [research/NOTES](../dota_assistant/research/NOTES.md) |
-| 86 | 字母小版本（7.42a）不切胜率数据；知识库每次启动对版本、字母小版本也马上换（含打包版 / 其他电脑） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
+| 86 | 克制数据查「上线后第一局」超时导致整次更新失败、一直用旧版本数据：超时就按上线时长估算起点 | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
+| 87 | 字母小版本（7.42a）不切胜率数据；知识库每次启动对版本、字母小版本也马上换（含打包版 / 其他电脑） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |

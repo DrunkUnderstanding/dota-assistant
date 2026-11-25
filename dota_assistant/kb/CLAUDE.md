@@ -10,7 +10,7 @@
 
 ## 四层内容
 
-1. **官方原文**：`data/kb/kb.json`，`update` 时看版本号（`patchnoteslist` 最新一项，含字母小版本），变了才重拉；每次启动 `app/start.ensure_kb` 也对一次（第 86 节）；说明里的 `%占位符%` 换成各级数值。
+1. **官方原文**：`data/kb/kb.json`，`update` 时看版本号（`patchnoteslist` 最新一项，含字母小版本），变了才重拉；每次启动 `app/start.ensure_kb` 也对一次（第 87 节）；说明里的 `%占位符%` 换成各级数值。
 2. **机制标签**：`TAGS` 里按官方措辞的关键词 + 排除词从原文抽（不是人工标注），每个标签附命中的原句。
 3. **玩家规则**：`knowledge/rules.toml`（`Rule`、`load_rules`）。
 4. **常见误判**：`knowledge/mistakes.toml`（`Mistake`、`load_mistakes`、`add_mistake`）；`kb hero / item` 输出末尾显示，打法页 AI 把相关的放进资料。

@@ -111,11 +111,18 @@ def fetch_stats(cfg: Config, log=http._say, patch: tuple[str, int] | None = None
     since = 0
     if patch and patch[1] > time.time() - cfg.days * 86400:
         since = patch[1]
-        # 上线后第一局的 match_id（explorer 一次 min，约 2 秒）；IDS_PER_DAY 只是估算，多往前留一天
-        rows = http._sql(f"SELECT min(match_id) m FROM public_matches "
-                         f"WHERE match_id > {latest - (cfg.days + 1) * IDS_PER_DAY} AND start_time >= {since}")
-        first = rows[0]["m"] if rows and rows[0].get("m") else latest
-        start = max(start, int(first) - 1)
+        # 上线后第一局的 match_id（explorer 一次 min，平时约 2 秒）；IDS_PER_DAY 只是估算，多往前留一天
+        try:
+            rows = http._sql(f"SELECT min(match_id) m FROM public_matches "
+                             f"WHERE match_id > {latest - (cfg.days + 1) * IDS_PER_DAY} AND start_time >= {since}")
+            first = int(rows[0]["m"]) if rows and rows[0].get("m") else latest
+        except http.NETWORK_ERRORS as e:
+            # 2026-11-20 实测 explorer 忙时这条 min 会 Query read timeout，整次更新失败、推荐一直用旧版本的克制数据。
+            # 退回按上线时长估算起点、多往前留一天：分块查询本身按 start_time 精确切，起点早一点只是多扫一两块
+            ago = (time.time() - since) / 86400
+            first = latest - int((ago + 1) * IDS_PER_DAY)
+            log(f"  上线后第一局没查到（{e}），按上线时长估算起点")
+        start = max(start, first - 1)
         log(f"  {patch[0]} 上线不到 {cfg.days} 天，只统计上线以后的局")
     bracket = _bracket_sql(cfg)
 

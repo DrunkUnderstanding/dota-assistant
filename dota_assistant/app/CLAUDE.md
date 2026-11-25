@@ -52,7 +52,7 @@
 - 随机端口要避开 Chromium 拒绝的端口（`UNSAFE_PORTS`，2026-10-27 实测分到过 6669 打不开界面）。
 - 没装 Electron 时 `run --browser` 只是预览，叠加层盖不到游戏上；旧版 Qt 界面已删除，不要再加回来当兜底（HANDOFF 第 12 节）。
 - npm 装完有时没下载 Electron 本体，`start.py` 会补跑 `node node_modules/electron/install.js`（HANDOFF 第 12 节）。
-- 更新频率：全量 `FULL_UPDATE_DAYS = 3` 天；克制数据是当前版本上线前拉的马上全量更新、新版本上线不满 `days` 天时 `PATCH_EARLY_UPDATE_HOURS = 24` 小时一更（`full_update_reason`，玩家 2026-11-19 定推荐只用当前版本数据，`sources/NOTES.md` 第 83 节）；知识库每次启动对一下 Valve 当前版本（`ensure_kb`，含字母小版本，对不上就重拉知识库 + 大招图标，第 86 节）；个人数据 `PLAYER_UPDATE_HOURS = 12` 小时，没网用旧数据；GSI 启动项提醒只显示一次（`data/.gsi_hint_shown`，HANDOFF 第 13 节）。
+- 更新频率：全量 `FULL_UPDATE_DAYS = 3` 天；克制数据是当前版本上线前拉的马上全量更新、新版本上线不满 `days` 天时 `PATCH_EARLY_UPDATE_HOURS = 24` 小时一更（`full_update_reason`，玩家 2026-11-19 定推荐只用当前版本数据，`sources/NOTES.md` 第 83 节）；知识库每次启动对一下 Valve 当前版本（`ensure_kb`，含字母小版本，对不上就重拉知识库 + 大招图标，第 87 节）；个人数据 `PLAYER_UPDATE_HOURS = 12` 小时，没网用旧数据；GSI 启动项提醒只显示一次（`data/.gsi_hint_shown`，HANDOFF 第 13 节）。
 - 改了 `启动助手.bat` 要用 cmd 真跑一遍（根 CLAUDE.md 规则），`.bat` 必须 CRLF。
 
 ## 设计记录（原「相关 HANDOFF 节」）

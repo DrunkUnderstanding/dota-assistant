@@ -44,7 +44,7 @@
 - STRATZ 请求要带 `Authorization: Bearer <token>` 和 `User-Agent: STRATZ_API`，不带 UA 会被拒（HANDOFF 第 9 节「常用命令」末尾）；行为快照会核对这两个请求头没丢（`tools/golden/README.md`「请求头核对」）。
 - STRATZ 个人对局接口会整体超时，`fetch_player` 自动退回 OpenDota（这次不带位置）；OpenDota 免费额度约每分钟 60 次，429 自动退避（HANDOFF 第 8 节）。
 - 没 token 也要能用：分位置改用 OpenDota 分路凑（HANDOFF 第 35 节）。
-- **版本更新以后的胜率只用更新以后的数据**（玩家 2026-11-19 定）：`patch_start` 取上线时间，`fetch_stats` 按 `start_time` 切，分位置 / 对线用 `stratz_week` 挑全是新版本的那一周，这周中间上的分位置按天 + 按小时凑、对线先不给（第 83 节，`tests/test_patch_cut.py`）。**字母小版本不算新版本**（玩家 2026-11-25 定）：`patch_start` 只返回大版本和大版本上线时间（`major` 去掉字母），7.42a 出了还从 7.42 上线算（第 86 节）。
+- **版本更新以后的胜率只用更新以后的数据**（玩家 2026-11-19 定）：`patch_start` 取上线时间，`fetch_stats` 按 `start_time` 切，分位置 / 对线用 `stratz_week` 挑全是新版本的那一周，这周中间上的分位置按天 + 按小时凑、对线先不给（第 83 节，`tests/test_patch_cut.py`）。**字母小版本不算新版本**（玩家 2026-11-25 定）：`patch_start` 只返回大版本和大版本上线时间（`major` 去掉字母），7.42a 出了还从 7.42 上线算（第 87 节）。
 - token 不能出现在日志 / 报错里。
 
 ## 设计记录（原「相关 HANDOFF 节」）
