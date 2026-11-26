@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7.42 对局节奏</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --line: rgba(11, 11, 11, .10);
+    --s1: #2a78d6;
+    --s2: #eb6834;
+    --hl: #f0efec;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #f0efec;
+      --ink-2: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --line: rgba(255, 255, 255, .10);
+      --s1: #3987e5;
+      --s2: #d95926;
+      --hl: #262624;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 1080px; margin: 0 auto; padding: 40px 20px 72px; }
+  header { margin-bottom: 28px; }
+  h1 { font-size: 30px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -.01em; }
+  .sub { color: var(--ink-2); max-width: 760px; margin: 0; }
+  .tag {
+    display: inline-block; font-size: 12px; color: var(--ink-2);
+    border: 1px solid var(--line); border-radius: 999px; padding: 1px 10px; margin-bottom: 12px;
+  }
+  .lead {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin: 0 0 20px; color: var(--ink);
+  }
+  .lead b { color: var(--ink); }
+  .kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px; margin-bottom: 34px;
+  }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+  }
+  .kpi .label { color: var(--ink-2); font-size: 13px; }
+  .kpi .value { font-size: 30px; line-height: 1.2; margin-top: 2px; }
+  .kpi .value small { font-size: 15px; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .kpi .delta { font-size: 13px; color: var(--ink-2); margin-top: 2px; font-variant-numeric: tabular-nums; }
+  section { margin-bottom: 38px; }
+  h2 { font-size: 18px; margin: 0 0 4px; }
+  .note { color: var(--ink-2); font-size: 13px; margin: 0 0 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 12px;
+  }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 18px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { font-family: inherit; }
+  .axis-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .gridline { stroke: var(--grid); stroke-width: 1; }
+  .baseline { stroke: var(--axis); stroke-width: 1; }
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 10; background: var(--surface);
+    color: var(--ink); border: 1px solid var(--line); border-radius: 8px;
+    padding: 7px 10px; font-size: 12px; box-shadow: 0 4px 18px rgba(0,0,0,.14);
+    opacity: 0; transition: opacity .08s; white-space: nowrap;
+  }
+  .tooltip.on { opacity: 1; }
+  .tooltip b { font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 7px 8px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--axis); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .unit { color: var(--muted); font-size: 12px; }
+  .foot { color: var(--muted); font-size: 12px; line-height: 1.7; }
+  .foot b { color: var(--ink-2); }
+  .mono { font-variant-numeric: tabular-nums; }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --line: rgba(255, 255, 255, .10); --s1: #3987e5; --s2: #d95926; --hl: #262624;
+  }
+  .ci { color: var(--muted); font-size: 11px; }
+  .dim td { color: var(--ink-2); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="tag">STRATZ · 超凡～冠绝 · 全英雄选择</span>
+    <h1>{{TITLE}}</h1>
+    <p class="sub">{{SUB}}</p>
+  </header>
+
+  <p class="lead">{{LEAD}}</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2>打架密度：每 5 分钟英雄击杀</h2>
+    <p class="note">{{NOTE_KILLS}}</p>
+    <div class="card">
+      <div class="legend" id="legend-kills"></div>
+      <div id="chart-kills"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>领先方最终赢的比例</h2>
+    <p class="note">{{NOTE_WIN}}</p>
+    <div class="two">
+      <div class="card">
+        <div class="note" style="margin:0 0 4px">领先 2000 以上</div>
+        <div class="legend" id="legend-win2k"></div>
+        <div id="chart-win2k"></div>
+      </div>
+      <div class="card">
+        <div class="note" style="margin:0 0 4px">领先 5000 以上</div>
+        <div class="legend" id="legend-win5k"></div>
+        <div id="chart-win5k"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>上线以来稳不稳：按天看</h2>
+    <p class="note">{{NOTE_DAILY}}</p>
+    <div class="two">
+      <div class="card">
+        <div class="note" style="margin:0 0 4px">10 分钟领先 2000 的一方最终胜率</div>
+        <div class="legend" id="legend-d1"></div>
+        <div id="chart-d1"></div>
+      </div>
+      <div class="card">
+        <div class="note" style="margin:0 0 4px">15 分钟落后 2000 的一方翻盘率</div>
+        <div class="legend" id="legend-d2"></div>
+        <div id="chart-d2"></div>
+      </div>
+    </div>
+    <div class="card" style="overflow-x:auto;margin-top:14px">
+      <table id="period-table"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2>推塔节奏</h2>
+    <p class="note">{{NOTE_TOWER}}</p>
+    <div class="card" id="chart-tower"></div>
+  </section>
+
+  <section>
+    <h2>核心的正补变少了</h2>
+    <p class="note">{{NOTE_LH}}</p>
+    <div class="card">
+      <div class="legend" id="legend-lh"></div>
+      <div id="chart-lh"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>各位置的分段节奏</h2>
+    <p class="note">每局平均。参团 = 参与击杀 + 助攻；正补 = 该时段每分钟补刀相加。灰字是 7.41f。</p>
+    <div class="card" style="overflow-x:auto">
+      <table id="pos-table"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2>数据核对</h2>
+    <p class="note">{{NOTE_CHECK}}</p>
+    <div class="card" style="overflow-x:auto">
+      <table id="check-table"></table>
+    </div>
+  </section>
+
+  <section>
+    <h2>数据表</h2>
+    <div class="card" style="overflow-x:auto">
+      <table id="main-table"></table>
+    </div>
+  </section>
+
+  <p class="foot">{{FOOT}}</p>
+</main>
+<div class="tooltip" id="tip"></div>
+
+<script>
+const R = {{DATA}};
+const D = {
+  "742": {tower: {"第1座": R["742"].tower["1"], "第3座": R["742"].tower["3"], "第6座": R["742"].tower["6"], "第9座": R["742"].tower["9"]}},
+  "741": {tower: {"第1座": R["741"].tower["1"], "第3座": R["741"].tower["3"], "第6座": R["741"].tower["6"], "第9座": R["741"].tower["9"]}}
+};
+</script>
+<script>
+const C1 = "var(--s1)", C2 = "var(--s2)";
+const NS = "http://www.w3.org/2000/svg";
+const tip = document.getElementById("tip");
+
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function showTip(e, html) {
+  tip.innerHTML = html;
+  tip.classList.add("on");
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY - h - 10;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y < 8) y = e.clientY + 16;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+function hideTip() { tip.classList.remove("on"); }
+
+function legend(node, items) {
+  node.innerHTML = items.map(([name, color]) =>
+    `<span><i style="background:${color}"></i>${name}</span>`).join("");
+}
+
+/* 折线图：series = [{name,color,values:[{x,y,label}]}] */
+function lineChart(mount, series, opt) {
+  const W = 720, H = 280, L = 46, R = 74, T = 16, B = 34;
+  const pts = series[0].values.map(v => v.x);
+  const xMin = opt.xMin, xMax = opt.xMax, xTicks = opt.xTicks;
+  const yMin = opt.yMin, yMax = opt.yMax;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opt.aria});
+  const px = x => L + (x - xMin) / (xMax - xMin) * (W - L - R);
+  const py = y => T + (yMax - y) / (yMax - yMin) * (H - T - B);
+
+  (opt.yTicks || []).forEach(v => {
+    el("line", {x1: L, x2: W - R, y1: py(v), y2: py(v), class: v === yMin ? "baseline" : "gridline"}, svg);
+    el("text", {x: L - 8, y: py(v) + 4, "text-anchor": "end", class: "axis-label"}, svg).textContent = opt.fmtY(v);
+  });
+  xTicks.forEach(x => {
+    el("text", {x: px(x), y: H - 12, "text-anchor": "middle", class: "axis-label"}, svg)
+      .textContent = opt.fmtX(x);
+  });
+  el("line", {x1: L, x2: W - R, y1: py(yMin), y2: py(yMin), class: "baseline"}, svg);
+
+  series.forEach(s => {
+    const d = s.values.map((v, i) => `${i ? "L" : "M"}${px(v.x)},${py(v.y)}`).join(" ");
+    el("path", {d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-dasharray": s.dash || "none",
+                "stroke-linejoin": "round", "stroke-linecap": "round"}, svg);
+    const last = s.values[s.values.length - 1];
+    el("circle", {cx: px(last.x), cy: py(last.y), r: 3.2, fill: s.color}, svg);
+  });
+  // 直接标注：末端两点太近时上下错开，带一根短引线
+  const endLabels = series.map(s => {
+    const v = s.values[s.values.length - 1];
+    return {name: s.name, x: px(v.x), y: py(v.y), ly: py(v.y) + 4};
+  }).sort((a, b) => a.y - b.y);
+  endLabels.forEach((p, i) => {
+    if (i && p.ly - endLabels[i - 1].ly < 13) p.ly = endLabels[i - 1].ly + 13;
+    if (Math.abs(p.ly - (p.y + 4)) > 2) {
+      el("line", {x1: p.x + 2, y1: p.y, x2: p.x + 6, y2: p.ly - 4,
+                  stroke: "var(--muted)", "stroke-width": 1}, svg);
+    }
+    el("text", {x: p.x + 8, y: p.ly, fill: "var(--ink-2)", "font-size": 12}, svg).textContent = p.name;
+  });
+
+  const cross = el("line", {y1: T, y2: H - B, stroke: "var(--axis)", "stroke-width": 1, opacity: 0}, svg);
+  const dots = series.map(s => el("circle", {r: 5, fill: s.color, stroke: "var(--surface)",
+                                              "stroke-width": 2, opacity: 0}, svg));
+  const hit = el("rect", {x: L, y: T, width: W - L - R, height: H - T - B, fill: "transparent"}, svg);
+
+  function move(e) {
+    const box = svg.getBoundingClientRect();
+    const mx = (e.clientX - box.left) / box.width * W;
+    let best = 0, bd = 1e9;
+    pts.forEach((x, i) => { const d = Math.abs(px(x) - mx); if (d < bd) { bd = d; best = i; } });
+    cross.setAttribute("x1", px(pts[best])); cross.setAttribute("x2", px(pts[best]));
+    cross.setAttribute("opacity", 1);
+    const rows = series.map((s, j) => {
+      const v = s.values[best];
+      dots[j].setAttribute("cx", px(v.x)); dots[j].setAttribute("cy", py(v.y));
+      dots[j].setAttribute("opacity", 1);
+      return `<div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${s.color};margin-right:6px"></span>${s.name}<b style="float:right;margin-left:16px">${opt.fmtTip(v.y)}</b></div>`;
+    }).join("");
+    showTip(e, `<div style="margin-bottom:3px;color:var(--ink-2)">${opt.fmtTipX ? opt.fmtTipX(pts[best]) : opt.fmtX(pts[best])}</div>${rows}`);
+  }
+  hit.addEventListener("mousemove", move);
+  hit.addEventListener("mouseleave", () => {
+    cross.setAttribute("opacity", 0);
+    dots.forEach(d => d.setAttribute("opacity", 0));
+    hideTip();
+  });
+
+  const box = document.getElementById(mount);
+  box.innerHTML = "";
+  box.appendChild(svg);
+}
+
+/* 时间轴：两行，每行 4 个点 */
+function towerChart(mount) {
+  const W = 720, H = 150, L = 74, R = 24, T = 34, B = 34;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "推塔节奏"});
+  const xs = [0, 35];
+  const px = x => L + (x - xs[0]) / (xs[1] - xs[0]) * (W - L - R);
+  xs.forEach(x => {
+    el("line", {x1: px(x), x2: px(x), y1: T - 12, y2: H - B + 4, class: x === 0 ? "baseline" : "gridline"}, svg);
+    el("text", {x: px(x), y: H - 12, "text-anchor": "middle", class: "axis-label"}, svg).textContent = x + " 分";
+  });
+  [10, 15, 20, 25, 30].forEach(x => {
+    el("line", {x1: px(x), x2: px(x), y1: T - 12, y2: H - B + 4, class: "gridline"}, svg);
+    el("text", {x: px(x), y: H - 12, "text-anchor": "middle", class: "axis-label"}, svg).textContent = x;
+  });
+  const rows = [["742", C1], ["741", C2]];
+  rows.forEach(([ver, color], i) => {
+    const y = T + i * 46;
+    el("line", {x1: px(0), x2: px(35), y1: y, y2: y, stroke: "var(--grid)", "stroke-width": 1}, svg);
+    el("text", {x: L - 14, y: y + 4, "text-anchor": "end", fill: "var(--ink-2)", "font-size": 12}, svg)
+      .textContent = ver === "742" ? "7.42" : "7.41f";
+    Object.entries(D[ver].tower).forEach(([name, v]) => {
+      el("circle", {cx: px(v), cy: y, r: 5, fill: color, stroke: "var(--surface)", "stroke-width": 2}, svg)
+        .addEventListener("mousemove", e => showTip(e, `${name} · ${ver === "742" ? "7.42" : "7.41f"}<br><b>${v.toFixed(1)} 分</b>`));
+      const hit = el("circle", {cx: px(v), cy: y, r: 12, fill: "transparent"}, svg);
+      hit.addEventListener("mousemove", e => showTip(e, `${name} · ${ver === "742" ? "7.42" : "7.41f"}<br><b>${v.toFixed(1)} 分</b>`));
+      hit.addEventListener("mouseleave", hideTip);
+      el("text", {x: px(v), y: y - 12, "text-anchor": "middle", fill: "var(--muted)", "font-size": 10.5}, svg)
+        .textContent = name;
+    });
+  });
+  svg.addEventListener("mouseleave", hideTip);
+  const box = document.getElementById(mount);
+  box.innerHTML = "";
+  box.appendChild(svg);
+}
+
+/* 分组柱状：位置 × 版本 */
+function barChart(mount, cats, series, opt) {
+  const W = 720, H = 300, L = 46, R = 16, T = 16, B = 40;
+  const svg = el("svg", {viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opt.aria});
+  const max = opt.yMax, ticks = opt.yTicks;
+  const py = v => T + (max - v) / max * (H - T - B);
+  ticks.forEach(v => {
+    el("line", {x1: L, x2: W - R, y1: py(v), y2: py(v), class: v === 0 ? "baseline" : "gridline"}, svg);
+    el("text", {x: L - 8, y: py(v) + 4, "text-anchor": "end", class: "axis-label"}, svg).textContent = v;
+  });
+  const band = (W - L - R) / cats.length;
+  const bw = Math.min(26, band / 3.2);
+  cats.forEach((c, i) => {
+    const cx = L + band * i + band / 2;
+    el("text", {x: cx, y: H - 14, "text-anchor": "middle", class: "axis-label"}, svg).textContent = c;
+    series.forEach((s, j) => {
+      const v = s.values[i];
+      const x = cx + (j - (series.length - 1) / 2) * (bw + 3) - bw / 2;
+      const h = Math.max(1, py(0) - py(v));
+      el("rect", {x, y: py(v), width: bw, height: h, rx: 3, fill: s.color}, svg)
+        .addEventListener("mousemove", e => showTip(e, `${c} · ${s.name}<br><b>${opt.fmtTip(v)}</b>`));
+      const r = el("rect", {x: x - 4, y: py(v) - 8, width: bw + 8, height: h + 8, fill: "transparent"}, svg);
+      r.addEventListener("mousemove", e => showTip(e, `${c} · ${s.name}<br><b>${opt.fmtTip(v)}</b>`));
+      r.addEventListener("mouseleave", hideTip);
+    });
+  });
+  svg.addEventListener("mouseleave", hideTip);
+  const box = document.getElementById(mount);
+  box.innerHTML = "";
+  box.appendChild(svg);
+}
+
+const pct = (x, d = 1) => (x * 100).toFixed(d) + "%";
+const ci = r => `±${(1.96 * r.se * 100).toFixed(1)}`;
+const A = R["742"], B = R["741"];
+
+/* ---- KPI ---- */
+const cb = A.comeback15, cbo = B.comeback15;
+const w2 = A.lead["10"].win["2000"], w2o = B.lead["10"].win["2000"];
+document.getElementById("kpis").innerHTML = [
+  ["中位时长", A.dur_median.toFixed(1), "分", `7.41f ${B.dur_median.toFixed(1)} 分`],
+  ["每分钟击杀", A.kpm.toFixed(2), "", `7.41f ${B.kpm.toFixed(2)}`],
+  ["10 分领先 2000 的胜率", (w2.p * 100).toFixed(1), "%", `7.41f ${pct(w2o.p)} · ${ci(w2)} / ${ci(w2o)}`],
+  ["15 分落后 2000 的翻盘率", (cb.p * 100).toFixed(1), "%", `7.41f ${pct(cbo.p)} · ${ci(cb)} / ${ci(cbo)}`]
+].map(([l, v, u, d]) => `
+  <div class="kpi"><div class="label">${l}</div>
+  <div class="value">${v}<small>${u}</small></div><div class="delta">${d}</div></div>`).join("");
+
+/* ---- 击杀曲线 ---- */
+const kKeys = Object.keys(A.kills5);
+const kXs = kKeys.map(k => +k.split("-")[0] + 2.5);
+legend(document.getElementById("legend-kills"), [["7.42", C1], ["7.41f", C2]]);
+lineChart("chart-kills", [
+  {name: "7.42", color: C1, values: kXs.map((x, i) => ({x, y: A.kills5[kKeys[i]]}))},
+  {name: "7.41f", color: C2, values: kXs.map((x, i) => ({x, y: B.kills5[kKeys[i]]}))}
+], {
+  xMin: 0, xMax: 50, xTicks: [0, 10, 20, 30, 40, 50],
+  yMin: 0, yMax: 12, yTicks: [0, 3, 6, 9, 12],
+  fmtX: x => x + " 分", fmtTipX: x => `${x - 2.5}–${x + 2.5} 分`,
+  fmtY: v => v, fmtTip: v => v.toFixed(1) + " 个/局",
+  aria: "每 5 分钟英雄击杀，7.42 对 7.41f"
+});
+
+/* ---- 领先方胜率 ---- */
+function winChart(mount, legendMount, L) {
+  const xs = [10, 15, 20, 25, 30];
+  const series = [[A, "7.42", C1], [B, "7.41f", C2]].map(([r, name, color]) => ({
+    name, color, values: xs.map(x => ({x, y: r.lead[x].win[L].p * 100, n: r.lead[x].win[L].n}))
+  }));
+  legend(document.getElementById(legendMount), series.map(s => [s.name, s.color]));
+  lineChart(mount, series, {
+    xMin: 8, xMax: 32, xTicks: xs, yMin: 60, yMax: 100, yTicks: [60, 70, 80, 90, 100],
+    fmtX: x => x + " 分", fmtY: v => v + "%", fmtTip: v => v.toFixed(1) + "%",
+    aria: `领先 ${L} 的一方最终胜率`
+  });
+}
+winChart("chart-win2k", "legend-win2k", "2000");
+winChart("chart-win5k", "legend-win5k", "5000");
+
+/* ---- 按天 ---- */
+function dailyChart(mount, legendMount, get, ref, yMin, yMax, ticks) {
+  const days = R.daily.map(d => d.day);
+  const s1 = {name: "7.42 当天", color: C1, values: R.daily.map(d => ({x: d.day, y: get(d).p * 100}))};
+  const s2 = {name: "7.41f", color: C2, dash: "5 4", values: days.map(x => ({x, y: ref * 100}))};
+  legend(document.getElementById(legendMount), [["7.42 当天", C1], ["7.41f 整体", C2]]);
+  lineChart(mount, [s1, s2], {
+    xMin: days[0] - .4, xMax: days[days.length - 1] + .4, xTicks: days,
+    yMin, yMax, yTicks: ticks,
+    fmtX: x => `第 ${x} 天`,
+    fmtTipX: x => { const d = R.daily.find(z => z.day === x); return `第 ${x} 天 · ${d.n} 局 · ${ci(get(d))}`; },
+    fmtY: v => v + "%", fmtTip: v => v.toFixed(1) + "%",
+    aria: "按天"
+  });
+}
+dailyChart("chart-d1", "legend-d1", d => d.win2k10, B.lead["10"].win["2000"].p, 60, 90, [60, 70, 80, 90]);
+dailyChart("chart-d2", "legend-d2", d => d.comeback15, B.comeback15.p, 10, 40, [10, 20, 30, 40]);
+
+const P = [["742_d12", "上线头 2 天"], ["742_d36", "第 3 天～7.42a 前"], ["742_a", "11-24 起（含 7.42a）"], ["742", "7.42 合计"], ["741", "7.41f"]]
+  .filter(([k]) => R[k]);
+const cell = r => r.p == null ? "—" : `${pct(r.p)} <span class="ci">${ci(r)}</span>`;
+document.getElementById("period-table").innerHTML = `
+  <thead><tr><th>时段</th><th>局数</th><th>中位时长</th><th>每分钟击杀</th>
+  <th>10 分领先 2000 胜率</th><th>10 分领先 5000 胜率</th><th>15 分落后 2000 翻盘</th><th>20 分中位领先</th></tr></thead>
+  <tbody>${P.map(([k, name]) => { const r = R[k]; return `<tr${k === "741" ? ' class="dim"' : ""}><td>${name}</td><td>${r.n}</td>
+    <td>${r.dur_median.toFixed(1)}</td><td>${r.kpm.toFixed(2)}</td>
+    <td>${cell(r.lead["10"].win["2000"])}</td><td>${cell(r.lead["10"].win["5000"])} <span class="ci">n${r.lead["10"].win["5000"].n}</span></td>
+    <td>${cell(r.comeback15)}</td><td>${Math.round(r.lead["20"].median)}</td></tr>`; }).join("")}</tbody>`;
+
+/* ---- 塔 ---- */
+towerChart("chart-tower");
+
+/* ---- 正补 ---- */
+const lhCats = ["1号", "2号", "3号", "4号", "5号"];
+legend(document.getElementById("legend-lh"), [["7.42", C1], ["7.41f", C2]]);
+barChart("chart-lh", lhCats, [
+  {name: "7.42", color: C1, values: lhCats.map((c, i) => A.pos[i + 1][1].lh)},
+  {name: "7.41f", color: C2, values: lhCats.map((c, i) => B.pos[i + 1][1].lh)}
+], {yMax: 120, yTicks: [0, 30, 60, 90, 120], fmtTip: v => v.toFixed(1) + " 个", aria: "各位置 10-20 分钟正补"});
+
+/* ---- 位置表 ---- */
+document.getElementById("pos-table").innerHTML = `
+  <thead><tr><th>位置</th><th>时段</th><th>参团</th><th>死亡</th><th>正补</th>
+  <th>参团 7.41f</th><th>死亡 7.41f</th><th>正补 7.41f</th></tr></thead>
+  <tbody>${[1, 2, 3, 4, 5].map(p => A.pos[p].map((r, i) => {
+    const o = B.pos[p][i];
+    return `<tr><td>${i === 0 ? p + "号" : ""}</td><td>${r.win} 分</td>
+      <td>${r.kp.toFixed(2)}</td><td>${r.dth.toFixed(2)}</td><td>${r.lh.toFixed(1)}</td>
+      <td class="unit">${o.kp.toFixed(2)}</td><td class="unit">${o.dth.toFixed(2)}</td><td class="unit">${o.lh.toFixed(1)}</td></tr>`;
+  }).join("")).join("")}</tbody>`;
+
+/* ---- 核对表 ---- */
+const O = R["742_old"], N2 = R["742_d12"];
+const chk = [
+  ["局数", r => r.n],
+  ["中位时长（分）", r => r.dur_median.toFixed(1)],
+  ["每分钟击杀", r => r.kpm.toFixed(2)],
+  ["前 10 分钟击杀", r => r.kills10.toFixed(1)],
+  ["第 1 座塔（分）", r => r.tower["1"].toFixed(1)],
+  ["10 分领先 2000 胜率", r => cell(r.lead["10"].win["2000"])],
+  ["15 分落后 2000 翻盘率", r => cell(r.comeback15)],
+  ["20 分中位领先", r => Math.round(r.lead["20"].median)],
+  ["1 号位 10–20 分正补", r => r.pos[1][1].lh.toFixed(1)]
+];
+document.getElementById("check-table").innerHTML = O && N2 ? `
+  <thead><tr><th>指标</th><th>旧样本（11-20 抽，第 85 节）</th><th>新样本同时段（上线头 2 天）</th></tr></thead>
+  <tbody>${chk.map(([name, f]) => `<tr><td>${name}</td><td>${f(O)}</td><td>${f(N2)}</td></tr>`).join("")}</tbody>` : "";
+
+/* ---- 主表 ---- */
+const rows = [
+  ["中位时长（分）", r => r.dur_median, 1],
+  ["平均时长（分）", r => r.dur_mean, 1],
+  ["每分钟击杀", r => r.kpm, 2],
+  ["前 10 分钟击杀", r => r.kills10, 1],
+  ["第 1 座塔被推（分）", r => r.tower["1"], 1],
+  ["第 3 座塔被推（分）", r => r.tower["3"], 1],
+  ["第 6 座塔被推（分）", r => r.tower["6"], 1],
+  ["第 9 座塔被推（分）", r => r.tower["9"], 1],
+  ["10 分中位领先", r => r.lead["10"].median, 0],
+  ["20 分中位领先", r => r.lead["20"].median, 0],
+  ["30 分中位领先", r => r.lead["30"].median, 0],
+  ["10 分领先 2000 胜率（%）", r => r.lead["10"].win["2000"].p * 100, 1],
+  ["10 分领先 5000 胜率（%）", r => r.lead["10"].win["5000"].p * 100, 1],
+  ["15 分领先 5000 胜率（%）", r => r.lead["15"].win["5000"].p * 100, 1],
+  ["25 分领先 5000 胜率（%）", r => r.lead["25"].win["5000"].p * 100, 1],
+  ["15 分落后 2000 翻盘率（%）", r => r.comeback15.p * 100, 1],
+  ["1 号位 10–20 分正补", r => r.pos[1][1].lh, 1],
+  ["2 号位 10–20 分正补", r => r.pos[2][1].lh, 1],
+  ["3 号位 10–20 分正补", r => r.pos[3][1].lh, 1]
+];
+document.getElementById("main-table").innerHTML = `
+  <thead><tr><th>指标</th><th>7.42</th><th>7.41f</th><th>差</th></tr></thead>
+  <tbody>${rows.map(([name, f, d]) => { const a = f(A), b = f(B), x = a - b;
+    return `<tr><td>${name}</td><td>${a.toFixed(d)}</td><td>${b.toFixed(d)}</td><td>${+Math.abs(x).toFixed(d) === 0 ? "0" : (x > 0 ? "+" : "−") + Math.abs(x).toFixed(d)}</td></tr>`; }).join("")}</tbody>`;
+</script>
+</body>
+</html>

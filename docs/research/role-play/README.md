@@ -37,3 +37,14 @@ python -X utf8 docs/research/role-play/scripts/d_page.py      # 出网页
 - STRATZ 死亡事件的 `isTracked` / `isDieBack` 全是 0，`hasHealAvailable` 7.42 普遍偏高，没用。一次请求放 40 局回 400，35 局可以。
 
 `conclusions.json` 是看完 `report.txt` 手写的结论文字（网页上的要点、实际对局例子、局限），重跑数据后要按新数字改。`probe.py` 查 STRATZ 字段名，`patch_text.py` 把中文版更新日志网页转成纯文本方便查改动。
+
+### 对局节奏（2026-11-25，research/NOTES 第 88 节）
+
+```
+python -X utf8 docs/research/role-play/scripts/i_rhythm_ids.py [N]   # OpenDota 取 7.42 上线到现在的全部编号 + 开始时间，抽 N 局（默认 3 万）→ rhythm_ids.json
+python -X utf8 docs/research/role-play/scripts/j_rhythm_fetch.py [60] # STRATZ 只抓节奏字段（可续）→ r742.jsonl.gz，一次 60 局，3 万局约 12 分钟
+python -X utf8 docs/research/role-play/scripts/h_rhythm.py            # 7.42 全部 / 按时段 / 按天 + 7.41f + 旧样本核对 → rhythm.json
+python -X utf8 docs/research/role-play/scripts/k_rhythm_page.py       # rhythm_template.html + rhythm.json → data/mockups/7.42-对局节奏.html
+```
+
+`k_rhythm_page.py` 里的 `TEXT` 是看完 `h_rhythm.py` 输出手写的结论，重跑后按新数字改；图表和表格的数字页面自己从数据算。

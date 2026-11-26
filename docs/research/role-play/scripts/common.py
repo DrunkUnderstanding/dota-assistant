@@ -14,7 +14,8 @@ _spec = importlib.util.spec_from_file_location("iv_fetch", ROOT / "docs" / "rese
 iv = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(iv)
 
-CUT_742 = 1763499600          # 7.42 上线（2026-11-18 21:00 UTC，胜率监控 watch.CUT）
+CUT_742 = 1795035600          # 7.42 上线（2026-11-18 21:00 UTC，胜率监控 watch.CUT）。
+# 2026-11-25 前这里误写成 1763499600（2025 年），a_ids 的 start_time 条件等于没起作用，第 85 节样本混进约 1% 上线前（151 局）的局（第 88 节）
 FARM = "{ id count gold }"
 FIELDS = (
     "id durationSeconds didRadiantWin bottomLaneOutcome midLaneOutcome topLaneOutcome radiantNetworthLeads "
