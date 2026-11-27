@@ -238,3 +238,4 @@
 | 86 | 克制数据查「上线后第一局」超时导致整次更新失败、一直用旧版本数据：超时就按上线时长估算起点 | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
 | 87 | 字母小版本（7.42a）不切胜率数据；知识库每次启动对版本、字母小版本也马上换（含打包版 / 其他电脑） | [sources/NOTES](../dota_assistant/sources/NOTES.md) |
 | 88 | 7.42 的对局节奏：时长 / 击杀密度 / 推塔 / 领先方胜率，上线到 11-25 共 2.7 万局按天看稳定性；修正研究脚本 `CUT_742` 写错年份（研究脚本 + 网页） | [research/NOTES](../dota_assistant/research/NOTES.md) |
+| 89 | 装备价值换算：按商店官方分类，属性按最便宜的单项基础装折成钱和售价比（研究脚本 + 网页） | [research/NOTES](../dota_assistant/research/NOTES.md) |

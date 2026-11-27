@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>装备价值换算</title>
+<style>
+:root{color-scheme:light;
+  --page:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;
+  --border:rgba(11,11,11,.10);--wash:rgba(11,11,11,.04);--accent:#2a78d6;--bar:#2a78d6;--bar2:#b9b8b0;--ref:#0b0b0b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--accent:#3987e5;--bar:#3987e5;--bar2:#55544f;--ref:#f0efec}}
+:root[data-theme="dark"]{color-scheme:dark;
+  --page:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;
+  --border:rgba(255,255,255,.10);--wash:rgba(255,255,255,.05);--accent:#3987e5;--bar:#3987e5;--bar2:#55544f;--ref:#f0efec}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:24px 16px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;margin:0}
+h2{font-size:17px;margin:0}
+.sub{margin:4px 0 0;color:var(--ink2)}
+.how{margin:8px 0 0;padding-left:18px;color:var(--ink2)}
+.how li{margin:2px 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;min-width:0}
+.ctl{position:sticky;top:0;z-index:5;display:flex;flex-direction:column;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.ctl .r{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}
+.ctl .lb{color:var(--muted);font-size:13px}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;color:var(--ink2);font:inherit;padding:4px 10px;cursor:pointer;white-space:nowrap}
+.seg button+button{border-left:1px solid var(--border)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface);font-weight:600}
+input[type=search]{font:inherit;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--page);color:var(--ink);width:160px}
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chips a{font-size:12px;color:var(--ink2);text-decoration:none;border:1px solid var(--border);border-radius:12px;padding:1px 9px;white-space:nowrap}
+.chips a:hover{background:var(--wash);color:var(--ink)}
+.ic{display:inline-block;width:33px;height:24px;border-radius:3px;background-size:cover;background-position:center;background-color:var(--grid);flex:none}
+.base{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px 14px;margin-top:10px}
+.base .b{display:flex;gap:8px;align-items:center;min-width:0}
+.base .t{display:flex;flex-direction:column;line-height:1.25;min-width:0}
+.base .t .a{font-size:13px}
+.base .t .s{font-size:12px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.base .t .a b{font-variant-numeric:tabular-nums}
+.attr{margin:10px 0 0;color:var(--ink2);font-size:13px}
+.cat{scroll-margin-top:110px}
+.cat .hd{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.cat .hd .grp{color:var(--muted);font-size:13px}
+.cat .hd .cnt{color:var(--muted);font-size:12px}
+.rows{margin-top:10px;display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:33px minmax(0,1.3fr) 56px minmax(150px,1fr);gap:4px 12px;align-items:center;padding:6px 0;border-top:1px solid var(--grid)}
+.row:first-child{border-top:0}
+.row .nm{min-width:0;display:flex;flex-direction:column;line-height:1.3}
+.row .nm .a{font-size:14px}
+.row .nm .note{font-size:12px;color:var(--ink2)}
+.row .pr{font-variant-numeric:tabular-nums;color:var(--ink2);text-align:right;font-size:13px}
+.vb{display:flex;flex-direction:column;gap:2px;min-width:0}
+.bar{position:relative;height:16px;display:flex;align-items:center;gap:6px}
+.track{position:relative;flex:1;height:10px;background:var(--wash);border-radius:2px;min-width:60px}
+.fill{position:absolute;left:0;top:0;bottom:0;border-radius:2px;background:var(--bar2)}
+.fill.hi{background:var(--bar)}
+.fill.over{border-top-right-radius:0;border-bottom-right-radius:0;background-image:repeating-linear-gradient(-45deg,transparent 0 4px,rgba(255,255,255,.35) 4px 6px)}
+.ref{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1.5px dashed var(--ref);opacity:.55}
+.pv{width:44px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600;font-size:13px}
+.pv.lo{font-weight:400;color:var(--ink2)}
+.all{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.all b{color:var(--ink);font-weight:600}
+.none{font-size:12px;color:var(--muted)}
+.empty{color:var(--muted);font-size:13px;margin-top:8px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--ink2);align-items:center}
+.legend .sw{display:inline-block;width:14px;height:8px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.legend .dl{display:inline-block;width:0;height:12px;border-left:1.5px dashed var(--ref);opacity:.55;margin:0 4px 0 6px;vertical-align:middle}
+.foot{color:var(--ink2);font-size:13px}
+.foot p{margin:4px 0}
+@media (max-width:640px){
+  .row{grid-template-columns:33px minmax(0,1fr) 48px;grid-template-areas:"ic nm pr" "vb vb vb"}
+  .row>.ic{grid-area:ic}.row .nm{grid-area:nm}.row .pr{grid-area:pr}.row .vb{grid-area:vb}
+  .ctl{position:static}
+  input[type=search]{width:100%}
+}
+/*ICONS*/
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="ttl">装备价值换算</h1>
+    <p class="sub" id="sub"></p>
+    <ul class="how">
+      <li><b>怎么换算</b>：每项属性的单价 = 只加这一项、最便宜的基础装（例如生命按毛毛帽算 2 金 / 点），见下面「单价」。一件装备的价值 = 它面板上每项属性 × 单价，加起来。</li>
+      <li><b>百分比</b> = 换算价值 ÷ 售价。100% = 和买对应基础装一样划算；高于 100% = 合成以后属性更便宜。</li>
+      <li><b>看谁用</b>：力 / 敏 / 智属性按游戏内说明换成生命、攻速、护甲、魔法等再算钱；配上主属性每点再 +1 攻击，全才英雄每点 +0.45 攻击。「面板」= 不分英雄，属性一律按力量手套 46.7 金 / 点。</li>
+      <li><b>只算面板上的固定属性</b>：主动技能、光环、触发效果都不算，所以跳刀、黑皇杖这类是 0% 或很低——低不等于不值得买，说明你买的主要是它的技能。几个常用的主动（魔瓶、魔杖、灵魂之戒）在说明里单独折了钱。</li>
+    </ul>
+  </header>
+
+  <div class="card ctl">
+    <div class="r">
+      <span class="lb">看谁用</span>
+      <div class="seg" id="who" role="group"></div>
+      <span class="lb">排序</span>
+      <div class="seg" id="sort" role="group"><button data-v="shop" aria-pressed="true">商店顺序</button><button data-v="val" aria-pressed="false">性价比高到低</button></div>
+      <input type="search" id="q" placeholder="搜物品名">
+    </div>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="card">
+    <h2>单价（每项属性值多少钱）</h2>
+    <div class="base" id="base"></div>
+    <p class="attr" id="attr"></p>
+  </section>
+
+  <div class="legend card" id="legend"></div>
+  <main id="cats" style="display:flex;flex-direction:column;gap:16px"></main>
+  <footer class="card foot" id="foot"></footer>
+</div>
+<script>
+const DATA = /*DATA*/null;
+const WHO = [["panel", "面板"], [0, "力量英雄"], [1, "敏捷英雄"], [2, "智力英雄"], [3, "全才英雄"]];
+const SHORT = ["力", "敏", "智", "全才"];
+const MAX = 2.5;   // 条形图满格 = 250%
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const ic = k => `<span class="ic i-${esc(k)}"></span>`;
+const st = {who: "panel", sort: "shop", q: ""};
+try { const w = localStorage.getItem("iv-who"); if (w != null) st.who = w === "panel" ? "panel" : +w; } catch (e) { /* 无痕模式等 */ }
+
+const val = (x, who) => who === "panel" ? x.panel : x.r[who];
+const ratio = (x, who) => x.c ? val(x, who) / x.c : 0;
+const pc = v => Math.round(v * 100) + "%";
+
+document.getElementById("ttl").textContent = `${DATA.patch} 装备价值换算`;
+document.getElementById("sub").textContent =
+  `按游戏商店的官方分类，${DATA.cats.reduce((n, c) => n + c.items.length, 0)} 件物品；价格和属性来自 Valve 官方 datafeed（${DATA.patch}），分类来自游戏文件 scripts/shops.txt；整理于 ${new Date(DATA.made * 1000).toLocaleString("zh-CN")}。`;
+
+document.getElementById("base").innerHTML = DATA.base.map(b =>
+  `<div class="b">${ic(b.item)}<span class="t"><span class="a">${esc(b.name)} <b>${b.per >= 10 ? b.per.toFixed(1) : b.per.toFixed(2)}</b> 金</span><span class="s">${esc(b.n)} ${b.c} 金</span></span></div>`).join("")
+  + `<div class="b">${ic("flask")}<span class="t"><span class="a">一次性回血 <b>${DATA.once.hp}</b> 金 / 点</span><span class="s">治疗药膏</span></span></div>`
+  + `<div class="b">${ic("clarity")}<span class="t"><span class="a">一次性回蓝 <b>${DATA.once.mp}</b> 金 / 点</span><span class="s">净化药水</span></span></div>`;
+document.getElementById("attr").innerHTML =
+  `每点属性折成钱：<b>力量 ${DATA.attr.str}</b> 金（20 生命 + 0.1 回血）· <b>敏捷 ${DATA.attr.agi}</b> 金（1 攻速 + 0.16 护甲）· <b>智力 ${DATA.attr.int}</b> 金（12 魔法 + 0.05 回蓝 + 0.125% 魔抗）；主属性每点再 +1 攻击（50 金），全才每点 +${DATA.uni} 攻击（${(DATA.uni * 50).toFixed(1)} 金）。`;
+
+document.getElementById("who").innerHTML = WHO.map(([v, t]) => `<button data-v="${v}">${t}</button>`).join("");
+document.getElementById("chips").innerHTML = DATA.cats.map(c => `<a href="#c-${c.key}">${c.group === "升级物品" ? "升级·" : c.name === "神秘商店" ? "" : "基础·"}${esc(c.name)}</a>`).join("");
+document.getElementById("legend").innerHTML =
+  `<span><span class="sw" style="background:var(--bar)"></span>≥ 100%（比买基础装划算）</span><span><span class="sw" style="background:var(--bar2)"></span>&lt; 100%</span><span><span class="dl"></span>100% 线</span><span>条形满格 = 250%，超出的打斜纹</span><span>每行下面一行小字：四种英雄各自的百分比，当前选中的加粗</span>`;
+
+function barHtml(x) {
+  if (x.kind === "none") return `<div class="vb"><span class="none">没有属性 · 价值全在主动 / 被动</span></div>`;
+  const r = ratio(x, st.who), w = Math.min(r, MAX) / MAX * 100;
+  const cls = (r >= 1 ? "hi" : "") + (r > MAX ? " over" : "");
+  const same = new Set(x.r.map(v => Math.round(v / x.c * 100))).size === 1;
+  const all = same ? `四种英雄都一样 · 面板 ${pc(x.panel / x.c)}`
+    : `面板 ${st.who === "panel" ? `<b>${pc(x.panel / x.c)}</b>` : pc(x.panel / x.c)} · ` + x.r.map((v, i) => `${SHORT[i]} ${st.who === i ? `<b>${pc(v / x.c)}</b>` : pc(v / x.c)}`).join(" · ");
+  return `<div class="vb"><div class="bar"><div class="track"><div class="fill ${cls}" style="width:${w}%"></div><div class="ref" style="left:${100 / MAX}%"></div></div><span class="pv${r < 1 ? " lo" : ""}">${pc(r)}</span></div><div class="all">${all}</div></div>`;
+}
+function rowHtml(x) {
+  return `<div class="row">${ic(x.k)}<div class="nm"><span class="a">${esc(x.n)}</span>${x.note ? `<span class="note">${esc(x.note)}</span>` : ""}</div><div class="pr">${x.c} 金</div>${barHtml(x)}</div>`;
+}
+function render() {
+  document.querySelectorAll("#who button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v) === String(st.who)));
+  document.querySelectorAll("#sort button").forEach(b => b.setAttribute("aria-pressed", b.dataset.v === st.sort));
+  const q = st.q.trim();
+  document.getElementById("cats").innerHTML = DATA.cats.map(c => {
+    let xs = c.items.filter(x => !q || x.n.includes(q) || x.k.includes(q.toLowerCase()));
+    if (q && !xs.length) return "";
+    if (st.sort === "val") xs = xs.slice().sort((a, b) => ratio(b, st.who) - ratio(a, st.who) || a.c - b.c);
+    return `<section class="card cat" id="c-${c.key}"><div class="hd"><h2>${esc(c.name)}</h2><span class="grp">${c.name === "神秘商店" ? "" : esc(c.group)}</span><span class="cnt">${xs.length} 件</span></div>
+      <div class="rows">${xs.map(rowHtml).join("")}</div></section>`;
+  }).join("") || `<p class="empty card">没有找到「${esc(q)}」</p>`;
+}
+document.getElementById("who").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  st.who = b.dataset.v === "panel" ? "panel" : +b.dataset.v;
+  try { localStorage.setItem("iv-who", String(st.who)); } catch (err) { /* 存不了就算了 */ }
+  render();
+});
+document.getElementById("sort").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  st.sort = b.dataset.v; render();
+});
+document.getElementById("q").addEventListener("input", e => { st.q = e.target.value; render(); });
+render();
+
+document.getElementById("foot").innerHTML = `
+  <p><b>没算进去的</b>：格子成本（后期 6 个格子都值钱，枝干、圆环百分比再高也会被卖掉）；卖装备只返一半钱；攻击距离、施法距离、冷却缩减、恢复增强、弹道速度、百分比移速没有单项基础装、没法定价，说明里写了「没算」的装备实际更值。</p>
+  <p><b>光环</b>（恢复头巾、王者之戒、玄冥盾牌、梅肯斯姆……）只算了自己身上那份，覆盖 3～4 个队友时整体价值要翻好几倍。<b>静谧之鞋</b>取没被打断时的数，说明里给了被打断后的。</p>
+  <p><b>鞋的移速</b>分近战 / 远程，这里按远程（低的那个）算，近战英雄的相位鞋、动力鞋、护足再多 10 移速 ≈ 111 金。</p>
+  <p>白板性价比只回答「光看属性这钱花得值不值」，不等于装备好不好：黑皇杖白板不到 60%，却经常是最该出的那件。</p>`;
+</script>
+</body>
+</html>
